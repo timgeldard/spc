@@ -1,0 +1,19 @@
+# Databricks Apps configuration
+# Note: auth_type and requested_scopes are configured via the App Settings UI (User authorization)
+command:
+  - uvicorn
+  - backend.main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "8000"
+
+env:
+  - name: DATABRICKS_WAREHOUSE_HTTP_PATH
+    value: "/sql/1.0/warehouses/e76480b94bea6ed5"
+
+  - name: TRACE_CATALOG
+    value: "connected_plant_uat"
+
+  - name: TRACE_SCHEMA
+    value: "gold"

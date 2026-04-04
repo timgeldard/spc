@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+
+# Node
+frontend/node_modules/
+
+# Databricks / tooling state
+.databricks/
+.claude/
+
+# OS / editor
+.DS_Store
+*.swp
