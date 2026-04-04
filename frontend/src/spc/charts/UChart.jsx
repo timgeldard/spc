@@ -103,7 +103,7 @@ export default function UChart({ points }) {
           <span className="spc-chart-ooc">⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} notMerge />
+      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
       <p className="spc-chart-hint">
         ū = {chart.uBar.toFixed(4)} · Variable limits per inspection unit count
       </p>

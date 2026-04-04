@@ -90,5 +90,5 @@ export default function GroupedBarChart({ materials, commonMics }) {
 
   if (!option) return <div className="spc-empty-state"><p>No common characteristics to compare.</p></div>
 
-  return <ReactECharts option={option} style={{ height: 380, width: '100%' }} notMerge />
+  return <ReactECharts option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
 }

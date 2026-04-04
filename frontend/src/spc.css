@@ -58,16 +58,6 @@
 }
 
 /* ==========================================================================
-   SPC Page Layout
-   ========================================================================== */
-
-.spc-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-/* ==========================================================================
    Filter Bar
    ========================================================================== */
 
@@ -136,45 +126,6 @@
   background: var(--c-brand);
   color: #fff;
   letter-spacing: .03em;
-}
-
-/* ==========================================================================
-   Tab Bar
-   ========================================================================== */
-
-.spc-tab-bar {
-  display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--c-border);
-  margin-top: 0;
-}
-
-.spc-tab {
-  padding: .75rem 1.5rem;
-  font-size: .875rem;
-  font-weight: 500;
-  color: var(--c-text-muted);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color .15s, border-color .15s;
-  margin-bottom: -2px;
-}
-
-.spc-tab:hover {
-  color: var(--c-brand);
-}
-
-.spc-tab--active {
-  color: var(--c-brand);
-  border-bottom-color: var(--c-brand);
-  font-weight: 600;
-}
-
-.spc-tab-content {
-  padding: 1.5rem 0;
-  min-height: 400px;
 }
 
 /* ==========================================================================

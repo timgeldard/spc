@@ -91,7 +91,7 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
   return (
     <div className="spc-chart-pane">
       <div className="spc-chart-pane-title">Moving Range Chart (MR)</div>
-      <ReactECharts option={option} style={{ height: 180 }} notMerge />
+      <ReactECharts option={option} style={{ height: 180 }} theme="spc" notMerge />
     </div>
   )
 }

@@ -1,4 +1,3 @@
-import CapabilityGauge from './CapabilityGauge.jsx'
 import CapabilityHistogram from './CapabilityHistogram.jsx'
 
 function StabilityWarning({ signals, mrSignals }) {
@@ -15,96 +14,87 @@ function StabilityWarning({ signals, mrSignals }) {
   )
 }
 
-const INTERPRETATION = [
-  { min: 1.67, label: 'Highly Capable',     color: '#059669', bg: '#d1fae5' },
-  { min: 1.33, label: 'Capable',            color: '#10b981', bg: '#ecfdf5' },
+const TIERS = [
+  { min: 1.67, label: 'Highly Capable', color: '#059669', bg: '#d1fae5' },
+  { min: 1.33, label: 'Capable', color: '#10b981', bg: '#ecfdf5' },
   { min: 1.00, label: 'Marginally Capable', color: '#d97706', bg: '#fffbeb' },
-  { min: 0,    label: 'Not Capable',        color: '#dc2626', bg: '#fef2f2' },
+  { min: 0, label: 'Not Capable', color: '#dc2626', bg: '#fef2f2' },
 ]
 
-function interpret(cpk) {
-  if (cpk === null || cpk === undefined) return null
-  for (const tier of INTERPRETATION) {
-    if (cpk >= tier.min) return tier
+function getTier(v) {
+  if (v == null) return null
+  for (const t of TIERS) {
+    if (v >= t.min) return t
   }
-  return INTERPRETATION[INTERPRETATION.length - 1]
+  return TIERS[TIERS.length - 1]
+}
+
+function MetricCard({ label, value, tier, subtitle, note }) {
+  const t = tier ?? getTier(value)
+  const displayVal = value != null ? value.toFixed(2) : '—'
+  return (
+    <div
+      className="rounded-lg p-3 flex flex-col gap-0.5 min-w-0"
+      style={{ background: t?.bg ?? '#f9fafb', border: `1px solid ${t?.color ?? '#e5e7eb'}20` }}
+    >
+      <span className="text-xs font-medium" style={{ color: t?.color ?? '#6b7280' }}>{label}</span>
+      <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: t?.color ?? '#111827' }}>
+        {displayVal}
+      </span>
+      {subtitle && <span className="text-xs" style={{ color: t?.color ?? '#6b7280' }}>{subtitle}</span>}
+      {note && <span className="text-xs text-gray-400 mt-0.5">{note}</span>}
+    </div>
+  )
 }
 
 export default function CapabilityPanel({ spc }) {
   if (!spc?.capability) return null
 
   const { cp, cpk, pp, ppk, cpkLower95, cpkUpper95, zScore, dpmo, spec_type } = spc.capability
-  const tier = interpret(cpk)
-
   const isUnilateral = spec_type === 'unilateral_upper' || spec_type === 'unilateral_lower'
+  const cpkTier = getTier(cpk)
 
   return (
     <div className="spc-capability-panel">
       <div className="spc-capability-panel-title">Process Capability</div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
 
-      {/* Verdict banner */}
-      {tier && (
-        <div className="spc-capability-verdict" style={{ background: tier.bg, borderColor: tier.color }}>
-          <span className="spc-capability-verdict-label" style={{ color: tier.color }}>
-            {tier.label}
-          </span>
-          {cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && (
-            <span className="spc-capability-verdict-note">
-              Process is {cpk < cp ? 'off-centre' : 'centred'} (Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)})
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Gauges */}
-      <div className="spc-gauge-row">
-        <div className="spc-gauge-group">
-          <div className="spc-gauge-group-label">Within-Subgroup (Short-term)</div>
-          <div className="spc-gauge-pair">
-            {!isUnilateral && <CapabilityGauge label="Cp" value={cp} />}
-            <CapabilityGauge label="Cpk" value={cpk} lower95={cpkLower95} upper95={cpkUpper95} />
+      <div className="grid grid-cols-2 gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+        {!isUnilateral && <MetricCard label="Cp" value={cp} note="Short-term" />}
+        <MetricCard
+          label="Cpk"
+          value={cpk}
+          note={cpkLower95 != null ? `95% CI [${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]` : 'Short-term'}
+        />
+        {!isUnilateral && <MetricCard label="Pp" value={pp} note="Long-term" />}
+        <MetricCard label="Ppk" value={ppk} note="Long-term" />
+        {zScore != null && (
+          <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
+        )}
+        {dpmo != null && (
+          <div className="rounded-lg p-3 flex flex-col gap-0.5 min-w-0" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+            <span className="text-xs font-medium text-gray-500">DPMO</span>
+            <span className="text-2xl font-bold tabular-nums leading-none text-gray-800">{dpmo.toLocaleString()}</span>
+            <span className="text-xs text-gray-400">1.5σ shift</span>
           </div>
-          {isUnilateral && (
-            <div className="spc-capability-note">Cp not defined for one-sided specification</div>
-          )}
-          {cpkLower95 != null && (
-            <div className="spc-capability-note" style={{ color: '#6b7280', fontSize: '0.75rem' }}>
-              95% CI on Cpk: [{cpkLower95.toFixed(2)}, {cpkUpper95.toFixed(2)}]
-            </div>
-          )}
-        </div>
-        <div className="spc-gauge-group">
-          <div className="spc-gauge-group-label">Overall (Long-term)</div>
-          <div className="spc-gauge-pair">
-            {!isUnilateral && <CapabilityGauge label="Pp" value={pp} />}
-            <CapabilityGauge label="Ppk" value={ppk} />
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Six Sigma metrics */}
-      {(zScore != null || dpmo != null) && (
-        <div className="spc-sixsigma-row">
-          <div className="spc-sixsigma-item">
-            <span className="spc-sixsigma-label">Process Z (σ level)</span>
-            <span className="spc-sixsigma-value">{zScore?.toFixed(2) ?? '—'}</span>
-          </div>
-          <div className="spc-sixsigma-item">
-            <span className="spc-sixsigma-label" title="Defects Per Million Opportunities — calculated using the Motorola 1.5σ long-term shift convention">DPMO (1.5σ) ℹ</span>
-            <span className="spc-sixsigma-value">{dpmo != null ? dpmo.toLocaleString() : '—'}</span>
-          </div>
-        </div>
+      {cpkTier && cp != null && Math.abs(cp - cpk) > 0.05 && (
+        <p className="text-xs text-gray-500 mb-2">
+          Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
+        </p>
+      )}
+      {isUnilateral && (
+        <p className="text-xs text-gray-400 mb-2">Cp / Pp not defined for one-sided specification</p>
       )}
 
-      {/* Histogram */}
       <CapabilityHistogram spc={spc} />
 
-      {/* Reference table */}
       <div className="spc-capability-legend">
-        {INTERPRETATION.map((t, i) => (
+        {TIERS.map((t, i) => (
           <span key={i} className="spc-capability-legend-item" style={{ color: t.color }}>
-            {i < INTERPRETATION.length - 1 ? `≥ ${INTERPRETATION[i].min.toFixed(2)} ${t.label}` : `< 1.00 ${t.label}`}
+            {i < TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< 1.00 ${t.label}`}
           </span>
         ))}
       </div>

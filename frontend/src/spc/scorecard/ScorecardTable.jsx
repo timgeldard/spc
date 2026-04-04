@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
@@ -68,6 +68,17 @@ export default function ScorecardTable({ rows }) {
   const { state, dispatch } = useSPC()
   const gridRef = useRef(null)
   const { exportData, exporting } = useExport()
+  const [dark, setDark] = useState(
+    () => document.documentElement.getAttribute('data-theme') === 'dark'
+  )
+
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setDark(document.documentElement.getAttribute('data-theme') === 'dark')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
 
   const onRowClicked = useCallback((event) => {
     const row = event.data
@@ -99,7 +110,7 @@ export default function ScorecardTable({ rows }) {
           {exporting ? 'Exporting…' : 'Export Excel'}
         </button>
       </div>
-      <div className="ag-theme-quartz" style={{ height: 450, width: '100%' }}>
+      <div className={dark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'} style={{ height: 450, width: '100%' }}>
         <AgGridReact
           ref={gridRef}
           rowData={rows}

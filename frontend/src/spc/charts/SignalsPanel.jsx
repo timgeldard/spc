@@ -1,3 +1,5 @@
+import { useSPC } from '../SPCContext.jsx'
+
 const WECO_RULES = {
   desc: {
     1: 'One point beyond the 3σ control limit',
@@ -19,19 +21,14 @@ const NELSON_RULES = {
     7: '15 consecutive points within Zone C (hugging centre line)',
     8: '8 consecutive points outside Zone C on both sides (mixture)',
   },
-  severity: {
-    1: 'critical',
-    2: 'warning',
-    3: 'warning',
-    4: 'info',
-    5: 'warning',
-    6: 'warning',
-    7: 'info',
-    8: 'info',
-  },
+  severity: { 1: 'critical', 2: 'warning', 3: 'warning', 4: 'info', 5: 'warning', 6: 'warning', 7: 'info', 8: 'info' },
 }
 
-import { useSPC } from '../SPCContext.jsx'
+const SEVERITY_STYLE = {
+  critical: { dot: '#dc2626', label: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+  warning: { dot: '#d97706', label: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+  info: { dot: '#0284c7', label: '#0284c7', bg: '#f0f9ff', border: '#7dd3fc' },
+}
 
 export default function SignalsPanel({ signals = [], mrSignals = [], indexedPoints = [], ruleSet = 'weco' }) {
   const { dispatch } = useSPC()
@@ -45,9 +42,12 @@ export default function SignalsPanel({ signals = [], mrSignals = [], indexedPoin
 
   if (allSignals.length === 0) {
     return (
-      <div className="spc-signals-panel spc-signals-panel--ok">
-        <span className="spc-signals-ok-icon">✓</span>
-        <span>No {label} rule violations detected</span>
+      <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium"
+        style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        No {label} rule violations detected
       </div>
     )
   }
@@ -56,45 +56,60 @@ export default function SignalsPanel({ signals = [], mrSignals = [], indexedPoin
     <div className="spc-signals-panel">
       <div className="spc-signals-title">
         {label} Signals
-        <span className="spc-signals-count">
-          {allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}
-        </span>
+        <span className="spc-signals-count">{allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="spc-signals-list">
-        {allSignals.map((s, i) => {
-          const severity = rules.severity[s.rule] ?? 'info'
-          const batchIds = s.indices
-            .map(idx => indexedPoints[idx]?.batch_id)
-            .filter(Boolean)
-            .filter((v, j, a) => a.indexOf(v) === j)
-            .slice(0, 3)
 
-          return (
-            <div key={i} className={`spc-signal spc-signal--${severity}`}>
-              <div className="spc-signal-header">
-                <span className={`spc-signal-rule spc-signal-rule--${severity}`}>Rule {s.rule}</span>
-                <span className="spc-signal-chart-tag">{s.chart} chart</span>
+      <div className="relative ml-2 mt-2">
+        <div className="absolute left-[7px] top-0 bottom-0 w-px bg-gray-200" />
+
+        <div className="flex flex-col gap-3">
+          {allSignals.map((s, i) => {
+            const severity = rules.severity[s.rule] ?? 'info'
+            const style = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.info
+            const batchIds = s.indices
+              .map(idx => indexedPoints[idx]?.batch_id)
+              .filter(Boolean)
+              .filter((v, j, a) => a.indexOf(v) === j)
+              .slice(0, 3)
+
+            return (
+              <div key={i} className="relative pl-6">
+                <div
+                  className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white"
+                  style={{ background: style.dot, boxShadow: `0 0 0 2px ${style.dot}40` }}
+                />
+                <div
+                  className="rounded-lg px-3 py-2 text-sm"
+                  style={{ background: style.bg, border: `1px solid ${style.border}` }}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-bold" style={{ color: style.label }}>Rule {s.rule}</span>
+                    <span className="text-xs rounded px-1.5 py-0.5 font-medium"
+                      style={{ background: 'rgba(0,0,0,0.06)', color: style.label }}>
+                      {s.chart} chart
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-snug">{rules.desc[s.rule] ?? s.description}</p>
+                  {batchIds.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Batches: {batchIds.join(', ')}{s.indices.length > 3 ? ` +${s.indices.length - 3} more` : ''}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="spc-signal-desc">{rules.desc[s.rule] ?? s.description}</p>
-              {batchIds.length > 0 && (
-                <p className="spc-signal-batches">
-                  Batches: {batchIds.join(', ')}{s.indices.length > 3 ? ` +${s.indices.length - 3} more` : ''}
-                </p>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
-      {allSignals.length > 0 && (
-        <button
-          className="spc-btn spc-btn--sm spc-btn--secondary"
-          style={{ marginTop: 8 }}
-          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'correlation' })}
-          title="Investigate whether correlated characteristics may share assignable causes"
-        >
-          Investigate Correlations
-        </button>
-      )}
+
+      <button
+        className="spc-btn spc-btn--sm spc-btn--secondary"
+        style={{ marginTop: 12 }}
+        onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'correlation' })}
+        title="Investigate whether correlated characteristics may share assignable causes"
+      >
+        Investigate Correlations
+      </button>
     </div>
   )
 }

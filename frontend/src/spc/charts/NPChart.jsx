@@ -89,7 +89,7 @@ export default function NPChart({ points }) {
           <span className="spc-chart-ooc">⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} notMerge />
+      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
       <p className="spc-chart-hint">
         n̄p̄ = {chart.npBar.toFixed(2)} · UCL = {chart.ucl.toFixed(2)} · LCL = {Math.max(0, chart.lcl).toFixed(2)}
       </p>

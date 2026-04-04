@@ -127,7 +127,7 @@ export default function CapabilityMatrix({ rows }) {
 
   return (
     <div className="spc-capability-matrix">
-      <ReactECharts option={option} style={{ height: 500, width: '100%' }} onEvents={onEvents} notMerge />
+      <ReactECharts option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge />
       <p className="spc-chart-hint">
         Bubble size = batch count · Click a bubble to open the control chart · Green = Capable &amp; Stable
       </p>

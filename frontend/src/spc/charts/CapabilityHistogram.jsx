@@ -124,7 +124,7 @@ export default function CapabilityHistogram({ spc }) {
   return (
     <div className="spc-chart-pane">
       <div className="spc-chart-pane-title">Capability Histogram</div>
-      <ReactECharts option={option} style={{ height: 220 }} notMerge />
+      <ReactECharts option={option} style={{ height: 220 }} theme="spc" notMerge />
       <p className="spc-chart-hint">Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
     </div>
   )

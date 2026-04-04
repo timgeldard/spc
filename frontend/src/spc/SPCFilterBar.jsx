@@ -3,6 +3,7 @@ import { useSPC } from './SPCContext.jsx'
 import { useValidateMaterial } from './hooks/useMaterials.js'
 import { usePlants } from './hooks/usePlants.js'
 import { useCharacteristics } from './hooks/useCharacteristics.js'
+import { getRecentMaterials, addRecentMaterial } from './hooks/useRecentMaterials.js'
 
 export default function SPCFilterBar() {
   const { state, dispatch } = useSPC()
@@ -19,6 +20,7 @@ export default function SPCFilterBar() {
 
   const [inputValue, setInputValue] = useState('')
   const [notFound, setNotFound] = useState(false)
+  const [recents] = useState(() => getRecentMaterials())
 
   const handleValidate = async () => {
     const trimmed = inputValue.trim()
@@ -26,7 +28,9 @@ export default function SPCFilterBar() {
     setNotFound(false)
     const result = await validateMaterial(trimmed)
     if (result?.valid) {
-      dispatch({ type: 'SET_MATERIAL', payload: { material_id: result.material_id, material_name: result.material_name } })
+      const mat = { material_id: result.material_id, material_name: result.material_name }
+      addRecentMaterial(mat)
+      dispatch({ type: 'SET_MATERIAL', payload: mat })
     } else if (result && !result.valid) {
       setNotFound(true)
     }
@@ -45,6 +49,11 @@ export default function SPCFilterBar() {
     const [mic_id, mic_name] = e.target.value.split('|')
     const mic = allCharacteristics.find(c => c.mic_id === mic_id && c.mic_name === mic_name) ?? null
     dispatch({ type: 'SET_MIC', payload: mic })
+  }
+
+  const selectRecent = (mat) => {
+    setInputValue(mat.material_id)
+    dispatch({ type: 'SET_MATERIAL', payload: mat })
   }
 
   return (
@@ -81,6 +90,19 @@ export default function SPCFilterBar() {
             {state.selectedMaterial.material_name || state.selectedMaterial.material_id}
           </span>
         )}
+        {!state.selectedMaterial && recents.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {recents.map(m => (
+              <button
+                key={m.material_id}
+                onClick={() => selectRecent(m)}
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer border-0"
+              >
+                {m.material_name || m.material_id}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Plant — only shown once a material is validated */}
@@ -95,7 +117,7 @@ export default function SPCFilterBar() {
             disabled={plantsLoading}
           >
             <option value="">
-              {plantsLoading ? 'Loading...' : plants.length > 1 ? '— All plants —' : plants.length === 1 ? '— Select plant —' : 'No plant data'}
+              {plantsLoading ? 'Loading…' : plants.length > 1 ? '— All plants —' : plants.length === 1 ? '— Select plant —' : 'No plant data'}
             </option>
             {plants.map(p => (
               <option key={p.plant_id} value={p.plant_id}>
@@ -120,7 +142,7 @@ export default function SPCFilterBar() {
             {!state.selectedMaterial
               ? '— Select material first —'
               : charsLoading
-              ? 'Loading...'
+              ? 'Loading…'
               : allCharacteristics.length === 0
               ? 'No characteristics found'
               : '— Select a characteristic —'}

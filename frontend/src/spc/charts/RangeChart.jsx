@@ -96,7 +96,7 @@ export default function RangeChart({ spc, mrSignals }) {
   return (
     <div className="spc-chart-pane">
       <div className="spc-chart-pane-title">R Chart (Subgroup Range)</div>
-      <ReactECharts option={option} style={{ height: 180 }} notMerge />
+      <ReactECharts option={option} style={{ height: 180 }} theme="spc" notMerge />
     </div>
   )
 }

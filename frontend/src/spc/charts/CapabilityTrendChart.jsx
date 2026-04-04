@@ -85,5 +85,5 @@ export default function CapabilityTrendChart({ trendData, windowSize }) {
     )
   }
 
-  return <ReactECharts option={option} style={{ height: 220, width: '100%' }} />
+  return <ReactECharts option={option} style={{ height: 220, width: '100%' }} theme="spc" />
 }

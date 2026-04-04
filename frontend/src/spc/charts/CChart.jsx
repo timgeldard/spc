@@ -86,7 +86,7 @@ export default function CChart({ points }) {
           <span className="spc-chart-ooc">⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} notMerge />
+      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
       <p className="spc-chart-hint">
         c̄ = {chart.cBar.toFixed(3)} · UCL = {chart.ucl.toFixed(3)} · LCL = {Math.max(0, chart.lcl).toFixed(3)}
       </p>

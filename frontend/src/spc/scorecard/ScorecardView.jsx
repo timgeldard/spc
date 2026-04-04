@@ -49,19 +49,31 @@ export default function ScorecardView() {
 
   if (!state.selectedMaterial) {
     return (
-      <div className="spc-empty-state">
-        <div className="spc-empty-icon">📋</div>
-        <p>Select a material above to view the SPC scorecard.</p>
-        <p className="spc-empty-sub">The scorecard shows Cp/Cpk for all characteristics. Click a row to open its control chart.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="text-gray-300">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-700">No material selected</p>
+          <p className="text-xs text-gray-400 max-w-xs mt-1">Select a material above to view the SPC scorecard with Cp/Cpk for all characteristics.</p>
+        </div>
       </div>
     )
   }
 
   if (loading) {
     return (
-      <div className="spc-loading">
-        <div className="spc-spinner" />
-        <p>Loading scorecard…</p>
+      <div style={{ padding: '1.5rem 0' }}>
+        <div className="flex flex-col gap-3">
+          <div className="animate-pulse rounded-md bg-gray-200/70 h-10 w-full" />
+          <div className="animate-pulse rounded-md bg-gray-200/70 h-10 w-full" />
+          <div className="animate-pulse rounded-md bg-gray-200/70 h-10 w-5/6" />
+          <div className="animate-pulse rounded-md bg-gray-200/70 h-10 w-4/6" />
+          <div className="animate-pulse rounded-md bg-gray-200/70 h-10 w-full" />
+        </div>
       </div>
     )
   }
@@ -72,9 +84,16 @@ export default function ScorecardView() {
 
   if (!scorecard.length) {
     return (
-      <div className="spc-empty-state">
-        <p>No scorecard data found for <strong>{state.selectedMaterial.material_name}</strong>.</p>
-        <p className="spc-empty-sub">At least 3 batches with quantitative results are required per characteristic.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="text-gray-300">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-700">No scorecard data</p>
+          <p className="text-xs text-gray-400 max-w-xs mt-1">No data found for <strong>{state.selectedMaterial.material_name}</strong>. At least 3 batches with quantitative results are required.</p>
+        </div>
       </div>
     )
   }

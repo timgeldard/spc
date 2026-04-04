@@ -146,7 +146,7 @@ export default function IndividualsChart({ spc, indexedPoints, signals, excluded
         Individuals Chart (X)
         <span className="spc-chart-n">n = {indexedPoints.length}</span>
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} notMerge onEvents={onEvents} />
+      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
       {onPointClick && (
         <p className="spc-chart-hint">Click any point to toggle exclusion from control limit calculation</p>
       )}

@@ -122,7 +122,7 @@ export default function XbarChart({ spc, signals, externalLimits }) {
         X̄ Chart (Subgroup Means)
         <span className="spc-chart-n">{xbarR.subgroupStats.length} subgroups</span>
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} notMerge />
+      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
     </div>
   )
 }

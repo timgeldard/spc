@@ -140,6 +140,7 @@ export default function CorrelationMatrix({ pairs, mics, onCellClick }) {
     <div>
       <ReactECharts
         option={option}
+        theme="spc"
         style={{ height: size, width: '100%' }}
         onEvents={onEvents}
         notMerge

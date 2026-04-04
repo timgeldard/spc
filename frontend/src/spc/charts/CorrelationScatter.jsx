@@ -110,7 +110,7 @@ export default function CorrelationScatter({ result, loading, error }) {
 
   return (
     <div className="spc-correlation-scatter">
-      <ReactECharts option={option} style={{ height: 380, width: '100%' }} notMerge />
+      <ReactECharts option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
     </div>
   )
 }
