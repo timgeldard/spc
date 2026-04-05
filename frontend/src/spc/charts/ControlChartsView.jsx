@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { useSPC } from '../SPCContext.jsx'
 import { useSPCChartData } from '../hooks/useSPCChartData.js'
 import { useSPCCalculations } from '../hooks/useSPCCalculations.js'
@@ -113,7 +114,7 @@ export default function ControlChartsView() {
 
   const { stratifyAll, limitsMode } = state
 
-  const { points: quantPoints, normality: quantNormality, loading: quantLoading, error: quantError } = useSPCChartData(
+  const { points: quantPoints, normality: quantNormality, dataTruncated, loading: quantLoading, error: quantError } = useSPCChartData(
     isQuantitative ? selectedMaterial?.material_id : null,
     selectedMIC?.mic_id,
     selectedMIC?.mic_name,
@@ -514,6 +515,12 @@ export default function ControlChartsView() {
       )}
       {exclusionsLoading && (
         <div className="banner banner--info">Loading persisted exclusions…</div>
+      )}
+      {dataTruncated && (
+        <div className="banner banner--warning" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <AlertTriangle size={16} />
+          <span>Data limit reached. Only the first 10,000 points are displayed. Please narrow your Date Range for a complete analysis.</span>
+        </div>
       )}
       {exclusionAudit && (
         <div className="banner banner--info">

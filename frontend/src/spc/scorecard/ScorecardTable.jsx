@@ -55,6 +55,7 @@ const columnDefs = [
   { field: 'stddev_overall',  headerName: 'Std Dev',        width: 100, type: 'numericColumn', valueFormatter: p => p.value?.toFixed(4) ?? '—' },
   { field: 'nominal_target',  headerName: 'Target',         width: 100, type: 'numericColumn', valueFormatter: p => p.value?.toFixed(4) ?? '—', sortable: false },
   { field: 'pp',              headerName: 'Pp',             width: 80,  type: 'numericColumn', valueFormatter: p => p.value?.toFixed(2) ?? '—' },
+  { field: 'cpk',             headerName: 'Cpk',            width: 90,  cellRenderer: PpkCell },
   { field: 'ppk',             headerName: 'Ppk',            width: 90,  cellRenderer: PpkCell },
   { field: 'z_score',         headerName: 'Z (σ)',          width: 80,  type: 'numericColumn', valueFormatter: p => p.value?.toFixed(2) ?? '—', hide: true },
   { field: 'dpmo',            headerName: 'DPMO (1.5σ)',    width: 110, cellRenderer: DPMOCell, headerComponent: DPMOHeaderCell, hide: true },

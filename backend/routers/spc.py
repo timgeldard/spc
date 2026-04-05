@@ -37,6 +37,23 @@ from backend.utils.rate_limit import limiter
 
 router = APIRouter()
 
+D2_TABLE = {
+    2: 1.128,
+    3: 1.693,
+    4: 2.059,
+    5: 2.326,
+    6: 2.534,
+    7: 2.704,
+    8: 2.847,
+    9: 2.970,
+    10: 3.078,
+    11: 3.173,
+    12: 3.258,
+    13: 3.336,
+    14: 3.407,
+    15: 3.472,
+}
+
 # In-process caching of process-flow results was removed.
 # Rationale: the cache was keyed only by material_id + date range, so results
 # from one user (with broad Unity Catalog access) could be served to another
@@ -519,12 +536,16 @@ async def spc_chart_data(
         body.date_to,
         body.stratify_all,
     )
+    data_truncated = len(rows) > 10000
+    if data_truncated:
+        rows = rows[:10000]
 
     return await attach_data_freshness(
         {
             "points": rows,
             "count": len(rows),
             "stratified": body.stratify_all,
+            "data_truncated": data_truncated,
             "normality": _compute_normality_result([row.get("value") for row in rows]),
         },
         token,
@@ -640,6 +661,7 @@ async def _chart_data_rows(
             {plant_select}
         FROM ranked
         ORDER BY batch_seq, sample_seq
+        LIMIT 10001
     """
     try:
         rows = await run_sql_async(token, query, params)
@@ -884,8 +906,8 @@ async def _scorecard_rows(
     Execute the scorecard SQL and post-process rows into capability metrics.
 
     Returns Pp/Ppk (overall process performance) using STDDEV_SAMP (N−1 denominator)
-    per AIAG SPC 4th Edition. Cp/Cpk (within-subgroup) are NOT included — they require
-    within-subgroup sigma estimated from R̄/d2, which is not available from a SQL aggregate.
+    and Cpk (short-term capability) using within-subgroup sigma estimated from
+    R̄/d2 per AIAG SPC 4th Edition.
 
     Spec type is inferred from resolved USL/LSL to handle unilateral specs correctly.
     """
@@ -903,48 +925,99 @@ async def _scorecard_rows(
     date_filter = ("AND " + " AND ".join(sc_clauses)) if sc_clauses else ""
 
     query = f"""
+        WITH batch_metadata AS (
+            SELECT
+                MATERIAL_ID,
+                BATCH_ID,
+                MAX(PLANT_ID) AS plant_id
+            FROM {tbl('gold_batch_mass_balance_v')} mb
+            WHERE mb.MATERIAL_ID = :material_id
+              AND mb.MOVEMENT_CATEGORY = 'Production'
+              {date_filter}
+            GROUP BY MATERIAL_ID, BATCH_ID
+        ),
+        filtered_results AS (
+            SELECT
+                r.BATCH_ID                                            AS batch_id,
+                r.MIC_ID                                              AS mic_id,
+                r.MIC_NAME                                            AS mic_name,
+                CAST(r.QUANTITATIVE_RESULT AS DOUBLE)                 AS value,
+                TRY_CAST(r.TARGET_VALUE AS DOUBLE)                    AS nominal_target,
+                TRY_CAST(
+                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
+                         THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
+                    END AS DOUBLE)                                    AS lsl_spec,
+                TRY_CAST(
+                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
+                         THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
+                    END AS DOUBLE)                                    AS usl_spec,
+                CASE WHEN LOCATE('...', r.TOLERANCE) = 0
+                     THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END         AS tolerance_half_width,
+                r.TOLERANCE                                           AS raw_tolerance,
+                r.INSPECTION_RESULT_VALUATION                         AS valuation
+            FROM {tbl('gold_batch_quality_result_v')} r
+            INNER JOIN batch_metadata bm
+                ON bm.MATERIAL_ID = r.MATERIAL_ID
+               AND bm.BATCH_ID    = r.BATCH_ID
+            WHERE r.MATERIAL_ID = :material_id
+              AND r.QUANTITATIVE_RESULT IS NOT NULL
+              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
+        ),
+        batch_ranges AS (
+            SELECT
+                mic_id,
+                mic_name,
+                batch_id,
+                COUNT(*)                                              AS batch_n,
+                MAX(value) - MIN(value)                               AS batch_range
+            FROM filtered_results
+            GROUP BY mic_id, mic_name, batch_id
+            HAVING COUNT(*) >= 2
+        ),
+        range_summary AS (
+            SELECT
+                mic_id,
+                mic_name,
+                AVG(batch_range)                                      AS r_bar,
+                AVG(batch_n)                                          AS avg_n
+            FROM batch_ranges
+            GROUP BY mic_id, mic_name
+        ),
+        mic_stats AS (
+            SELECT
+                mic_id,
+                mic_name,
+                COUNT(DISTINCT batch_id)                              AS batch_count,
+                COUNT(*)                                              AS sample_count,
+                ROUND(AVG(value), 4)                                  AS mean_value,
+                ROUND(STDDEV_SAMP(value), 4)                          AS stddev_overall,
+                ROUND(MIN(value), 4)                                  AS min_value,
+                ROUND(MAX(value), 4)                                  AS max_value,
+                MAX(nominal_target)                                   AS nominal_target,
+                MAX(lsl_spec)                                         AS lsl_spec,
+                MAX(usl_spec)                                         AS usl_spec,
+                MAX(tolerance_half_width)                             AS tolerance_half_width,
+                COUNT(DISTINCT nominal_target)                        AS distinct_nominal_count,
+                COUNT(DISTINCT raw_tolerance)                         AS distinct_tolerance_count,
+                COUNT(DISTINCT CASE
+                    WHEN valuation = 'R' THEN batch_id
+                END)                                                  AS ooc_batches,
+                COUNT(DISTINCT CASE
+                    WHEN valuation = 'A' THEN batch_id
+                END)                                                  AS accepted_batches
+            FROM filtered_results
+            GROUP BY mic_id, mic_name
+        )
         SELECT
-            r.MIC_ID                                                AS mic_id,
-            r.MIC_NAME                                              AS mic_name,
-            COUNT(DISTINCT r.BATCH_ID)                              AS batch_count,
-            COUNT(*)                                                AS sample_count,
-            ROUND(AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4)    AS mean_value,
-            ROUND(STDDEV_SAMP(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4) AS stddev_overall,
-            ROUND(MIN(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4)   AS min_value,
-            ROUND(MAX(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4)   AS max_value,
-            MAX(TRY_CAST(r.TARGET_VALUE AS DOUBLE))                 AS nominal_target,
-            -- Parse 'LSL...USL' range format (e.g. '0.816...0.836')
-            MAX(TRY_CAST(
-                CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                     THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
-                END AS DOUBLE))                                      AS lsl_spec,
-            MAX(TRY_CAST(
-                CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                     THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
-                END AS DOUBLE))                                      AS usl_spec,
-            -- Fallback: plain numeric half-width format
-            MAX(CASE WHEN LOCATE('...', r.TOLERANCE) = 0
-                     THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END)      AS tolerance_half_width,
-            COUNT(DISTINCT r.TARGET_VALUE)                           AS distinct_nominal_count,
-            COUNT(DISTINCT r.TOLERANCE)                              AS distinct_tolerance_count,
-            COUNT(DISTINCT CASE
-                WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN r.BATCH_ID
-            END)                                                    AS ooc_batches,
-            COUNT(DISTINCT CASE
-                WHEN r.INSPECTION_RESULT_VALUATION = 'A' THEN r.BATCH_ID
-            END)                                                    AS accepted_batches
-        FROM {tbl('gold_batch_quality_result_v')} r
-        LEFT JOIN {tbl('gold_batch_mass_balance_v')} mb
-            ON mb.MATERIAL_ID = r.MATERIAL_ID
-           AND mb.BATCH_ID    = r.BATCH_ID
-           AND mb.MOVEMENT_CATEGORY = 'Production'
-        WHERE r.MATERIAL_ID = :material_id
-          AND r.QUANTITATIVE_RESULT IS NOT NULL
-          AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-          {date_filter}
-        GROUP BY r.MIC_ID, r.MIC_NAME
-        HAVING COUNT(DISTINCT r.BATCH_ID) >= 3
-        ORDER BY r.MIC_NAME
+            ms.*,
+            ROUND(rs.r_bar, 4)                                        AS r_bar,
+            ROUND(rs.avg_n, 4)                                        AS avg_n
+        FROM mic_stats ms
+        LEFT JOIN range_summary rs
+            ON rs.mic_id = ms.mic_id
+           AND rs.mic_name = ms.mic_name
+        WHERE ms.batch_count >= 3
+        ORDER BY ms.mic_name
     """
     try:
         rows = await run_sql_async(token, query, params)
@@ -954,7 +1027,7 @@ async def _scorecard_rows(
     numeric_fields = [
         "batch_count", "sample_count", "mean_value", "stddev_overall",
         "min_value", "max_value", "nominal_target", "tolerance_half_width",
-        "lsl_spec", "usl_spec", "ooc_batches", "accepted_batches",
+        "lsl_spec", "usl_spec", "ooc_batches", "accepted_batches", "r_bar", "avg_n",
     ]
     for row in rows:
         for field in numeric_fields:
@@ -968,6 +1041,8 @@ async def _scorecard_rows(
         stddev = row.get("stddev_overall") or 0
         mean_v = row.get("mean_value")
         nominal = row.get("nominal_target")
+        r_bar = row.get("r_bar")
+        avg_n = row.get("avg_n")
 
         # Resolve spec limits: prefer parsed range, fall back to nominal ± half-width
         usl = row.get("usl_spec")
@@ -984,8 +1059,6 @@ async def _scorecard_rows(
         row["lsl"] = round(lsl, 6) if lsl is not None else None
 
         # Pp/Ppk — overall process performance using sample stddev (STDDEV_SAMP, N−1)
-        # Cp/Cpk are not included: they require within-subgroup sigma (R̄/d2) which
-        # cannot be computed from a single SQL aggregate across all batches.
         pp = ppk = None
         if stddev > 0 and mean_v is not None:
             if usl is not None and lsl is not None:
@@ -997,6 +1070,25 @@ async def _scorecard_rows(
             elif lsl is not None:
                 ppk = round((mean_v - lsl) / (3 * stddev), 3)
 
+        # Cpk — short-term capability using within-subgroup sigma = R̄ / d2.
+        # This uses the average within-batch range and average subgroup size
+        # per AIAG SPC 4th Edition for a lightweight scorecard approximation.
+        sigma_within = cp = cpk = None
+        ref_n = int(round(avg_n)) if avg_n is not None else None
+        d2 = D2_TABLE.get(ref_n)
+        if d2 and r_bar is not None and r_bar > 0 and mean_v is not None:
+            sigma_within = round(r_bar / d2, 6)
+            if usl is not None and lsl is not None:
+                cp = round((usl - lsl) / (6 * sigma_within), 3)
+                cpk = round(min((usl - mean_v) / (3 * sigma_within), (mean_v - lsl) / (3 * sigma_within)), 3)
+            elif usl is not None:
+                cpk = round((usl - mean_v) / (3 * sigma_within), 3)
+            elif lsl is not None:
+                cpk = round((mean_v - lsl) / (3 * sigma_within), 3)
+
+        row["cp"] = cp
+        row["cpk"] = cpk
+        row["sigma_within"] = sigma_within
         row["pp"] = pp
         row["ppk"] = ppk
 
