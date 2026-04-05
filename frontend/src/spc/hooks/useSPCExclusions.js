@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFrom, dateTo }) {
+export function useSPCExclusions({ materialId, micId, chartType, plantId, stratifyAll, dateFrom, dateTo }) {
   const [snapshot, setSnapshot] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -24,6 +24,7 @@ export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFr
       material_id: materialId,
       mic_id: micId,
       chart_type: chartType,
+      stratify_all: String(Boolean(stratifyAll)),
     })
     if (plantId) params.set('plant_id', plantId)
     if (dateFrom) params.set('date_from', dateFrom)
@@ -49,7 +50,7 @@ export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFr
       cancelled = true
       controller.abort()
     }
-  }, [scopeReady, materialId, micId, chartType, plantId, dateFrom, dateTo])
+  }, [scopeReady, materialId, micId, chartType, plantId, stratifyAll, dateFrom, dateTo])
 
   const saveSnapshot = useCallback(async (payload) => {
     setSaving(true)

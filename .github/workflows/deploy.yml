@@ -44,12 +44,26 @@ jobs:
       - name: Run backend tests
         run: pytest backend/tests -v
 
-      - name: Install Databricks CLI
+      - name: Install Databricks CLI prerequisites
         if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y gettext-base
-          pip install databricks-cli
+
+      - name: Set up Databricks CLI
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
+        uses: databricks/setup-cli@main
+
+      - name: Verify Databricks CLI version
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
+        run: |
+          databricks version
+          VERSION="$(databricks version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+          test -n "$VERSION"
+          if [ "$(printf '%s\n' '0.220.0' "$VERSION" | sort -V | head -n1)" != "0.220.0" ]; then
+            echo "Databricks CLI version $VERSION is too old; require >= 0.220.0"
+            exit 1
+          fi
 
       - name: Configure Databricks CLI for migration checks
         if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}

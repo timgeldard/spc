@@ -70,6 +70,7 @@ class SaveExclusionsRequest(BaseModel):
     mic_id: str
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
+    stratify_all: bool = False
     chart_type: str = "imr"
     date_from: Optional[str] = None
     date_to: Optional[str] = None
@@ -97,6 +98,7 @@ class SaveExclusionsRequest(BaseModel):
 
 
 class ChartTypeRequest(BaseModel):
+    stratify_all: bool = False
     chart_type: str = "imr"
 
     @field_validator("chart_type")
@@ -123,6 +125,7 @@ async def save_exclusions(
         "mic_id": body.mic_id,
         "mic_name": body.mic_name,
         "plant_id": body.plant_id,
+        "stratify_all": body.stratify_all,
         "chart_type": body.chart_type,
         "date_from": body.date_from,
         "date_to": body.date_to,
@@ -164,6 +167,7 @@ async def get_exclusions(
     mic_id: str,
     chart_type: str = "imr",
     plant_id: Optional[str] = None,
+    stratify_all: bool = False,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     x_forwarded_access_token: Optional[str] = Header(default=None),
@@ -175,6 +179,7 @@ async def get_exclusions(
 
     try:
         ChartTypeRequest(
+            stratify_all=stratify_all,
             chart_type=chart_type,
         )
     except ValidationError as exc:
@@ -183,25 +188,12 @@ async def get_exclusions(
     params = [
         sql_param("material_id", material_id),
         sql_param("mic_id", mic_id),
+        sql_param("plant_id", plant_id),
+        sql_param("stratify_all", stratify_all),
         sql_param("chart_type", chart_type),
+        sql_param("date_from", date_from),
+        sql_param("date_to", date_to),
     ]
-    if plant_id:
-        plant_clause = "AND plant_id = :plant_id"
-        params.append(sql_param("plant_id", plant_id))
-    else:
-        plant_clause = "AND plant_id IS NULL"
-
-    if date_from:
-        date_from_clause = "AND COALESCE(date_from, '') = :date_from"
-        params.append(sql_param("date_from", date_from))
-    else:
-        date_from_clause = "AND date_from IS NULL"
-
-    if date_to:
-        date_to_clause = "AND COALESCE(date_to, '') = :date_to"
-        params.append(sql_param("date_to", date_to))
-    else:
-        date_to_clause = "AND date_to IS NULL"
 
     query = f"""
         SELECT
@@ -210,6 +202,7 @@ async def get_exclusions(
             mic_id,
             mic_name,
             plant_id,
+            stratify_all,
             chart_type,
             date_from,
             date_to,
@@ -226,9 +219,10 @@ async def get_exclusions(
         WHERE material_id = :material_id
           AND mic_id = :mic_id
           AND chart_type = :chart_type
-          {plant_clause}
-          {date_from_clause}
-          {date_to_clause}
+          AND plant_id <=> :plant_id
+          AND COALESCE(stratify_all, false) = CAST(:stratify_all AS BOOLEAN)
+          AND date_from <=> :date_from
+          AND date_to <=> :date_to
         ORDER BY event_ts DESC
         LIMIT 1
     """

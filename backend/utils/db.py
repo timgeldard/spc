@@ -365,9 +365,12 @@ async def attach_data_freshness(
             error_id=error_id,
             request_path=request_path or "unknown",
         )
-        raise RuntimeError(
-            f"Data freshness lookup failed (error_id={error_id}). "
-            "See spc_query_audit for details."
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Data freshness lookup failed",
+                "error_id": error_id,
+            },
         ) from exc
 
 
@@ -387,6 +390,7 @@ async def insert_spc_exclusion_snapshot(
         sql_param("mic_id", payload["mic_id"]),
         sql_param("mic_name", payload.get("mic_name")),
         sql_param("plant_id", payload.get("plant_id")),
+        sql_param("stratify_all", payload.get("stratify_all", False)),
         sql_param("chart_type", payload["chart_type"]),
         sql_param("date_from", payload.get("date_from")),
         sql_param("date_to", payload.get("date_to")),
@@ -405,6 +409,7 @@ async def insert_spc_exclusion_snapshot(
             mic_id,
             mic_name,
             plant_id,
+            stratify_all,
             chart_type,
             date_from,
             date_to,
@@ -424,6 +429,7 @@ async def insert_spc_exclusion_snapshot(
             :mic_id,
             :mic_name,
             :plant_id,
+            CAST(:stratify_all AS BOOLEAN),
             :chart_type,
             :date_from,
             :date_to,

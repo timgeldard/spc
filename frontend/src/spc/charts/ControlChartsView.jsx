@@ -133,6 +133,7 @@ export default function ControlChartsView() {
     micId: isQuantitative ? selectedMIC?.mic_id : null,
     chartType: effectiveChartType,
     plantId: selectedPlant?.plant_id ?? null,
+    stratifyAll,
     dateFrom: dateFrom || null,
     dateTo: dateTo || null,
   })
@@ -207,6 +208,7 @@ export default function ControlChartsView() {
       mic_id: selectedMIC.mic_id,
       mic_name: selectedMIC.mic_name ?? null,
       plant_id: selectedPlant?.plant_id ?? null,
+      stratify_all: stratifyAll,
       chart_type: effectiveChartType,
       date_from: dateFrom || null,
       date_to: dateTo || null,

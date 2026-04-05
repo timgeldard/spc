@@ -19,19 +19,19 @@ def test_export_scorecard_csv_returns_200(monkeypatch):
     monkeypatch.setattr(export_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
 
     async def fake_fetch_scorecard(_token, _body):
-      return [{
-          "mic_id": "MIC-1",
-          "mic_name": "Moisture",
-          "batch_count": 4,
-          "mean_value": 10.1,
-          "stddev_overall": 0.2,
-          "pp": 1.5,
-          "ppk": 1.4,
-          "z_score": 4.2,
-          "dpmo": 63,
-          "ooc_rate": 0.0,
-          "capability_status": "good",
-      }]
+        return [{
+            "mic_id": "MIC-1",
+            "mic_name": "Moisture",
+            "batch_count": 4,
+            "mean_value": 10.1,
+            "stddev_overall": 0.2,
+            "pp": 1.5,
+            "ppk": 1.4,
+            "z_score": 4.2,
+            "dpmo": 63,
+            "ooc_rate": 0.0,
+            "capability_status": "good",
+        }]
 
     monkeypatch.setattr(export_module, "_fetch_scorecard", fake_fetch_scorecard)
 
