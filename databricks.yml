@@ -1,6 +1,18 @@
 bundle:
   name: spc
 
+variables:
+  app_name:
+    default: spc
+  warehouse_http_path:
+    default: /sql/1.0/warehouses/e76480b94bea6ed5
+  trace_catalog:
+    default: connected_plant_uat
+  trace_schema:
+    default: gold
+  locked_limits_migration:
+    default: scripts/migrations/000_setup_locked_limits.sql
+
 targets:
   uat:
     default: true
@@ -10,7 +22,7 @@ targets:
 resources:
   apps:
     spc:
-      name: spc
+      name: ${var.app_name}
       description: Statistical Process Control app powered by Databricks
       source_code_path: .
       # IMPORTANT: user_api_scopes (["sql"]) cannot be declared here — the DABs
@@ -18,3 +30,6 @@ resources:
       # The `make deploy` target runs scripts/post-deploy.sh after every deploy
       # to re-apply the scope via `databricks apps update`. Never deploy with
       # `databricks bundle deploy` directly or the SQL token passthrough breaks.
+      #
+      # Locked-limits setup is treated as part of deployment readiness via the
+      # Makefile / CI migration step against ${var.locked_limits_migration}.

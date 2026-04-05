@@ -17,8 +17,9 @@ import hashlib
 import json
 import logging
 import os
-import time
 import re
+import time
+import uuid
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -99,6 +100,50 @@ def sql_param(name: str, value: Optional[object]) -> dict:
         params    = [sql_param("my_id", some_value)]
     """
     return {"name": name, "value": str(value) if value is not None else None, "type": "STRING"}
+
+
+def classify_sql_runtime_error(
+    exc: Exception,
+    *,
+    missing_table_detail: Optional[str] = None,
+) -> Optional[HTTPException]:
+    """Map Databricks SQL runtime failures to client-facing HTTP errors."""
+    msg = str(exc).lower()
+    if "permission denied" in msg or "no access" in msg or "403" in msg:
+        return HTTPException(status_code=403, detail="Access denied by Unity Catalog policy.")
+    if "401" in msg or "unauthorized" in msg:
+        return HTTPException(status_code=401, detail="Token rejected by Databricks.")
+    if missing_table_detail and (
+        "table or view not found" in msg
+        or "does not exist" in msg
+        or "doesn't exist" in msg
+    ):
+        return HTTPException(status_code=503, detail=missing_table_detail)
+    return None
+
+
+def increment_observability_counter(name: str, *, tags: Optional[dict[str, str]] = None) -> None:
+    """Emit a structured counter event until a dedicated metrics sink is wired in."""
+    logger.info(
+        "metric.increment name=%s value=1 tags=%s",
+        name,
+        json.dumps(tags or {}, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def send_operational_alert(*, subject: str, body: str, error_id: Optional[str] = None, request_path: Optional[str] = None) -> None:
+    """Stub hook for workspace-specific alerting integrations.
+
+    See GitHub issue #9 for wiring this into Databricks SQL alerts or a webhook-
+    based incident pipeline once environment-specific routing is available.
+    """
+    logger.warning(
+        "operational_alert.pending issue=#9 subject=%s error_id=%s request_path=%s body=%s",
+        subject,
+        error_id or "unknown",
+        request_path or "unknown",
+        body,
+    )
 
 
 def run_sql(
@@ -236,3 +281,192 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
         "schema": TRACE_SCHEMA,
         "sources": rows,
     }
+
+
+async def insert_spc_audit_event(
+    token: str,
+    *,
+    event_type: str,
+    detail: dict,
+    sql_hash: Optional[str] = None,
+    error_id: Optional[str] = None,
+    request_path: Optional[str] = None,
+) -> None:
+    """Persist an app audit event for operational/compliance investigations."""
+    params = [
+        sql_param("audit_id", str(uuid.uuid4())),
+        sql_param("event_type", event_type),
+        sql_param("sql_hash", sql_hash),
+        sql_param("error_id", error_id),
+        sql_param("request_path", request_path),
+        sql_param("detail_json", json.dumps(detail, separators=(",", ":"))),
+    ]
+    statement = f"""
+        INSERT INTO {tbl('spc_query_audit')} (
+            audit_id,
+            event_type,
+            sql_hash,
+            error_id,
+            request_path,
+            detail_json,
+            user_id,
+            created_at
+        )
+        SELECT
+            :audit_id,
+            :event_type,
+            :sql_hash,
+            :error_id,
+            :request_path,
+            :detail_json,
+            CURRENT_USER(),
+            CURRENT_TIMESTAMP()
+    """
+    await run_sql_async(token, statement, params)
+
+
+async def attach_data_freshness(
+    payload: dict,
+    token: str,
+    source_views: list[str],
+    *,
+    request_path: Optional[str] = None,
+) -> dict:
+    """Attach freshness metadata or raise an auditable failure.
+
+    Freshness is treated as an explicit contract: if it cannot be computed, the
+    caller gets a hard failure with an error id rather than a silent partial
+    success that hides the monitoring gap.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        payload["data_freshness"] = await loop.run_in_executor(
+            _sql_executor, lambda: get_data_freshness(token, source_views)
+        )
+        return payload
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        mapped_error = classify_sql_runtime_error(exc)
+        if mapped_error is not None:
+            raise mapped_error from exc
+
+        error_id = str(uuid.uuid4())
+        logger.exception(
+            "data_freshness.failed error_id=%s request_path=%s source_views=%s",
+            error_id,
+            request_path or "unknown",
+            ",".join(sorted(set(source_views))),
+        )
+        try:
+            await insert_spc_audit_event(
+                token,
+                event_type="freshness_error",
+                error_id=error_id,
+                request_path=request_path or "unknown",
+                detail={
+                    "message": str(exc)[:500],
+                    "source_views": sorted(set(source_views)),
+                },
+            )
+        except Exception:
+            increment_observability_counter(
+                "data_freshness.audit_insert_failed_total",
+                tags={
+                    "error_id": error_id,
+                    "request_path": request_path or "unknown",
+                },
+            )
+            logger.exception(
+                "data_freshness.audit_insert_failed error_id=%s request_path=%s",
+                error_id,
+                request_path or "unknown",
+            )
+        send_operational_alert(
+            subject="SPC data freshness lookup failed",
+            body=(
+                "Freshness metadata could not be attached. "
+                "Check spc_query_audit and Databricks SQL connectivity."
+            ),
+            error_id=error_id,
+            request_path=request_path or "unknown",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Data freshness lookup failed",
+                "error_id": error_id,
+            },
+        ) from exc
+
+
+async def insert_spc_exclusion_snapshot(
+    token: str,
+    payload: dict,
+) -> None:
+    """Persist an immutable exclusion snapshot event to the Delta audit table.
+
+    The target table is expected to have Change Data Feed enabled so downstream
+    audit/reporting consumers can replay the full event history without relying
+    on in-place updates.
+    """
+    params = [
+        sql_param("event_id", payload["event_id"]),
+        sql_param("material_id", payload["material_id"]),
+        sql_param("mic_id", payload["mic_id"]),
+        sql_param("mic_name", payload.get("mic_name")),
+        sql_param("plant_id", payload.get("plant_id")),
+        sql_param("stratify_all", payload.get("stratify_all", False)),
+        sql_param("chart_type", payload["chart_type"]),
+        sql_param("date_from", payload.get("date_from")),
+        sql_param("date_to", payload.get("date_to")),
+        sql_param("rule_set", payload.get("rule_set")),
+        sql_param("justification", payload["justification"]),
+        sql_param("action", payload.get("action")),
+        sql_param("excluded_count", payload["excluded_count"]),
+        sql_param("excluded_points_json", json.dumps(payload["excluded_points"], separators=(",", ":"))),
+        sql_param("before_limits_json", json.dumps(payload.get("before_limits"), separators=(",", ":"))),
+        sql_param("after_limits_json", json.dumps(payload.get("after_limits"), separators=(",", ":"))),
+    ]
+    insert_sql = f"""
+        INSERT INTO {tbl('spc_exclusions')} (
+            event_id,
+            material_id,
+            mic_id,
+            mic_name,
+            plant_id,
+            stratify_all,
+            chart_type,
+            date_from,
+            date_to,
+            rule_set,
+            justification,
+            action,
+            excluded_count,
+            excluded_points_json,
+            before_limits_json,
+            after_limits_json,
+            user_id,
+            event_ts
+        )
+        SELECT
+            :event_id,
+            :material_id,
+            :mic_id,
+            :mic_name,
+            :plant_id,
+            CAST(:stratify_all AS BOOLEAN),
+            :chart_type,
+            :date_from,
+            :date_to,
+            :rule_set,
+            :justification,
+            :action,
+            CAST(:excluded_count AS INT),
+            :excluded_points_json,
+            :before_limits_json,
+            :after_limits_json,
+            CURRENT_USER(),
+            CURRENT_TIMESTAMP()
+    """
+    await run_sql_async(token, insert_sql, params)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSPC } from '../SPCContext.jsx'
-import { computeGRR } from './msaCalculations.js'
+import { computeGRR, computeGRR_ANOVA } from './msaCalculations.js'
 
 function parseCSVData(text, nOperators, nParts, nReplicates) {
   // Expected format: one row per measurement, columns: operator, part, replicate, value
@@ -36,12 +36,19 @@ function GRRResult({ result, tolerance, onSave, saving }) {
   if (!result) return null
   if (result.error) return <div className="banner banner--error">{result.error}</div>
 
-  const { grrPct, grrPctTol, repeatability, reproducibility, ndc, ev, av, grr, pv, tv } = result
+  const { grrPct, grrPctTol, ndc, ev, av, grr, pv, tv, method, interactionVariation, interactionPValue, modelWarning, systemStabilityWarning } = result
   const pctColor = grrPct == null ? '#9ca3af' : grrPct < 10 ? '#059669' : grrPct < 30 ? '#d97706' : '#dc2626'
   const verdict  = grrPct == null ? 'Unknown' : grrPct < 10 ? 'Acceptable' : grrPct < 30 ? 'Conditionally Acceptable' : 'Not Acceptable'
 
   return (
     <div className="spc-msa-results">
+      <div className="spc-chart-hint" style={{ marginBottom: '0.5rem' }}>
+        Method: <strong>{method === 'anova' ? 'ANOVA Gauge R&R' : 'Average & Range'}</strong>
+        {method === 'anova' && interactionPValue != null && ` · interaction p = ${interactionPValue.toFixed(4)}`}
+      </div>
+      {modelWarning && <div className="banner banner--warning">{modelWarning}</div>}
+      {systemStabilityWarning && <div className="banner banner--warning">{systemStabilityWarning}</div>}
+
       <div className="spc-msa-verdict" style={{ color: pctColor }}>
         <span className="spc-msa-grr-pct">{grrPct?.toFixed(1) ?? '—'}% GRR</span>
         <span className="spc-msa-verdict-label">{verdict}</span>
@@ -53,6 +60,7 @@ function GRRResult({ result, tolerance, onSave, saving }) {
         <tbody>
           <tr><td>Repeatability (EV)</td><td>{ev?.toFixed(4)}</td><td>{tv > 0 ? ((ev/tv)*100).toFixed(1) : '—'}%</td></tr>
           <tr><td>Reproducibility (AV)</td><td>{av?.toFixed(4)}</td><td>{tv > 0 ? ((av/tv)*100).toFixed(1) : '—'}%</td></tr>
+          {method === 'anova' && <tr><td>Op × Part Interaction</td><td>{interactionVariation?.toFixed(4)}</td><td>{tv > 0 ? (((interactionVariation ?? 0)/tv)*100).toFixed(1) : '—'}%</td></tr>}
           <tr><td>GRR</td><td>{grr?.toFixed(4)}</td><td>{grrPct?.toFixed(1)}%</td></tr>
           <tr><td>Part Variation (PV)</td><td>{pv?.toFixed(4)}</td><td>{tv > 0 ? ((pv/tv)*100).toFixed(1) : '—'}%</td></tr>
           <tr><td><strong>Total Variation (TV)</strong></td><td><strong>{tv?.toFixed(4)}</strong></td><td>100%</td></tr>
@@ -95,6 +103,7 @@ function generateSampleData(nOp, nPt, nRep) {
 
 export default function MSAView() {
   const { state } = useSPC()
+  const [method, setMethod] = useState('average_range')
   const [nOperators,  setNOperators]  = useState(3)
   const [nParts,      setNParts]      = useState(10)
   const [nReplicates, setNReplicates] = useState(2)
@@ -111,7 +120,7 @@ export default function MSAView() {
       return
     }
     const tol = parseFloat(tolerance) || 0
-    setResult(computeGRR(data, tol))
+    setResult(method === 'anova' ? computeGRR_ANOVA(data, tol) : computeGRR(data, tol))
   }
 
   const handleSave = async () => {
@@ -148,7 +157,7 @@ export default function MSAView() {
 
   return (
     <div className="spc-msa-view">
-      <h3 className="spc-section-title">Gauge R&R (AIAG Average &amp; Range Method)</h3>
+      <h3 className="spc-section-title">Gauge R&amp;R</h3>
       {!state.selectedMIC && (
         <div className="banner banner--warning">
           Select a characteristic in the Charts tab first to associate this study with a specific MIC.
@@ -156,6 +165,25 @@ export default function MSAView() {
       )}
 
       <div className="spc-msa-setup">
+        <div className="spc-msa-setup-row">
+          <label>Method:</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className={'spc-btn spc-btn--sm ' + (method === 'average_range' ? 'spc-btn--primary' : 'spc-btn--secondary')}
+              onClick={() => setMethod('average_range')}
+            >
+              Average &amp; Range
+            </button>
+            <button
+              type="button"
+              className={'spc-btn spc-btn--sm ' + (method === 'anova' ? 'spc-btn--primary' : 'spc-btn--secondary')}
+              onClick={() => setMethod('anova')}
+            >
+              ANOVA
+            </button>
+          </div>
+        </div>
         <div className="spc-msa-setup-row">
           <label>Operators:</label>
           <input type="number" className="spc-input spc-input--sm" min={2} max={5} value={nOperators}

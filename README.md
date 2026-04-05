@@ -160,13 +160,18 @@ npm run test:coverage       # with coverage report
 ```bash
 make deploy                 # builds frontend + deploys to UAT
 make deploy PROFILE=prod    # deploy to a different target profile
+make deploy PROFILE=dev APP_NAME=spc-dev TRACE_CATALOG=connected_plant_dev
 ```
 
 The Makefile:
 1. Verifies Databricks CLI authentication
 2. Builds the frontend (`npm run build` → `frontend/dist/`)
-3. Runs `databricks bundle deploy` (uploads all files)
-4. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
+3. Renders `app.yaml` from `app.template.yaml` using the active warehouse/catalog/schema values
+4. Runs `databricks bundle deploy` (uploads all files)
+5. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
+6. Applies the idempotent locked-limits migration (`scripts/migrations/000_setup_locked_limits.sql`)
+7. Applies the exclusions audit migration (`scripts/migrations/001_create_spc_exclusions.sql`)
+8. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
 
 ### CI
 
@@ -174,8 +179,9 @@ GitHub Actions runs `lint-and-test` on every push to `main`:
 - Frontend: `npm test` (Vitest)
 - Backend: `pytest backend/tests`
 
-Deployment is **not automated** — run `make deploy` from your local machine after
-the CI checks pass.
+When Databricks credentials are configured in GitHub Actions secrets, CI also
+applies the locked-limits, exclusions, and query-audit migrations to keep
+app-managed tables in sync with the deployed backend expectations.
 
 ---
 
@@ -203,6 +209,7 @@ the CI checks pass.
 | `POST` | `/api/spc/characteristics` | MIC list with statistical metadata (mean, stddev, chart type) |
 | `POST` | `/api/spc/attribute-characteristics` | Attribute (pass/fail) MIC list with p-bar |
 | `POST` | `/api/spc/chart-data` | Time-ordered measurement points for a material + MIC |
+| `POST` | `/api/spc/export` | Export scorecard, chart data, or signals as Excel / CSV |
 | `POST` | `/api/spc/p-chart-data` | Per-batch proportion nonconforming for a P-chart |
 | `POST` | `/api/spc/process-flow` | Material DAG (4 levels upstream, 3 downstream) with SPC health |
 | `POST` | `/api/spc/scorecard` | Pp/Ppk per MIC for a material, sorted by Ppk ascending |
@@ -298,7 +305,8 @@ credential storage and no app-level data filtering.
 
 ```
 spc/
-├── app.yaml                    Databricks Apps startup config (command + env vars)
+├── app.yaml                    Rendered Databricks Apps runtime config
+├── app.template.yaml           Template used by `make deploy` to render app.yaml
 ├── databricks.yml              Databricks Asset Bundle (DAB) config
 ├── Makefile                    Build and deploy automation
 ├── start.sh                    Alt startup script

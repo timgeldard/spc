@@ -3,14 +3,16 @@ import {
   mean,
   stddevPop,
   stddevSample,
+  stddevMSSD,
   computeIMR,
   computeXbarR,
   groupIntoSubgroups,
   computeCapability,
+  computeAll,
   detectWECORules,
   detectNelsonRules,
 } from '../calculations.js'
-import { computeGRR } from '../msa/msaCalculations.js'
+import { computeGRR, computeGRR_ANOVA } from '../msa/msaCalculations.js'
 
 // ---------------------------------------------------------------------------
 // mean
@@ -94,6 +96,23 @@ describe('computeIMR', () => {
     const result = computeIMR(values)
     expect(result.xBar).toBeCloseTo(10, 5)
   })
+
+  it('uses MSSD for low-n series', () => {
+    const result = computeIMR([10, 11, 9, 12, 8, 11, 10, 12])
+    expect(result.sigmaMethod).toBe('mssd')
+    expect(result.sigmaWithin).toBeCloseTo(result.sigmaMSSD, 6)
+  })
+
+  it('uses MSSD when a monotonic trend is detected', () => {
+    const result = computeIMR([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(result.sigmaMethod).toBe('mssd')
+  })
+
+  it('keeps MR as the default estimator for stable series', () => {
+    const result = computeIMR([10, 11, 10, 11, 10, 11, 10, 11, 10, 11])
+    expect(result.sigmaMethod).toBe('mr')
+    expect(result.sigmaWithin).toBeCloseTo(result.sigmaMR, 6)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -144,6 +163,19 @@ describe('computeXbarR', () => {
     expect(result).toHaveProperty('ucl_x')
     expect(result).toHaveProperty('lcl_x')
     expect(result).toHaveProperty('ucl_r')
+  })
+
+  it('surfaces mixed subgroup-size metadata without rounding n to a single reference size', () => {
+    const subgroups = [
+      { batchSeq: 1, batchId: 'B1', batchDate: '2024-01-01', values: [10, 11] },
+      { batchSeq: 2, batchId: 'B2', batchDate: '2024-01-02', values: [10, 12, 11, 9] },
+      { batchSeq: 3, batchId: 'B3', batchDate: '2024-01-03', values: [9, 10, 11] },
+    ]
+    const result = computeXbarR(subgroups)
+    expect(result.mixedSubgroupSizes).toBe(true)
+    expect(result.referenceSubgroupSize).toBeNull()
+    expect(result.averageSubgroupSize).toBeCloseTo((2 + 4 + 3) / 3, 6)
+    expect(result.limitStrategy).toMatch(/average_n/)
   })
 })
 
@@ -200,6 +232,42 @@ describe('computeCapability', () => {
     const usl = 13, lsl = 7
     const expectedPp = (usl - lsl) / (6 * expectedSigma)
     expect(result.pp).toBeCloseTo(expectedPp, 5)
+  })
+
+  it('carries through a non-normality warning when provided', () => {
+    const values = [8, 9, 10, 11, 12, 13]
+    const result = computeCapability(values, 10, 3, 1, {
+      normality: { method: 'shapiro_wilk', p_value: 0.0123, alpha: 0.05, is_normal: false, warning: null },
+    })
+    expect(result.normality?.is_normal).toBe(false)
+    expect(result.normalityWarning).toMatch(/non-normal/i)
+  })
+})
+
+describe('stddevMSSD', () => {
+  it('returns null for fewer than 2 values', () => {
+    expect(stddevMSSD([5])).toBeNull()
+  })
+
+  it('computes the successive-difference sigma estimator', () => {
+    const result = stddevMSSD([10, 12, 11, 13])
+    expect(result).toBeGreaterThan(0)
+  })
+})
+
+describe('computeAll', () => {
+  it('propagates backend normality metadata into capability results', () => {
+    const points = [
+      { batch_id: 'B1', batch_seq: 1, sample_seq: 1, value: 10, nominal: 10, tolerance: 3 },
+      { batch_id: 'B2', batch_seq: 2, sample_seq: 1, value: 11, nominal: 10, tolerance: 3 },
+      { batch_id: 'B3', batch_seq: 3, sample_seq: 1, value: 9, nominal: 10, tolerance: 3 },
+      { batch_id: 'B4', batch_seq: 4, sample_seq: 1, value: 10, nominal: 10, tolerance: 3 },
+      { batch_id: 'B5', batch_seq: 5, sample_seq: 1, value: 12, nominal: 10, tolerance: 3 },
+    ]
+    const normality = { method: 'shapiro_wilk', p_value: 0.02, alpha: 0.05, is_normal: false, warning: null }
+    const result = computeAll(points, 'imr', 'weco', { normality })
+    expect(result.normality).toEqual(normality)
+    expect(result.capability.normality).toEqual(normality)
   })
 })
 
@@ -401,5 +469,43 @@ describe('computeGRR', () => {
     const result = computeGRR(data, 20)
     // rBarBar = 2, K1(2 reps) = 0.8862
     expect(result.ev).toBeCloseTo(2 * 0.8862, 3)
+  })
+
+  it('returns a stability warning when AV raw variance goes negative', () => {
+    const data = [
+      [[10, 10.5], [20, 20.5]],
+      [[10.1, 10.6], [20.1, 20.6]],
+    ]
+    const result = computeGRR(data, 20)
+    expect(result.systemStabilityWarning).toMatch(/negative variance/i)
+  })
+})
+
+describe('computeGRR_ANOVA', () => {
+  it('returns error for insufficient dimensions', () => {
+    expect(computeGRR_ANOVA([[[1, 2]]], 10).error).toBeDefined()
+  })
+
+  it('reports interaction when operator-part effect is strong', () => {
+    const data = [
+      [[10, 10.2], [12, 12.2], [14, 14.2]],
+      [[10, 10.2], [14, 14.2], [18, 18.2]],
+    ]
+    const result = computeGRR_ANOVA(data, 20)
+    expect(result.method).toBe('anova')
+    expect(result.interactionVariation).toBeGreaterThan(0)
+    expect(result.model).toBe('interaction')
+  })
+
+  it('falls back to the reduced model when interaction is not significant', () => {
+    const data = [
+      [[10, 10.1], [20, 20.1], [30, 30.1]],
+      [[10.3, 10.4], [20.3, 20.4], [30.3, 30.4]],
+    ]
+    const result = computeGRR_ANOVA(data, 20)
+    expect(result.method).toBe('anova')
+    expect(result.interactionSignificant).toBe(false)
+    expect(result.model).toBe('reduced')
+    expect(result.modelWarning).toMatch(/reduced additive model/i)
   })
 })

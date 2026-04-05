@@ -18,7 +18,7 @@ export default function XbarChart({ spc, signals, externalLimits }) {
   const option = useMemo(() => {
     if (!xbarR) return null
 
-    const { sigma1, sigma2, subgroupStats } = xbarR
+    const { sigma1, sigma2, subgroupStats, mixedSubgroupSizes } = xbarR
     const grandMean = externalLimits?.cl  ?? xbarR.grandMean
     const ucl_x     = externalLimits?.ucl ?? xbarR.ucl_x
     const lcl_x     = externalLimits?.lcl ?? xbarR.lcl_x
@@ -48,12 +48,61 @@ export default function XbarChart({ spc, signals, externalLimits }) {
     const yMax = Math.max(...allY) + yPad
 
     const markLineData = [
-      { yAxis: ucl_x,     lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl_x.toFixed(4)}`,       position: 'end', color: '#ef4444', fontSize: 10 } },
-      { yAxis: grandMean, lineStyle: { color: '#1B3A4B', type: 'solid',  width: 2   }, label: { formatter: `X̄̄ ${grandMean.toFixed(4)}`, position: 'end', color: '#1B3A4B', fontSize: 10 } },
-      { yAxis: lcl_x,     lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lcl_x.toFixed(4)}`,       position: 'end', color: '#ef4444', fontSize: 10 } },
+      { yAxis: grandMean, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `X̄̄ ${grandMean.toFixed(4)}`, position: 'end', color: '#1B3A4B', fontSize: 10 } },
     ]
+    if (!mixedSubgroupSizes) {
+      markLineData.unshift(
+        { yAxis: ucl_x, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl_x.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } },
+      )
+      markLineData.push(
+        { yAxis: lcl_x, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lcl_x.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } },
+      )
+    }
     if (usl != null) markLineData.push({ yAxis: usl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `USL ${usl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
     if (lsl != null) markLineData.push({ yAxis: lsl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `LSL ${lsl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
+
+    const series = [{
+      type: 'line',
+      data: seriesData,
+      lineStyle: { color: '#1B3A4B', width: 2 },
+      showSymbol: true,
+      markLine: {
+        silent: true,
+        symbol: ['none', 'none'],
+        data: markLineData,
+      },
+      markArea: {
+        silent: true,
+        data: [
+          [{ yAxis: grandMean - sigma1, itemStyle: { color: 'rgba(16,185,129,0.05)' } }, { yAxis: grandMean + sigma1 }],
+          [{ yAxis: grandMean + sigma1, itemStyle: { color: 'rgba(245,158,11,0.06)' } }, { yAxis: grandMean + sigma2 }],
+          [{ yAxis: grandMean - sigma2, itemStyle: { color: 'rgba(245,158,11,0.06)' } }, { yAxis: grandMean - sigma1 }],
+          [{ yAxis: grandMean + sigma2, itemStyle: { color: 'rgba(239,68,68,0.06)' } }, { yAxis: ucl_x }],
+          [{ yAxis: lcl_x, itemStyle: { color: 'rgba(239,68,68,0.06)' } }, { yAxis: grandMean - sigma2 }],
+        ],
+      },
+    }]
+
+    if (mixedSubgroupSizes) {
+      series.unshift(
+        {
+          type: 'line',
+          data: subgroupStats.map(s => s.ucl_x),
+          showSymbol: false,
+          silent: true,
+          tooltip: { show: false },
+          lineStyle: { color: '#ef4444', width: 1.25, type: 'dashed', opacity: 0.55 },
+        },
+        {
+          type: 'line',
+          data: subgroupStats.map(s => s.lcl_x),
+          showSymbol: false,
+          silent: true,
+          tooltip: { show: false },
+          lineStyle: { color: '#ef4444', width: 1.25, type: 'dashed', opacity: 0.55 },
+        },
+      )
+    }
 
     return {
       animation: false,
@@ -90,27 +139,7 @@ export default function XbarChart({ spc, signals, externalLimits }) {
           return `<strong>${s.batchId}</strong><br/>X̄: <strong>${s.xbar?.toFixed(4)}</strong><br/>n = ${s.n}`
         },
       },
-      series: [{
-        type: 'line',
-        data: seriesData,
-        lineStyle: { color: '#1B3A4B', width: 2 },
-        showSymbol: true,
-        markLine: {
-          silent: true,
-          symbol: ['none', 'none'],
-          data: markLineData,
-        },
-        markArea: {
-          silent: true,
-          data: [
-            [{ yAxis: grandMean - sigma1, itemStyle: { color: 'rgba(16,185,129,0.05)'  } }, { yAxis: grandMean + sigma1  }],
-            [{ yAxis: grandMean + sigma1, itemStyle: { color: 'rgba(245,158,11,0.06)'  } }, { yAxis: grandMean + sigma2  }],
-            [{ yAxis: grandMean - sigma2, itemStyle: { color: 'rgba(245,158,11,0.06)'  } }, { yAxis: grandMean - sigma1  }],
-            [{ yAxis: grandMean + sigma2, itemStyle: { color: 'rgba(239,68,68,0.06)'   } }, { yAxis: ucl_x              }],
-            [{ yAxis: lcl_x,              itemStyle: { color: 'rgba(239,68,68,0.06)'   } }, { yAxis: grandMean - sigma2  }],
-          ],
-        },
-      }],
+      series,
     }
   }, [xbarR, spc, signalIndices, externalLimits])
 
@@ -123,6 +152,11 @@ export default function XbarChart({ spc, signals, externalLimits }) {
         <span className="spc-chart-n">{xbarR.subgroupStats.length} subgroups</span>
       </div>
       <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
+      {xbarR.mixedSubgroupSizes && (
+        <p className="spc-chart-hint">
+          Subgroup sizes vary. Dashed red limits are calculated per subgroup; the centre band uses pooled σ with average n for reference.
+        </p>
+      )}
     </div>
   )
 }

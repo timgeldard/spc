@@ -13,6 +13,7 @@ export function CustomDot({ cx, cy, index, signals = [], value, excluded = false
   if (excluded) {
     return (
       <g>
+        <title>Excluded from control-limit calculation — see audit panel for justification</title>
         <circle cx={cx} cy={cy} r={5} fill="#fff" stroke="#9ca3af" strokeWidth="1.5" strokeDasharray="3 2" />
         <line x1={cx - 4} y1={cy - 4} x2={cx + 4} y2={cy + 4} stroke="#9ca3af" strokeWidth="1.5" />
         <line x1={cx + 4} y1={cy - 4} x2={cx - 4} y2={cy + 4} stroke="#9ca3af" strokeWidth="1.5" />

@@ -147,8 +147,11 @@ export default function IndividualsChart({ spc, indexedPoints, signals, excluded
         <span className="spc-chart-n">n = {indexedPoints.length}</span>
       </div>
       <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
+      <p className="spc-chart-hint">
+        Sigma estimator: {imr.sigmaMethod === 'mssd' ? 'MSSD (trend-aware / low-n)' : 'Moving range (MR̄ / d2)'}
+      </p>
       {onPointClick && (
-        <p className="spc-chart-hint">Click any point to toggle exclusion from control limit calculation</p>
+        <p className="spc-chart-hint">Click any point to open the reviewed exclusion flow for control-limit calculation</p>
       )}
     </div>
   )

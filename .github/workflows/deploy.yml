@@ -40,3 +40,70 @@ jobs:
 
       - name: Run backend tests
         run: pytest backend/tests -v
+
+      - name: Detect Databricks migration prerequisites
+        id: db-env
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          if [[ -n "$DATABRICKS_HOST" && -n "$DATABRICKS_TOKEN" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Databricks CLI prerequisites
+        if: steps.db-env.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+
+      - name: Set up Databricks CLI
+        if: steps.db-env.outputs.enabled == 'true'
+        uses: databricks/setup-cli@main
+
+      - name: Verify Databricks CLI version
+        if: steps.db-env.outputs.enabled == 'true'
+        run: |
+          databricks version
+          VERSION="$(databricks version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+          test -n "$VERSION"
+          if [ "$(printf '%s\n' '0.220.0' "$VERSION" | sort -V | head -n1)" != "0.220.0" ]; then
+            echo "Databricks CLI version $VERSION is too old; require >= 0.220.0"
+            exit 1
+          fi
+
+      - name: Configure Databricks CLI for migration checks
+        if: steps.db-env.outputs.enabled == 'true'
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          mkdir -p "$HOME"
+          cat > "$HOME/.databrickscfg" <<EOF
+          [ci]
+          host = ${DATABRICKS_HOST}
+          token = ${DATABRICKS_TOKEN}
+          EOF
+
+      - name: Apply locked-limits migration
+        if: steps.db-env.outputs.enabled == 'true'
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-locked-limits PROFILE=ci
+
+      - name: Apply exclusions migration
+        if: steps.db-env.outputs.enabled == 'true'
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-exclusions PROFILE=ci
+
+      - name: Apply query-audit migration
+        if: steps.db-env.outputs.enabled == 'true'
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-query-audit PROFILE=ci

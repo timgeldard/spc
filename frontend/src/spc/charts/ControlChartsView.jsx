@@ -2,11 +2,13 @@ import { useMemo, useState, useEffect } from 'react'
 import { useSPC } from '../SPCContext.jsx'
 import { useSPCChartData } from '../hooks/useSPCChartData.js'
 import { useSPCCalculations } from '../hooks/useSPCCalculations.js'
+import { useSPCExclusions } from '../hooks/useSPCExclusions.js'
 import { usePChartData } from '../hooks/usePChartData.js'
 import { useCountChartData } from '../hooks/useCountChartData.js'
 import { useLockedLimits } from '../hooks/useLockedLimits.js'
 import { useExport } from '../hooks/useExport.js'
 import { autoCleanPhaseI, computeRollingCapability } from '../calculations.js'
+import { getLimitsSnapshot, mapExcludedPointsToIndices, recomputeForExcludedSet, toExcludedPoints } from '../exclusions.js'
 import IMRChart from './IMRChart.jsx'
 import XbarRChart from './XbarRChart.jsx'
 import PChart from './PChart.jsx'
@@ -15,6 +17,8 @@ import UChart from './UChart.jsx'
 import NPChart from './NPChart.jsx'
 import CapabilityPanel from './CapabilityPanel.jsx'
 import CapabilityTrendChart from './CapabilityTrendChart.jsx'
+import ExcludedPointsPanel from './ExcludedPointsPanel.jsx'
+import ExclusionJustificationModal from './ExclusionJustificationModal.jsx'
 import SignalsPanel from './SignalsPanel.jsx'
 
 function ChartTypeToggle({ chartType, override, onOverride }) {
@@ -91,7 +95,7 @@ function RuleSetToggle({ ruleSet, onSet }) {
 
 export default function ControlChartsView() {
   const { state, dispatch } = useSPC()
-  const { selectedMaterial, selectedMIC, selectedPlant, dateFrom, dateTo, chartTypeOverride, excludedIndices, ruleSet, excludeOutliers } = state
+  const { selectedMaterial, selectedMIC, selectedPlant, dateFrom, dateTo, chartTypeOverride, excludedIndices, ruleSet, excludeOutliers, exclusionAudit, exclusionDialog } = state
   const { exportData, exporting } = useExport()
   const [autoCleanLog, setAutoCleanLog] = useState(null)
   const [rollingWindowSize, setRollingWindowSize] = useState(20)
@@ -109,7 +113,7 @@ export default function ControlChartsView() {
 
   const { stratifyAll, limitsMode } = state
 
-  const { points: quantPoints, loading: quantLoading, error: quantError } = useSPCChartData(
+  const { points: quantPoints, normality: quantNormality, loading: quantLoading, error: quantError } = useSPCChartData(
     isQuantitative ? selectedMaterial?.material_id : null,
     selectedMIC?.mic_id,
     selectedMIC?.mic_name,
@@ -118,6 +122,21 @@ export default function ControlChartsView() {
     selectedPlant?.plant_id,
     stratifyAll,
   )
+  const {
+    snapshot: exclusionsSnapshot,
+    loading: exclusionsLoading,
+    saving: exclusionsSaving,
+    error: exclusionsError,
+    saveSnapshot,
+  } = useSPCExclusions({
+    materialId: isQuantitative ? selectedMaterial?.material_id : null,
+    micId: isQuantitative ? selectedMIC?.mic_id : null,
+    chartType: effectiveChartType,
+    plantId: selectedPlant?.plant_id ?? null,
+    stratifyAll,
+    dateFrom: dateFrom || null,
+    dateTo: dateTo || null,
+  })
   const { points: attrPoints, loading: attrLoading, error: attrError } = usePChartData(
     isPChart ? selectedMaterial?.material_id : null,
     selectedMIC?.mic_id,
@@ -152,22 +171,135 @@ export default function ControlChartsView() {
     excludedIndices,
     ruleSet,
     excludeOutliers,
+    quantNormality,
   )
 
   const trendData = useMemo(
     () => spc?.sorted ? computeRollingCapability(spc.sorted, rollingWindowSize, spc.specConfig ?? {}) : [],
     [spc, rollingWindowSize],
   )
+  const currentExcludedPoints = useMemo(
+    () => (isQuantitative ? toExcludedPoints(quantPoints, excludedIndices) : []),
+    [isQuantitative, quantPoints, excludedIndices],
+  )
+
+  useEffect(() => {
+    dispatch({ type: exclusionsSnapshot ? 'SET_EXCLUSION_AUDIT' : 'CLEAR_EXCLUSION_AUDIT', payload: exclusionsSnapshot ?? null })
+  }, [dispatch, exclusionsSnapshot])
+
+  useEffect(() => {
+    if (!isQuantitative) return
+    if (!quantPoints?.length) {
+      if (!exclusionsSnapshot) dispatch({ type: 'SET_EXCLUSIONS', payload: [] })
+      return
+    }
+    const nextIndices = exclusionsSnapshot
+      ? mapExcludedPointsToIndices(quantPoints, exclusionsSnapshot.excluded_points ?? [])
+      : []
+    dispatch({ type: 'SET_EXCLUSIONS', payload: nextIndices })
+  }, [dispatch, isQuantitative, quantPoints, exclusionsSnapshot])
+
+  const persistExclusions = async (nextExcludedIndices, justification, action) => {
+    if (!selectedMaterial || !selectedMIC || !effectiveChartType) return
+
+    const beforeLimits = getLimitsSnapshot(spc)
+    const recomputed = recomputeForExcludedSet(quantPoints, nextExcludedIndices, effectiveChartType, ruleSet, quantNormality)
+    const payload = {
+      material_id: selectedMaterial.material_id,
+      mic_id: selectedMIC.mic_id,
+      mic_name: selectedMIC.mic_name ?? null,
+      plant_id: selectedPlant?.plant_id ?? null,
+      stratify_all: stratifyAll,
+      chart_type: effectiveChartType,
+      date_from: dateFrom || null,
+      date_to: dateTo || null,
+      rule_set: ruleSet,
+      justification,
+      action,
+      excluded_points: toExcludedPoints(quantPoints, nextExcludedIndices),
+      before_limits: beforeLimits,
+      after_limits: getLimitsSnapshot(recomputed),
+    }
+
+    await saveSnapshot(payload)
+    dispatch({ type: 'SET_EXCLUSIONS', payload: [...nextExcludedIndices].sort((a, b) => a - b) })
+  }
+
+  const openDialog = (payload) => {
+    dispatch({ type: 'OPEN_EXCLUSION_DIALOG', payload })
+  }
+
+  const closeDialog = () => {
+    if (exclusionsSaving) return
+    dispatch({ type: 'CLOSE_EXCLUSION_DIALOG' })
+  }
 
   const handlePointClick = (index) => {
-    dispatch({ type: 'TOGGLE_EXCLUDE_INDEX', payload: index })
+    const point = quantPoints[index]
+    if (!point) return
+
+    const nextExcluded = new Set(excludedIndices)
+    const adding = !nextExcluded.has(index)
+    if (adding) nextExcluded.add(index)
+    else nextExcluded.delete(index)
+
+    openDialog({
+      action: adding ? 'manual_exclude' : 'manual_restore',
+      point,
+      excludedCount: nextExcluded.size,
+      nextExcludedIndices: [...nextExcluded].sort((a, b) => a - b),
+    })
   }
 
   const handleAutoClean = () => {
     if (!spc?.indexedPoints?.length) return
     const result = autoCleanPhaseI(spc.indexedPoints, effectiveChartType, ruleSet, spc.specConfig ?? {})
-    dispatch({ type: 'SET_EXCLUSIONS', payload: [...result.cleanedIndices] })
-    setAutoCleanLog(result)
+    openDialog({
+      action: 'auto_clean_phase_i',
+      excludedCount: result.cleanedIndices.size,
+      nextExcludedIndices: [...result.cleanedIndices].sort((a, b) => a - b),
+      autoCleanLog: result,
+    })
+  }
+
+  const handleRestoreAll = () => {
+    if (excludedIndices.size === 0) return
+    openDialog({
+      action: 'clear_exclusions',
+      excludedCount: excludedIndices.size,
+      nextExcludedIndices: [],
+    })
+  }
+
+  const handleRestorePoint = (point) => {
+    const [index] = mapExcludedPointsToIndices(quantPoints, [point])
+    if (index == null) return
+
+    const nextExcluded = new Set(excludedIndices)
+    nextExcluded.delete(index)
+    openDialog({
+      action: 'manual_restore',
+      point: quantPoints[index],
+      excludedCount: nextExcluded.size,
+      nextExcludedIndices: [...nextExcluded].sort((a, b) => a - b),
+    })
+  }
+
+  const handleDialogSubmit = async ({ justification }) => {
+    if (!exclusionDialog) return
+    try {
+      await persistExclusions(
+        new Set(exclusionDialog.nextExcludedIndices ?? []),
+        justification,
+        exclusionDialog.action,
+      )
+      if (exclusionDialog.action === 'auto_clean_phase_i') {
+        setAutoCleanLog(exclusionDialog.autoCleanLog ?? null)
+      }
+      dispatch({ type: 'CLOSE_EXCLUSION_DIALOG' })
+    } catch {
+      // Hook-level error state surfaces the failure banner.
+    }
   }
 
   if (!selectedMaterial) {
@@ -334,7 +466,8 @@ export default function ControlChartsView() {
           {excludedIndices.size > 0 && (
             <button
               className="spc-btn spc-btn--sm spc-btn--secondary"
-              onClick={() => dispatch({ type: 'CLEAR_EXCLUSIONS' })}
+              disabled={exclusionsSaving}
+              onClick={handleRestoreAll}
             >
               Clear {excludedIndices.size} exclusion{excludedIndices.size !== 1 ? 's' : ''}
             </button>
@@ -342,10 +475,11 @@ export default function ControlChartsView() {
           {spc?.indexedPoints?.length > 0 && (
             <button
               className="spc-btn spc-btn--sm spc-btn--secondary"
+              disabled={exclusionsSaving}
               onClick={handleAutoClean}
               title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
             >
-              Auto-clean Phase I
+              {exclusionsSaving ? 'Saving…' : 'Auto-clean Phase I'}
             </button>
           )}
           <button
@@ -374,6 +508,20 @@ export default function ControlChartsView() {
 
       {lockedLimitsError && (
         <div className="banner banner--error">Locked limits error: {lockedLimitsError}</div>
+      )}
+      {exclusionsError && (
+        <div className="banner banner--error">Exclusions audit error: {exclusionsError}</div>
+      )}
+      {exclusionsLoading && (
+        <div className="banner banner--info">Loading persisted exclusions…</div>
+      )}
+      {exclusionAudit && (
+        <div className="banner banner--info">
+          {exclusionAudit.excluded_count ?? 0} point{(exclusionAudit.excluded_count ?? 0) !== 1 ? 's' : ''} excluded
+          {exclusionAudit.user_id ? ` by ${exclusionAudit.user_id}` : ''}
+          {exclusionAudit.event_ts ? ` on ${String(exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : ''}
+          {exclusionAudit.justification ? ` — ${exclusionAudit.justification}` : ''}
+        </div>
       )}
 
       {/* Control charts */}
@@ -406,7 +554,16 @@ export default function ControlChartsView() {
           indexedPoints={spc.indexedPoints}
           ruleSet={ruleSet}
         />
-        <CapabilityPanel spc={spc} />
+        <div className="spc-side-stack">
+          <CapabilityPanel spc={spc} />
+          <ExcludedPointsPanel
+            snapshot={exclusionsSnapshot ?? exclusionAudit}
+            currentPoints={currentExcludedPoints}
+            onRestorePoint={handleRestorePoint}
+            onRestoreAll={handleRestoreAll}
+            saving={exclusionsSaving}
+          />
+        </div>
       </div>
 
       {/* Auto-clean log */}
@@ -450,6 +607,13 @@ export default function ControlChartsView() {
           <CapabilityTrendChart trendData={trendData} windowSize={rollingWindowSize} />
         </div>
       )}
+
+      <ExclusionJustificationModal
+        dialog={exclusionDialog}
+        saving={exclusionsSaving}
+        onCancel={closeDialog}
+        onSubmit={handleDialogSubmit}
+      />
     </div>
   )
 }

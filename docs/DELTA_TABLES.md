@@ -1,9 +1,9 @@
 # Delta Tables — App-Managed Persistent State
 
 This document describes the Delta tables created by the SPC App for persistent
-state that cannot live in the read-only gold views. These tables must be created
-once by a Databricks workspace administrator before the relevant features can
-be used.
+state that cannot live in the read-only gold views. The deploy pipeline is
+expected to apply the relevant migrations automatically; the SQL shown here is
+the underlying shape for audit and admin review.
 
 ## Recommendations
 
@@ -28,22 +28,26 @@ CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_locked_limits` (
   material_id    STRING  NOT NULL  COMMENT 'SAP material number',
   mic_id         STRING  NOT NULL  COMMENT 'Inspection characteristic code',
   plant_id       STRING            COMMENT 'Plant ID (NULL = all plants)',
-  chart_type     STRING  NOT NULL  COMMENT 'imr or xbar_r',
-  cl             DOUBLE  NOT NULL  COMMENT 'Centre line (grand mean or mean of means)',
-  ucl            DOUBLE  NOT NULL  COMMENT 'Upper control limit (individuals / Xbar)',
-  lcl            DOUBLE  NOT NULL  COMMENT 'Lower control limit (individuals / Xbar)',
+  chart_type     STRING  NOT NULL  COMMENT 'imr, xbar_r, or p_chart',
+  cl             DOUBLE            COMMENT 'Centre line (grand mean or mean of means)',
+  ucl            DOUBLE            COMMENT 'Upper control limit (individuals / Xbar)',
+  lcl            DOUBLE            COMMENT 'Lower control limit (individuals / Xbar)',
   ucl_r          DOUBLE            COMMENT 'UCL for range chart (xbar_r only)',
   lcl_r          DOUBLE            COMMENT 'LCL for range chart (xbar_r only)',
-  sigma_within   DOUBLE  NOT NULL  COMMENT 'Estimated within-subgroup sigma',
-  baseline_from  DATE              COMMENT 'Start of the baseline period used to lock limits',
-  baseline_to    DATE              COMMENT 'End of the baseline period used to lock limits',
+  sigma_within   DOUBLE            COMMENT 'Estimated within-subgroup sigma',
+  baseline_from  STRING            COMMENT 'Start of the baseline period used to lock limits',
+  baseline_to    STRING            COMMENT 'End of the baseline period used to lock limits',
   locked_by      STRING  NOT NULL  COMMENT 'Databricks identity (CURRENT_USER()) who locked limits',
   locked_at      TIMESTAMP NOT NULL COMMENT 'Timestamp when limits were locked'
 )
 USING DELTA
-TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'false')
 COMMENT 'SPC App: user-locked Phase II control limits';
 ```
+
+The nullable numeric columns match the live backend contract in
+`backend/routers/spc.py`, which allows partially populated limit rows for chart
+types that do not use every limit field.
 
 **Required Unity Catalog Grants:**
 
@@ -60,6 +64,94 @@ GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_locked_limits`
 > **Security note:** The application uses token passthrough — the logged-in user's
 > identity is forwarded to Databricks, and Unity Catalog enforces these grants
 > automatically. No service principal credentials are stored in the app.
+
+---
+
+## Table: `spc_query_audit`
+
+**Purpose:** Stores operational audit events for SPC runtime failures and
+eventually for SQL-query traceability. Freshness lookup failures write here with
+an error id so the API no longer returns a silent partial-success payload.
+
+**Feature:** Operational audit trail / compliance monitoring
+
+**DDL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_query_audit` (
+  audit_id     STRING    NOT NULL,
+  event_type   STRING    NOT NULL,
+  sql_hash     STRING,
+  error_id     STRING,
+  request_path STRING,
+  detail_json  STRING    NOT NULL,
+  user_id      STRING    NOT NULL,
+  created_at   TIMESTAMP NOT NULL
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
+
+**Required Unity Catalog Grants:**
+
+```sql
+-- Write runtime audit rows (must match the principal used at execution time)
+GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
+  TO `<principal-used-by-caller-token>`;
+
+-- Read audit history during investigations / reviews
+GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
+  TO `spc_admins`;
+```
+
+---
+
+## Table: `spc_exclusions`
+
+**Purpose:** Stores immutable exclusion snapshots for SPC control-chart points.
+Each save records the chart scope, justification, affected points, and
+before/after limit snapshots so exclusion actions remain attributable.
+
+**Feature:** Audited point exclusions / Phase I cleaning
+
+**DDL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_exclusions` (
+  event_id            STRING    NOT NULL,
+  material_id         STRING    NOT NULL,
+  mic_id              STRING    NOT NULL,
+  mic_name            STRING,
+  plant_id            STRING,
+  stratify_all        BOOLEAN,
+  chart_type          STRING    NOT NULL,
+  date_from           STRING,
+  date_to             STRING,
+  rule_set            STRING,
+  justification       STRING    NOT NULL,
+  action              STRING,
+  excluded_count      INT       NOT NULL,
+  excluded_points_json STRING   NOT NULL,
+  before_limits_json  STRING,
+  after_limits_json   STRING,
+  user_id             STRING    NOT NULL,
+  event_ts            TIMESTAMP NOT NULL
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
+
+**Required Unity Catalog Grants:**
+
+```sql
+-- Persist exclusion audit snapshots (must match the principal used at execution time)
+GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`
+  TO `<principal-used-by-caller-token>`;
+
+-- Review exclusion history during investigations
+GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`
+  TO `spc_quality_engineers`;
+```
 
 ---
 

@@ -1,6 +1,9 @@
 /**
  * SPC Control Chart Constants
- * Source: AIAG Statistical Process Control Reference Manual, 4th Edition
+ * Source: AIAG Statistical Process Control Reference Manual, 4th Edition.
+ * Constants for subgroup charts are taken from the standard factor tables used
+ * for Appendix B / control-chart constants (including the A2, d2, D3, D4
+ * family referenced alongside Table III-4 usage throughout the manual).
  *
  * For each subgroup size n:
  *   d2  — expected value of range / sigma (used to estimate sigma_within from R-bar)
@@ -26,6 +29,8 @@ export const SPC_CONSTANTS = {
 
 /**
  * Get constants for a given subgroup size. Clamps to the range [2, 10].
+ * For n > 10 the app intentionally uses the n=10 constants today rather than
+ * inventing an interpolation scheme without an AIAG-backed validation pass.
  * @param {number} n - subgroup size
  * @returns {{ d2, d3, A2, D3, D4 }}
  */
