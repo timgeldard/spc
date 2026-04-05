@@ -60,6 +60,7 @@ except ImportError:  # pragma: no cover - local-dev fallback until deps are inst
 _sql_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sql")
 _sql_cache = TTLCache(maxsize=100, ttl=300)
 _sql_cache_lock = threading.Lock()
+_SQL_CACHE_ROW_LIMIT = 1000
 
 logger = logging.getLogger(__name__)
 _VIEW_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -277,6 +278,11 @@ def _sql_cache_key(
     return f"{token_hash}:{stmt_hash}:{param_hash}"
 
 
+def _should_cache_rows(rows: list[dict]) -> bool:
+    """Keep the in-process cache bounded by skipping large result sets."""
+    return len(rows) <= _SQL_CACHE_ROW_LIMIT
+
+
 async def run_sql_async(
     token: str,
     statement: str,
@@ -292,8 +298,9 @@ async def run_sql_async(
 
     loop = asyncio.get_running_loop()
     rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
-    with _sql_cache_lock:
-        _sql_cache[cache_key] = deepcopy(rows)
+    if _should_cache_rows(rows):
+        with _sql_cache_lock:
+            _sql_cache[cache_key] = deepcopy(rows)
     return rows
 
 

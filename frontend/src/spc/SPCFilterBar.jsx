@@ -23,6 +23,15 @@ export default function SPCFilterBar() {
   const [recents] = useState(() => getRecentMaterials())
 
   useEffect(() => {
+    if (plantsLoading) return
+    if (!state.selectedPlant) return
+    const stillValid = plants.some(p => p.plant_id === state.selectedPlant.plant_id)
+    if (!stillValid) {
+      dispatch({ type: 'SET_PLANT', payload: null })
+    }
+  }, [dispatch, plants, plantsLoading, state.selectedPlant])
+
+  useEffect(() => {
     if (charsLoading) return
     if (!state.selectedMIC) return
     const stillValid = allCharacteristics.some(
