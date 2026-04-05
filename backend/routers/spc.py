@@ -464,31 +464,58 @@ async def spc_chart_data(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
 
+    rows = await _chart_data_rows(
+        token,
+        body.material_id,
+        body.mic_id,
+        body.mic_name,
+        body.plant_id,
+        body.date_from,
+        body.date_to,
+        body.stratify_all,
+    )
+
+    return await _with_freshness(
+        {"points": rows, "count": len(rows), "stratified": body.stratify_all},
+        token,
+        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+    )
+
+
+async def _chart_data_rows(
+    token: str,
+    material_id: str,
+    mic_id: str,
+    mic_name: Optional[str],
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    stratify_all: bool = False,
+) -> list[dict]:
+    """Shared chart-data fetcher used by both the API endpoint and export flow."""
     params = [
-        sql_param("material_id", body.material_id),
-        sql_param("mic_id", body.mic_id),
+        sql_param("material_id", material_id),
+        sql_param("mic_id", mic_id),
     ]
-    if body.mic_name:
-        params.append(sql_param("mic_name", body.mic_name))
-    # Date filters go into batch_dates CTE; plant filter applied after LEFT JOIN
-    # so batches without a mass_balance record are not silently excluded.
+    if mic_name:
+        params.append(sql_param("mic_name", mic_name))
+
     date_clauses = []
-    if body.date_from:
+    if date_from:
         date_clauses.append("POSTING_DATE >= :date_from")
-        params.append(sql_param("date_from", body.date_from))
-    if body.date_to:
+        params.append(sql_param("date_from", date_from))
+    if date_to:
         date_clauses.append("POSTING_DATE <= :date_to")
-        params.append(sql_param("date_to", body.date_to))
+        params.append(sql_param("date_to", date_to))
     date_filter = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
-    # When stratify_all: omit plant filter so all plants are included
+
     plant_filter = ""
-    if body.plant_id and not body.stratify_all:
-        # Include batches where plant matches OR where plant is unknown (no mass_balance record)
+    if plant_id and not stratify_all:
         plant_filter = "AND (bd.plant_id = :plant_id OR bd.plant_id IS NULL)"
-        params.append(sql_param("plant_id", body.plant_id))
-    mic_name_filter = "AND r.MIC_NAME = :mic_name" if body.mic_name else ""
-    # Include plant_id in SELECT when stratifying
-    plant_select = ", plant_id" if body.stratify_all else ""
+        params.append(sql_param("plant_id", plant_id))
+
+    mic_name_filter = "AND r.MIC_NAME = :mic_name" if mic_name else ""
+    plant_select = ", plant_id" if stratify_all else ""
 
     query = f"""
         WITH batch_dates AS (
@@ -512,7 +539,6 @@ async def spc_chart_data(
                 r.attribute                              AS attribut,
                 CAST(r.QUANTITATIVE_RESULT AS DOUBLE)    AS value,
                 TRY_CAST(r.TARGET_VALUE AS DOUBLE)       AS nominal,
-                -- Parse 'LSL...USL' tolerance range (e.g. '0.816...0.836')
                 TRY_CAST(
                     CASE WHEN LOCATE('...', r.TOLERANCE) > 0
                          THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
@@ -521,7 +547,6 @@ async def spc_chart_data(
                     CASE WHEN LOCATE('...', r.TOLERANCE) > 0
                          THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
                     END AS DOUBLE)                        AS usl,
-                -- Fallback for plain numeric half-width format
                 CASE WHEN LOCATE('...', r.TOLERANCE) = 0
                      THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END AS tolerance,
                 r.INSPECTION_RESULT_VALUATION            AS valuation,
@@ -580,7 +605,6 @@ async def spc_chart_data(
                 except (ValueError, TypeError):
                     row[field] = None
         row["is_outlier"] = row.get("attribut") == "*"
-        # Resolve USL/LSL: prefer parsed range values, fall back to nominal ± tolerance
         usl = row.get("usl")
         lsl = row.get("lsl")
         if usl is None or lsl is None:
@@ -592,15 +616,10 @@ async def spc_chart_data(
         row["usl"] = round(usl, 6) if usl is not None else None
         row["lsl"] = round(lsl, 6) if lsl is not None else None
         row["spec_type"] = _infer_spec_type(row["usl"], row["lsl"])
-        # plant_id present when stratify_all=True
         if "plant_id" not in row:
             row["plant_id"] = None
 
-    return await _with_freshness(
-        {"points": rows, "count": len(rows), "stratified": body.stratify_all},
-        token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
-    )
+    return rows
 
 
 @router.post("/process-flow")
@@ -1564,97 +1583,56 @@ async def compare_scorecard(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
 
+    material_ids = list(dict.fromkeys(body.material_ids))
+    name_params = [sql_param(f"m{i}", mid) for i, mid in enumerate(material_ids)]
+    in_clause = ", ".join(f":m{i}" for i in range(len(material_ids)))
+
+    names_query = f"""
+        SELECT
+            MATERIAL_ID AS material_id,
+            COALESCE(
+                MAX(CASE WHEN LANGUAGE_ID = 'E' THEN MATERIAL_NAME END),
+                MAX(MATERIAL_NAME),
+                MATERIAL_ID
+            ) AS material_name
+        FROM {tbl('gold_material')}
+        WHERE MATERIAL_ID IN ({in_clause})
+        GROUP BY MATERIAL_ID
+    """
+
+    try:
+        scorecard_sets, name_rows = await asyncio.gather(
+            asyncio.gather(*[
+                _scorecard_rows(token, mat_id, body.plant_id, body.date_from, body.date_to)
+                for mat_id in material_ids
+            ]),
+            run_sql_async(token, names_query, name_params),
+        )
+    except Exception as exc:
+        _handle_sql_error(exc)
+
+    material_names = {
+        str(row["material_id"]): str(row.get("material_name") or row["material_id"])
+        for row in name_rows
+    }
+
     results = []
     all_mic_sets: list[set] = []
-
-    for mat_id in body.material_ids:
-        params = [sql_param("material_id", mat_id)]
-        sc_clauses: list[str] = []
-        if body.date_from:
-            sc_clauses.append("mb.POSTING_DATE >= :date_from")
-            params.append(sql_param("date_from", body.date_from))
-        if body.date_to:
-            sc_clauses.append("mb.POSTING_DATE <= :date_to")
-            params.append(sql_param("date_to", body.date_to))
-        if body.plant_id:
-            sc_clauses.append("mb.PLANT_ID = :plant_id")
-            params.append(sql_param("plant_id", body.plant_id))
-        date_filter = ("AND " + " AND ".join(sc_clauses)) if sc_clauses else ""
-
-        query = f"""
-            SELECT
-                r.MIC_ID AS mic_id,
-                r.MIC_NAME AS mic_name,
-                COUNT(DISTINCT r.BATCH_ID) AS batch_count,
-                COUNT(*) AS sample_count,
-                ROUND(AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4) AS mean_value,
-                ROUND(STDDEV_SAMP(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)), 4) AS stddev_overall,
-                MAX(TRY_CAST(r.TARGET_VALUE AS DOUBLE)) AS nominal_target,
-                MAX(TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                    THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3) END AS DOUBLE)) AS usl_spec,
-                MAX(TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                    THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1) END AS DOUBLE)) AS lsl_spec,
-                MAX(CASE WHEN LOCATE('...', r.TOLERANCE) = 0
-                    THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END) AS tolerance_half_width,
-                COUNT(DISTINCT CASE WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN r.BATCH_ID END) AS ooc_batches,
-                MAX(COALESCE(m.MATERIAL_NAME, :material_id)) AS material_name
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN {tbl('gold_batch_mass_balance_v')} mb
-                ON mb.MATERIAL_ID = r.MATERIAL_ID AND mb.BATCH_ID = r.BATCH_ID
-                AND mb.MOVEMENT_CATEGORY = 'Production'
-            LEFT JOIN {tbl('gold_material')} m
-                ON m.MATERIAL_ID = r.MATERIAL_ID AND m.LANGUAGE_ID = 'E'
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {date_filter}
-            GROUP BY r.MIC_ID, r.MIC_NAME
-            HAVING COUNT(DISTINCT r.BATCH_ID) >= 3
-            ORDER BY r.MIC_NAME
-        """
-        try:
-            rows = await run_sql_async(token, query, params)
-        except Exception as exc:
-            _handle_sql_error(exc)
-
-        material_name = rows[0]["material_name"] if rows else mat_id
-        scorecard = []
-        mic_ids_for_mat: set = set()
-        for row in rows:
-            stddev = float(row.get("stddev_overall") or 0)
-            mean = float(row.get("mean_value") or 0) if row.get("mean_value") is not None else None
-            usl = float(row.get("usl_spec")) if row.get("usl_spec") is not None else None
-            lsl = float(row.get("lsl_spec")) if row.get("lsl_spec") is not None else None
-            if usl is None or lsl is None:
-                nominal = float(row.get("nominal_target")) if row.get("nominal_target") is not None else None
-                tol_val = float(row.get("tolerance_half_width")) if row.get("tolerance_half_width") is not None else None
-                if nominal is not None and tol_val is not None:
-                    usl = nominal + tol_val
-                    lsl = nominal - tol_val
-            # Ppk — overall performance; unilateral-aware
-            ppk = None
-            if stddev > 0 and mean is not None:
-                if usl is not None and lsl is not None:
-                    ppk = round(min((usl - mean) / (3 * stddev), (mean - lsl) / (3 * stddev)), 3)
-                elif usl is not None:
-                    ppk = round((usl - mean) / (3 * stddev), 3)
-                elif lsl is not None:
-                    ppk = round((mean - lsl) / (3 * stddev), 3)
-            batch_count = int(float(row.get("batch_count") or 0))
-            ooc = int(float(row.get("ooc_batches") or 0))
-            scorecard.append({
-                "mic_id": row["mic_id"],
-                "mic_name": row["mic_name"],
-                "ppk": ppk,
-                "batch_count": batch_count,
-                "ooc_rate": round(ooc / max(batch_count, 1), 4),
-            })
-            mic_ids_for_mat.add(str(row["mic_id"]))
-
+    for mat_id, scorecard in zip(material_ids, scorecard_sets):
+        mic_ids_for_mat = {str(row["mic_id"]) for row in scorecard}
         results.append({
             "material_id": mat_id,
-            "material_name": material_name,
-            "scorecard": scorecard,
+            "material_name": material_names.get(mat_id, mat_id),
+            "scorecard": [
+                {
+                    "mic_id": row["mic_id"],
+                    "mic_name": row["mic_name"],
+                    "ppk": row.get("ppk"),
+                    "batch_count": row.get("batch_count"),
+                    "ooc_rate": row.get("ooc_rate"),
+                }
+                for row in scorecard
+            ],
         })
         all_mic_sets.append(mic_ids_for_mat)
 

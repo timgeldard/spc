@@ -15,6 +15,7 @@ Every endpoint:
      row/column permissions are enforced automatically.
 """
 
+import asyncio
 import os
 import logging
 import uuid
@@ -37,6 +38,7 @@ from backend.utils.db import (
     hostname,
     resolve_token,
     run_sql,
+    run_sql_async,
     sql_param,
     tbl,
 )
@@ -510,151 +512,150 @@ async def batch_details(
     check_warehouse_config()
     mat_batch = [sql_param("material_id", body.material_id), sql_param("batch_id", body.batch_id)]
 
+    summary_query = f"""
+        WITH stk AS (
+          SELECT
+            SUM(UNRESTRICTED) AS current_stock_unrestricted,
+            SUM(BLOCKED + RESTRICTED) AS current_stock_blocked,
+            SUM(TOTAL_STOCK) AS actual_stock
+          FROM {tbl('gold_batch_stock_v')}
+          WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
+        ),
+        mb AS (
+          SELECT
+            COALESCE(SUM(CASE WHEN MOVEMENT_CATEGORY = 'Production' THEN ABS_QUANTITY ELSE 0 END), 0) AS total_produced,
+            COALESCE(SUM(CASE WHEN MOVEMENT_CATEGORY = 'Shipment'   THEN ABS_QUANTITY ELSE 0 END), 0) AS total_shipped
+          FROM {tbl('gold_batch_mass_balance_v')}
+          WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
+            AND MOVEMENT_CATEGORY NOT LIKE 'STO%'
+        )
+        SELECT
+          :batch_id AS batch_id,
+          mb.total_produced,
+          mb.total_shipped,
+          COALESCE(stk.current_stock_unrestricted, 0) AS current_stock_unrestricted,
+          COALESCE(stk.current_stock_blocked, 0) AS current_stock_blocked,
+          COALESCE(stk.actual_stock, 0) AS actual_stock,
+          COALESCE(stk.actual_stock, 0) -
+            (mb.total_produced - mb.total_shipped) AS mass_balance_variance
+        FROM mb CROSS JOIN stk
+    """
+    coa_query = f"""
+        SELECT
+          r.MIC_ID AS mic_code,
+          r.MIC_NAME AS mic_name,
+          r.TARGET_VALUE AS target_value,
+          r.TOLERANCE AS tolerance_range,
+          r.QUANTITATIVE_RESULT AS actual_result,
+          r.INSPECTION_RESULT_VALUATION AS result_status,
+          CASE
+            WHEN r.QUANTITATIVE_RESULT IS NOT NULL
+              AND r.TARGET_VALUE IS NOT NULL
+              AND TRY_CAST(r.TOLERANCE AS DOUBLE) IS NOT NULL
+            THEN CASE
+              WHEN ABS(r.QUANTITATIVE_RESULT - r.TARGET_VALUE)
+                   <= TRY_CAST(r.TOLERANCE AS DOUBLE)
+              THEN 'Within spec' ELSE 'Out of spec'
+            END
+            WHEN r.INSPECTION_RESULT_VALUATION = 'A' THEN 'Within spec'
+            WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN 'Out of spec'
+            ELSE 'No result'
+          END AS within_spec,
+          CASE
+            WHEN r.QUANTITATIVE_RESULT IS NOT NULL AND r.TARGET_VALUE IS NOT NULL
+            THEN ROUND(r.QUANTITATIVE_RESULT - r.TARGET_VALUE, 4)
+            ELSE NULL
+          END AS deviation_from_target
+        FROM {tbl('gold_batch_quality_result_v')} r
+        LEFT JOIN {tbl('gold_batch_quality_lot_v')} l
+          ON l.INSPECTION_LOT_ID = r.INSPECTION_LOT_ID
+          AND l.MATERIAL_ID = r.MATERIAL_ID
+          AND l.BATCH_ID = r.BATCH_ID
+        WHERE r.MATERIAL_ID = :material_id AND r.BATCH_ID = :batch_id
+        ORDER BY r.INSPECTION_LOT_ID, r.OPERATION_ID, r.MIC_ID, r.SAMPLE_ID
+    """
+    customer_query = f"""
+        SELECT DISTINCT
+          CUSTOMER_NAME AS customer_name,
+          COUNTRY_NAME AS country
+        FROM {tbl('gold_batch_delivery_v')}
+        WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
+          AND CUSTOMER_NAME IS NOT NULL
+        ORDER BY customer_name, country
+    """
+    cross_query = f"""
+        WITH inputs AS (
+          SELECT DISTINCT
+            PARENT_MATERIAL_ID AS input_mat,
+            PARENT_BATCH_ID AS input_batch
+          FROM {tbl('gold_batch_lineage')}
+          WHERE CHILD_MATERIAL_ID = :material_id AND CHILD_BATCH_ID = :batch_id
+            AND LINK_TYPE = 'PRODUCTION'
+            AND PARENT_BATCH_ID IS NOT NULL
+        ),
+        exposed AS (
+          SELECT DISTINCT
+            bl.CHILD_BATCH_ID AS other_batch_id,
+            i.input_mat AS shared_input_material
+          FROM inputs i
+          JOIN {tbl('gold_batch_lineage')} bl
+            ON bl.PARENT_MATERIAL_ID = i.input_mat
+            AND bl.PARENT_BATCH_ID = i.input_batch
+            AND bl.LINK_TYPE = 'PRODUCTION'
+          WHERE NOT (bl.CHILD_MATERIAL_ID = :material_id AND bl.CHILD_BATCH_ID = :batch_id)
+        )
+        SELECT
+          other_batch_id,
+          CONCAT_WS(', ', COLLECT_SET(shared_input_material)) AS shared_material_ids,
+          CASE
+            WHEN COUNT(DISTINCT shared_input_material) >= 3 THEN 'High'
+            WHEN COUNT(DISTINCT shared_input_material) >= 2 THEN 'Medium'
+            ELSE 'Low'
+          END AS risk_level
+        FROM exposed
+        GROUP BY other_batch_id
+        ORDER BY
+          CASE
+            WHEN COUNT(DISTINCT shared_input_material) >= 3 THEN 1
+            WHEN COUNT(DISTINCT shared_input_material) >= 2 THEN 2
+            ELSE 3
+          END,
+          other_batch_id
+    """
+    movement_query = f"""
+        WITH daily_balance AS (
+          SELECT
+            POSTING_DATE,
+            SUM(
+              CASE
+                WHEN MOVEMENT_TYPE = '261' THEN -ABS_QUANTITY
+                ELSE BALANCE_QTY
+              END
+            ) AS daily_net
+          FROM {tbl('gold_batch_mass_balance_v')}
+          WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
+            AND MOVEMENT_CATEGORY NOT LIKE 'STO%'
+          GROUP BY POSTING_DATE
+        ),
+        running_balance AS (
+          SELECT
+            POSTING_DATE,
+            SUM(daily_net) OVER (ORDER BY POSTING_DATE) AS inventory_level
+          FROM daily_balance
+        )
+        SELECT POSTING_DATE, inventory_level
+        FROM running_balance
+        ORDER BY POSTING_DATE
+    """
+
     try:
-        # --- Query 1: Summary KPIs ---
-        summary_rows = run_sql(token, f"""
-            WITH stk AS (
-              SELECT
-                SUM(UNRESTRICTED) AS current_stock_unrestricted,
-                SUM(BLOCKED + RESTRICTED) AS current_stock_blocked,
-                SUM(TOTAL_STOCK) AS actual_stock
-              FROM {tbl('gold_batch_stock_v')}
-              WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
-            ),
-            mb AS (
-              SELECT
-                COALESCE(SUM(CASE WHEN MOVEMENT_CATEGORY = 'Production' THEN ABS_QUANTITY ELSE 0 END), 0) AS total_produced,
-                COALESCE(SUM(CASE WHEN MOVEMENT_CATEGORY = 'Shipment'   THEN ABS_QUANTITY ELSE 0 END), 0) AS total_shipped
-              FROM {tbl('gold_batch_mass_balance_v')}
-              WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
-                AND MOVEMENT_CATEGORY NOT LIKE 'STO%'
-            )
-            SELECT
-              :batch_id AS batch_id,
-              mb.total_produced,
-              mb.total_shipped,
-              COALESCE(stk.current_stock_unrestricted, 0) AS current_stock_unrestricted,
-              COALESCE(stk.current_stock_blocked, 0) AS current_stock_blocked,
-              COALESCE(stk.actual_stock, 0) AS actual_stock,
-              COALESCE(stk.actual_stock, 0) -
-                (mb.total_produced - mb.total_shipped) AS mass_balance_variance
-            FROM mb CROSS JOIN stk
-        """, mat_batch)
-
-        # --- Query 2: CoA ---
-        coa_rows = run_sql(token, f"""
-            SELECT
-              r.MIC_ID AS mic_code,
-              r.MIC_NAME AS mic_name,
-              r.TARGET_VALUE AS target_value,
-              r.TOLERANCE AS tolerance_range,
-              r.QUANTITATIVE_RESULT AS actual_result,
-              r.INSPECTION_RESULT_VALUATION AS result_status,
-              CASE
-                WHEN r.QUANTITATIVE_RESULT IS NOT NULL
-                  AND r.TARGET_VALUE IS NOT NULL
-                  AND TRY_CAST(r.TOLERANCE AS DOUBLE) IS NOT NULL
-                THEN CASE
-                  WHEN ABS(r.QUANTITATIVE_RESULT - r.TARGET_VALUE)
-                       <= TRY_CAST(r.TOLERANCE AS DOUBLE)
-                  THEN 'Within spec' ELSE 'Out of spec'
-                END
-                WHEN r.INSPECTION_RESULT_VALUATION = 'A' THEN 'Within spec'
-                WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN 'Out of spec'
-                ELSE 'No result'
-              END AS within_spec,
-              CASE
-                WHEN r.QUANTITATIVE_RESULT IS NOT NULL AND r.TARGET_VALUE IS NOT NULL
-                THEN ROUND(r.QUANTITATIVE_RESULT - r.TARGET_VALUE, 4)
-                ELSE NULL
-              END AS deviation_from_target
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN {tbl('gold_batch_quality_lot_v')} l
-              ON l.INSPECTION_LOT_ID = r.INSPECTION_LOT_ID
-              AND l.MATERIAL_ID = r.MATERIAL_ID
-              AND l.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id AND r.BATCH_ID = :batch_id
-            ORDER BY r.INSPECTION_LOT_ID, r.OPERATION_ID, r.MIC_ID, r.SAMPLE_ID
-        """, mat_batch)
-
-        # --- Query 3: Customers ---
-        customer_rows = run_sql(token, f"""
-            SELECT DISTINCT
-              CUSTOMER_NAME AS customer_name,
-              COUNTRY_NAME AS country
-            FROM {tbl('gold_batch_delivery_v')}
-            WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
-              AND CUSTOMER_NAME IS NOT NULL
-            ORDER BY customer_name, country
-        """, mat_batch)
-
-        # --- Query 4: Cross-batch exposure ---
-        cross_rows = run_sql(token, f"""
-            WITH inputs AS (
-              SELECT DISTINCT
-                PARENT_MATERIAL_ID AS input_mat,
-                PARENT_BATCH_ID AS input_batch
-              FROM {tbl('gold_batch_lineage')}
-              WHERE CHILD_MATERIAL_ID = :material_id AND CHILD_BATCH_ID = :batch_id
-                AND LINK_TYPE = 'PRODUCTION'
-                AND PARENT_BATCH_ID IS NOT NULL
-            ),
-            exposed AS (
-              SELECT DISTINCT
-                bl.CHILD_BATCH_ID AS other_batch_id,
-                i.input_mat AS shared_input_material
-              FROM inputs i
-              JOIN {tbl('gold_batch_lineage')} bl
-                ON bl.PARENT_MATERIAL_ID = i.input_mat
-                AND bl.PARENT_BATCH_ID = i.input_batch
-                AND bl.LINK_TYPE = 'PRODUCTION'
-              WHERE NOT (bl.CHILD_MATERIAL_ID = :material_id AND bl.CHILD_BATCH_ID = :batch_id)
-            )
-            SELECT
-              other_batch_id,
-              CONCAT_WS(', ', COLLECT_SET(shared_input_material)) AS shared_material_ids,
-              CASE
-                WHEN COUNT(DISTINCT shared_input_material) >= 3 THEN 'High'
-                WHEN COUNT(DISTINCT shared_input_material) >= 2 THEN 'Medium'
-                ELSE 'Low'
-              END AS risk_level
-            FROM exposed
-            GROUP BY other_batch_id
-            ORDER BY
-              CASE
-                WHEN COUNT(DISTINCT shared_input_material) >= 3 THEN 1
-                WHEN COUNT(DISTINCT shared_input_material) >= 2 THEN 2
-                ELSE 3
-              END,
-              other_batch_id
-        """, mat_batch)
-
-        # --- Query 5: Movement history / running balance ---
-        movement_rows = run_sql(token, f"""
-            WITH daily_balance AS (
-              SELECT
-                POSTING_DATE,
-                SUM(
-                  CASE
-                    WHEN MOVEMENT_TYPE = '261' THEN -ABS_QUANTITY
-                    ELSE BALANCE_QTY
-                  END
-                ) AS daily_net
-              FROM {tbl('gold_batch_mass_balance_v')}
-              WHERE MATERIAL_ID = :material_id AND BATCH_ID = :batch_id
-                AND MOVEMENT_CATEGORY NOT LIKE 'STO%'
-              GROUP BY POSTING_DATE
-            ),
-            running_balance AS (
-              SELECT
-                POSTING_DATE,
-                SUM(daily_net) OVER (ORDER BY POSTING_DATE) AS inventory_level
-              FROM daily_balance
-            )
-            SELECT POSTING_DATE, inventory_level
-            FROM running_balance
-            ORDER BY POSTING_DATE
-        """, mat_batch)
+        summary_rows, coa_rows, customer_rows, cross_rows, movement_rows = await asyncio.gather(
+            run_sql_async(token, summary_query, mat_batch),
+            run_sql_async(token, coa_query, mat_batch),
+            run_sql_async(token, customer_query, mat_batch),
+            run_sql_async(token, cross_query, mat_batch),
+            run_sql_async(token, movement_query, mat_batch),
+        )
 
     except Exception as exc:
         error_msg = str(exc).lower()

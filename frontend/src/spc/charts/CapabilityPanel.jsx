@@ -88,6 +88,9 @@ export default function CapabilityPanel({ spc }) {
       {isUnilateral && (
         <p className="text-xs text-gray-400 mb-2">Cp / Pp not defined for one-sided specification</p>
       )}
+      {spc.capability?.specWarning && (
+        <p className="text-xs text-amber-700 mb-2">{spc.capability.specWarning}</p>
+      )}
 
       <CapabilityHistogram spc={spc} />
 

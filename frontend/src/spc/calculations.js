@@ -642,11 +642,26 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
     return { chartType, ruleSet, values: [], sorted: [], imr: null, xbarR: null, subgroups: null, capability: null, signals: [], mrSignals: [] }
   }
 
-  // Find the first point that carries valid spec data; don't assume points[0] has it.
-  // Early production batches may have no spec recorded, so scan all points.
-  const specPoint = points.find(p => p.usl != null || p.lsl != null)
-    ?? points.find(p => p.nominal != null && p.tolerance != null && p.tolerance > 0)
-    ?? points[0]
+  const sorted = [...points].sort((a, b) =>
+    a.batch_seq !== b.batch_seq ? a.batch_seq - b.batch_seq : a.sample_seq - b.sample_seq
+  )
+
+  // Resolve spec from the latest point carrying spec data so a spec change within
+  // the selected window does not silently anchor capability to the oldest batch.
+  const specCandidates = sorted.filter(p =>
+    p.usl != null || p.lsl != null || (p.nominal != null && p.tolerance != null && p.tolerance > 0)
+  )
+  const specPoint = specCandidates.at(-1) ?? sorted.at(-1)
+
+  const specSignature = (p) => JSON.stringify({
+    usl: p?.usl ?? null,
+    lsl: p?.lsl ?? null,
+    nominal: p?.nominal ?? null,
+    tolerance: p?.tolerance ?? null,
+    spec_type: p?.spec_type ?? 'bilateral_symmetric',
+  })
+  const uniqueSpecCount = new Set(specCandidates.map(specSignature)).size
+  const hasMixedSpec = uniqueSpecCount > 1
 
   const nominal   = specPoint?.nominal   ?? null
   const tolerance = specPoint?.tolerance ?? null
@@ -657,11 +672,11 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
     tolerance,
     usl: specPoint?.usl ?? null,
     lsl: specPoint?.lsl ?? null,
+    hasMixedSpec,
+    specWarning: hasMixedSpec
+      ? 'Capability uses the latest spec in the selected range because specifications changed across the time window.'
+      : null,
   }
-
-  const sorted = [...points].sort((a, b) =>
-    a.batch_seq !== b.batch_seq ? a.batch_seq - b.batch_seq : a.sample_seq - b.sample_seq
-  )
 
   const values = sorted.map(p => p.value)
 
@@ -671,7 +686,11 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
 
     const xbarR      = computeXbarR(subgroups)
     const xbarValues = xbarR.subgroupStats.map(s => s.xbar)
-    const capability = computeCapability(values, specConfig, xbarR.sigmaWithin)
+    const capability = {
+      ...computeCapability(values, specConfig, xbarR.sigmaWithin),
+      hasMixedSpec,
+      specWarning: specConfig.specWarning,
+    }
 
     const xbarLimits = { cl: xbarR.grandMean, ucl: xbarR.ucl_x, lcl: xbarR.lcl_x, sigma1: xbarR.sigma1, sigma2: xbarR.sigma2 }
     const rLimits    = { cl: xbarR.rBar, ucl: xbarR.ucl_r, lcl: xbarR.lcl_r, sigma1: xbarR.rBar / 3, sigma2: (xbarR.rBar * 2) / 3 }
@@ -697,7 +716,11 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
   const imr = computeIMR(values)
   if (!imr) return { chartType: 'imr', ruleSet, values, sorted, imr: null, xbarR: null, subgroups: null, capability: null, signals: [], mrSignals: [] }
 
-  const capability = computeCapability(values, specConfig, imr.sigmaWithin)
+  const capability = {
+    ...computeCapability(values, specConfig, imr.sigmaWithin),
+    hasMixedSpec,
+    specWarning: specConfig.specWarning,
+  }
 
   const xLimits  = { cl: imr.xBar,  ucl: imr.ucl_x,  lcl: imr.lcl_x,  sigma1: imr.sigma1,   sigma2: imr.sigma2 }
   const mrLimits = { cl: imr.mrBar, ucl: imr.ucl_mr, lcl: imr.lcl_mr, sigma1: imr.mrBar / 3, sigma2: (imr.mrBar * 2) / 3 }

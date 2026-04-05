@@ -43,6 +43,10 @@ class TestSqlParam:
         result = sql_param("empty", "")
         assert result["value"] == ""
 
+    def test_preserves_none_as_sql_null(self):
+        result = sql_param("maybe_null", None)
+        assert result == {"name": "maybe_null", "value": None, "type": "STRING"}
+
 
 class TestTbl:
     def test_returns_backtick_qualified_name(self):

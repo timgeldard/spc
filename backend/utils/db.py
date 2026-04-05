@@ -87,15 +87,18 @@ def resolve_token(
     return token
 
 
-def sql_param(name: str, value: str) -> dict:
+def sql_param(name: str, value: Optional[object]) -> dict:
     """
     Build a named STRING parameter dict for the Databricks SQL Statement API.
+
+    `None` is preserved so the JSON payload carries a real null instead of the
+    string literal "None".
 
     Usage:
         statement = "SELECT * FROM t WHERE id = :my_id"
         params    = [sql_param("my_id", some_value)]
     """
-    return {"name": name, "value": str(value), "type": "STRING"}
+    return {"name": name, "value": str(value) if value is not None else None, "type": "STRING"}
 
 
 def run_sql(

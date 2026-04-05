@@ -22,12 +22,10 @@ from openpyxl.utils import get_column_letter
 from backend.utils.db import (
     check_warehouse_config,
     resolve_token,
-    run_sql,
-    sql_param,
-    tbl,
 )
 from backend.utils.rate_limit import limiter
 from backend.routers.spc import (
+    _chart_data_rows,
     _handle_sql_error,
     _scorecard_rows,
 )
@@ -130,73 +128,19 @@ async def _fetch_scorecard(token: str, body: ExportRequest) -> list[dict]:
     return await _scorecard_rows(token, body.material_id, body.plant_id, body.date_from, body.date_to)
 
 
-def _fetch_chart_data(token: str, body: ExportRequest) -> list[dict]:
+async def _fetch_chart_data(token: str, body: ExportRequest) -> list[dict]:
     if not body.mic_id:
         return []
-    params = [sql_param("material_id", body.material_id), sql_param("mic_id", body.mic_id)]
-    if body.mic_name:
-        params.append(sql_param("mic_name", body.mic_name))
-    mb_clauses = []
-    if body.date_from:
-        mb_clauses.append("POSTING_DATE >= :date_from")
-        params.append(sql_param("date_from", body.date_from))
-    if body.date_to:
-        mb_clauses.append("POSTING_DATE <= :date_to")
-        params.append(sql_param("date_to", body.date_to))
-    if body.plant_id:
-        mb_clauses.append("PLANT_ID = :plant_id")
-        params.append(sql_param("plant_id", body.plant_id))
-    date_filter     = ("AND " + " AND ".join(mb_clauses)) if mb_clauses else ""
-    mic_name_filter = "AND r.MIC_NAME = :mic_name" if body.mic_name else ""
-
-    query = f"""
-        WITH batch_dates AS (
-            SELECT MATERIAL_ID, BATCH_ID, MIN(POSTING_DATE) AS batch_date
-            FROM {tbl('gold_batch_mass_balance_v')}
-            WHERE MATERIAL_ID = :material_id
-              AND MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        quality_data AS (
-            SELECT
-                r.BATCH_ID,
-                CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value,
-                TRY_CAST(r.TARGET_VALUE AS DOUBLE)    AS nominal,
-                TRY_CAST(r.TOLERANCE AS DOUBLE)       AS tolerance,
-                r.INSPECTION_RESULT_VALUATION         AS valuation,
-                bd.batch_date,
-                ROW_NUMBER() OVER (
-                    PARTITION BY r.BATCH_ID ORDER BY r.SAMPLE_ID, r.INSPECTION_LOT_ID
-                ) AS sample_seq
-            FROM {tbl('gold_batch_quality_result_v')} r
-            INNER JOIN batch_dates bd ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID       = :mic_id
-              {mic_name_filter}
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-        )
-        SELECT
-            BATCH_ID AS batch_id,
-            CAST(batch_date AS STRING) AS batch_date,
-            DENSE_RANK() OVER (ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID) AS batch_seq,
-            sample_seq,
-            value,
-            nominal,
-            tolerance,
-            valuation
-        FROM quality_data
-        ORDER BY batch_seq, sample_seq
-    """
-    rows = run_sql(token, query, params)
-    for row in rows:
-        for f in ["value", "nominal", "tolerance"]:
-            v = row.get(f)
-            row[f] = float(v) if v is not None else None
-        for f in ["batch_seq", "sample_seq"]:
-            v = row.get(f)
-            row[f] = int(float(v)) if v is not None else None
-    return rows
+    return await _chart_data_rows(
+        token,
+        body.material_id,
+        body.mic_id,
+        body.mic_name,
+        body.plant_id,
+        body.date_from,
+        body.date_to,
+        False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +340,7 @@ async def spc_export(
     # --- Chart data ---
     if scope == "chart_data":
         try:
-            rows = _fetch_chart_data(token, body)
+            rows = await _fetch_chart_data(token, body)
         except Exception as exc:
             _handle_sql_error(exc)
 
