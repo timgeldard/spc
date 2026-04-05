@@ -37,6 +37,23 @@ from backend.utils.rate_limit import limiter
 
 router = APIRouter()
 
+D2_TABLE = {
+    2: 1.128,
+    3: 1.693,
+    4: 2.059,
+    5: 2.326,
+    6: 2.534,
+    7: 2.704,
+    8: 2.847,
+    9: 2.970,
+    10: 3.078,
+    11: 3.173,
+    12: 3.258,
+    13: 3.336,
+    14: 3.407,
+    15: 3.472,
+}
+
 # In-process caching of process-flow results was removed.
 # Rationale: the cache was keyed only by material_id + date range, so results
 # from one user (with broad Unity Catalog access) could be served to another
@@ -908,7 +925,18 @@ async def _scorecard_rows(
     date_filter = ("AND " + " AND ".join(sc_clauses)) if sc_clauses else ""
 
     query = f"""
-        WITH filtered_results AS (
+        WITH batch_metadata AS (
+            SELECT
+                MATERIAL_ID,
+                BATCH_ID,
+                MAX(PLANT_ID) AS plant_id
+            FROM {tbl('gold_batch_mass_balance_v')} mb
+            WHERE mb.MATERIAL_ID = :material_id
+              AND mb.MOVEMENT_CATEGORY = 'Production'
+              {date_filter}
+            GROUP BY MATERIAL_ID, BATCH_ID
+        ),
+        filtered_results AS (
             SELECT
                 r.BATCH_ID                                            AS batch_id,
                 r.MIC_ID                                              AS mic_id,
@@ -928,14 +956,12 @@ async def _scorecard_rows(
                 r.TOLERANCE                                           AS raw_tolerance,
                 r.INSPECTION_RESULT_VALUATION                         AS valuation
             FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN {tbl('gold_batch_mass_balance_v')} mb
-                ON mb.MATERIAL_ID = r.MATERIAL_ID
-               AND mb.BATCH_ID    = r.BATCH_ID
-               AND mb.MOVEMENT_CATEGORY = 'Production'
+            INNER JOIN batch_metadata bm
+                ON bm.MATERIAL_ID = r.MATERIAL_ID
+               AND bm.BATCH_ID    = r.BATCH_ID
             WHERE r.MATERIAL_ID = :material_id
               AND r.QUANTITATIVE_RESULT IS NOT NULL
               AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {date_filter}
         ),
         batch_ranges AS (
             SELECT
@@ -956,37 +982,42 @@ async def _scorecard_rows(
                 AVG(batch_n)                                          AS avg_n
             FROM batch_ranges
             GROUP BY mic_id, mic_name
+        ),
+        mic_stats AS (
+            SELECT
+                mic_id,
+                mic_name,
+                COUNT(DISTINCT batch_id)                              AS batch_count,
+                COUNT(*)                                              AS sample_count,
+                ROUND(AVG(value), 4)                                  AS mean_value,
+                ROUND(STDDEV_SAMP(value), 4)                          AS stddev_overall,
+                ROUND(MIN(value), 4)                                  AS min_value,
+                ROUND(MAX(value), 4)                                  AS max_value,
+                MAX(nominal_target)                                   AS nominal_target,
+                MAX(lsl_spec)                                         AS lsl_spec,
+                MAX(usl_spec)                                         AS usl_spec,
+                MAX(tolerance_half_width)                             AS tolerance_half_width,
+                COUNT(DISTINCT nominal_target)                        AS distinct_nominal_count,
+                COUNT(DISTINCT raw_tolerance)                         AS distinct_tolerance_count,
+                COUNT(DISTINCT CASE
+                    WHEN valuation = 'R' THEN batch_id
+                END)                                                  AS ooc_batches,
+                COUNT(DISTINCT CASE
+                    WHEN valuation = 'A' THEN batch_id
+                END)                                                  AS accepted_batches
+            FROM filtered_results
+            GROUP BY mic_id, mic_name
         )
         SELECT
-            fr.mic_id                                                 AS mic_id,
-            fr.mic_name                                               AS mic_name,
-            COUNT(DISTINCT fr.batch_id)                               AS batch_count,
-            COUNT(*)                                                  AS sample_count,
-            ROUND(AVG(fr.value), 4)                                   AS mean_value,
-            ROUND(STDDEV_SAMP(fr.value), 4)                           AS stddev_overall,
-            ROUND(MIN(fr.value), 4)                                   AS min_value,
-            ROUND(MAX(fr.value), 4)                                   AS max_value,
-            MAX(fr.nominal_target)                                    AS nominal_target,
-            MAX(fr.lsl_spec)                                          AS lsl_spec,
-            MAX(fr.usl_spec)                                          AS usl_spec,
-            MAX(fr.tolerance_half_width)                              AS tolerance_half_width,
-            COUNT(DISTINCT fr.nominal_target)                         AS distinct_nominal_count,
-            COUNT(DISTINCT fr.raw_tolerance)                          AS distinct_tolerance_count,
-            COUNT(DISTINCT CASE
-                WHEN fr.valuation = 'R' THEN fr.batch_id
-            END)                                                      AS ooc_batches,
-            COUNT(DISTINCT CASE
-                WHEN fr.valuation = 'A' THEN fr.batch_id
-            END)                                                      AS accepted_batches,
-            ROUND(MAX(rs.r_bar), 4)                                   AS r_bar,
-            ROUND(MAX(rs.avg_n), 4)                                   AS avg_n
-        FROM filtered_results fr
+            ms.*,
+            ROUND(rs.r_bar, 4)                                        AS r_bar,
+            ROUND(rs.avg_n, 4)                                        AS avg_n
+        FROM mic_stats ms
         LEFT JOIN range_summary rs
-            ON rs.mic_id = fr.mic_id
-           AND rs.mic_name = fr.mic_name
-        GROUP BY fr.mic_id, fr.mic_name
-        HAVING COUNT(DISTINCT fr.batch_id) >= 3
-        ORDER BY fr.mic_name
+            ON rs.mic_id = ms.mic_id
+           AND rs.mic_name = ms.mic_name
+        WHERE ms.batch_count >= 3
+        ORDER BY ms.mic_name
     """
     try:
         rows = await run_sql_async(token, query, params)
@@ -998,7 +1029,6 @@ async def _scorecard_rows(
         "min_value", "max_value", "nominal_target", "tolerance_half_width",
         "lsl_spec", "usl_spec", "ooc_batches", "accepted_batches", "r_bar", "avg_n",
     ]
-    d2_table = {2: 1.128, 3: 1.693, 4: 2.059, 5: 2.326, 6: 2.534, 7: 2.704, 8: 2.847, 9: 2.970, 10: 3.078}
     for row in rows:
         for field in numeric_fields:
             v = row.get(field)
@@ -1045,7 +1075,7 @@ async def _scorecard_rows(
         # per AIAG SPC 4th Edition for a lightweight scorecard approximation.
         sigma_within = cp = cpk = None
         ref_n = int(round(avg_n)) if avg_n is not None else None
-        d2 = d2_table.get(ref_n)
+        d2 = D2_TABLE.get(ref_n)
         if d2 and r_bar is not None and r_bar > 0 and mean_v is not None:
             sigma_within = round(r_bar / d2, 6)
             if usl is not None and lsl is not None:

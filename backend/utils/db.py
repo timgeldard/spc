@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover - local-dev fallback until deps are inst
             return super().get(key, default)
 
         def __setitem__(self, key, value):
-            if len(self) >= self.maxsize:
+            if key not in self and len(self) >= self.maxsize:
                 oldest_key = min(self._expires, key=self._expires.get, default=None)
                 if oldest_key is not None:
                     self.pop(oldest_key, None)
@@ -294,7 +294,7 @@ async def run_sql_async(
     rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
     with _sql_cache_lock:
         _sql_cache[cache_key] = deepcopy(rows)
-    return deepcopy(rows)
+    return rows
 
 
 def get_data_freshness(token: str, source_views: list[str]) -> dict:
