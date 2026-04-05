@@ -1,0 +1,34 @@
+/* Tailwind utilities layer only - no preflight reset, preserves existing App.css + spc.css */
+@import "tailwindcss/utilities";
+
+/* Tailwind theme tokens that map to existing design system */
+@theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --color-brand: #1B3A4B;
+  --color-accent: #FF3621;
+  --color-capable: #10b981;
+  --color-marginal: #f59e0b;
+  --color-poor: #ef4444;
+  --color-muted: #6b7280;
+  --radius: 8px;
+}
+
+/* Dark mode overrides on existing CSS variables */
+[data-theme="dark"] {
+  --c-bg: #0f172a;
+  --c-surface: #1e293b;
+  --c-text: #f1f5f9;
+  --c-text-muted: #94a3b8;
+  --c-border: #334155;
+  --c-brand: #38bdf8;
+  --spc-green: #34d399;
+  --spc-amber: #fbbf24;
+  --spc-red: #f87171;
+  --spc-green-bg: #064e3b;
+  --spc-amber-bg: #78350f;
+  --spc-red-bg: #7f1d1d;
+  --spc-grey-bg: #1e293b;
+}
+
+/* Inter numeric opentype features */
+body { font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; }

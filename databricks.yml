@@ -1,0 +1,20 @@
+bundle:
+  name: spc
+
+targets:
+  uat:
+    default: true
+    workspace:
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+
+resources:
+  apps:
+    spc:
+      name: spc
+      description: Statistical Process Control app powered by Databricks
+      source_code_path: .
+      # IMPORTANT: user_api_scopes (["sql"]) cannot be declared here — the DABs
+      # schema does not support this field and bundle deploy resets it to empty.
+      # The `make deploy` target runs scripts/post-deploy.sh after every deploy
+      # to re-apply the scope via `databricks apps update`. Never deploy with
+      # `databricks bundle deploy` directly or the SQL token passthrough breaks.

@@ -1,0 +1,18 @@
+# Node — frontend is pre-built to frontend/dist; nothing else needed
+frontend/node_modules
+frontend/src
+frontend/index.html
+frontend/package.json
+frontend/package-lock.json
+frontend/vite.config.js
+
+# Databricks / tooling state
+.databricks
+.claude
+
+# Docs / dev-only
+*.md
+*.sh
+.gitignore
+.env.example
+PHASE_4_UC_OPTIMIZATION.md
