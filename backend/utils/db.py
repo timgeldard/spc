@@ -18,16 +18,48 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from typing import Optional
 
 from fastapi import HTTPException
+try:
+    from cachetools import TTLCache
+except ImportError:  # pragma: no cover - local-dev fallback until deps are installed
+    class TTLCache(dict):
+        """Minimal TTL cache fallback matching the small API surface we use."""
+
+        def __init__(self, maxsize: int, ttl: int):
+            super().__init__()
+            self.maxsize = maxsize
+            self.ttl = ttl
+            self._expires: dict[str, float] = {}
+
+        def get(self, key, default=None):
+            expires_at = self._expires.get(key)
+            if expires_at is not None and expires_at <= time.monotonic():
+                self.pop(key, None)
+                self._expires.pop(key, None)
+                return default
+            return super().get(key, default)
+
+        def __setitem__(self, key, value):
+            if len(self) >= self.maxsize:
+                oldest_key = min(self._expires, key=self._expires.get, default=None)
+                if oldest_key is not None:
+                    self.pop(oldest_key, None)
+                    self._expires.pop(oldest_key, None)
+            super().__setitem__(key, value)
+            self._expires[key] = time.monotonic() + self.ttl
 
 _sql_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sql")
+_sql_cache = TTLCache(maxsize=100, ttl=300)
+_sql_cache_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 _VIEW_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -228,6 +260,23 @@ def run_sql(
     return rows
 
 
+def _sql_cache_key(
+    token: str,
+    statement: str,
+    params: Optional[list[dict]] = None,
+) -> str:
+    """Return a user-scoped cache key for SQL result reuse.
+
+    The key includes a hash of the user token, statement text, and serialized
+    parameters so cached results remain isolated per authenticated user.
+    """
+    payload = json.dumps(params or [], sort_keys=True, default=str, separators=(",", ":"))
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    stmt_hash = hashlib.sha256(statement.encode()).hexdigest()
+    param_hash = hashlib.sha256(payload.encode()).hexdigest()
+    return f"{token_hash}:{stmt_hash}:{param_hash}"
+
+
 async def run_sql_async(
     token: str,
     statement: str,
@@ -235,8 +284,17 @@ async def run_sql_async(
 ) -> list[dict]:
     """Non-blocking wrapper — runs run_sql in a thread pool so the async event
     loop is never blocked waiting for Databricks SQL responses."""
+    cache_key = _sql_cache_key(token, statement, params)
+    with _sql_cache_lock:
+        cached_rows = _sql_cache.get(cache_key)
+    if cached_rows is not None:
+        return deepcopy(cached_rows)
+
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
+    rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
+    with _sql_cache_lock:
+        _sql_cache[cache_key] = deepcopy(rows)
+    return deepcopy(rows)
 
 
 def get_data_freshness(token: str, source_views: list[str]) -> dict:

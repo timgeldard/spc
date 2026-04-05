@@ -25,8 +25,6 @@ function reducer(state, action) {
       return {
         ...state,
         selectedMaterial: action.payload,
-        selectedPlant: null,
-        selectedMIC: null,
         excludedIndices: new Set(),
         chartTypeOverride: null,
         exclusionAudit: null,
@@ -36,9 +34,6 @@ function reducer(state, action) {
       return {
         ...state,
         selectedPlant: action.payload,
-        selectedMIC: null,
-        excludedIndices: new Set(),
-        chartTypeOverride: null,
         exclusionAudit: null,
         exclusionDialog: null,
       }
@@ -116,8 +111,6 @@ function reducer(state, action) {
       return {
         ...state,
         selectedMaterial: action.payload,
-        selectedPlant: null,
-        selectedMIC: null,
         activeTab: 'charts',
         excludedIndices: new Set(),
         chartTypeOverride: null,

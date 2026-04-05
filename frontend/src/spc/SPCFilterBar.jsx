@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useSPC } from './SPCContext.jsx'
 import { useValidateMaterial } from './hooks/useMaterials.js'
 import { usePlants } from './hooks/usePlants.js'
@@ -21,6 +21,17 @@ export default function SPCFilterBar() {
   const [inputValue, setInputValue] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [recents] = useState(() => getRecentMaterials())
+
+  useEffect(() => {
+    if (charsLoading) return
+    if (!state.selectedMIC) return
+    const stillValid = allCharacteristics.some(
+      c => c.mic_id === state.selectedMIC.mic_id && c.mic_name === state.selectedMIC.mic_name,
+    )
+    if (!stillValid) {
+      dispatch({ type: 'SET_MIC', payload: null })
+    }
+  }, [allCharacteristics, charsLoading, dispatch, state.selectedMIC])
 
   const handleValidate = async () => {
     const trimmed = inputValue.trim()
