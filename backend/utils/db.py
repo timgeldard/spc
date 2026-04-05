@@ -102,6 +102,30 @@ def sql_param(name: str, value: Optional[object]) -> dict:
     return {"name": name, "value": str(value) if value is not None else None, "type": "STRING"}
 
 
+def increment_observability_counter(name: str, *, tags: Optional[dict[str, str]] = None) -> None:
+    """Emit a structured counter event until a dedicated metrics sink is wired in."""
+    logger.info(
+        "metric.increment name=%s value=1 tags=%s",
+        name,
+        json.dumps(tags or {}, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def send_operational_alert(*, subject: str, body: str, error_id: Optional[str] = None, request_path: Optional[str] = None) -> None:
+    """Stub hook for workspace-specific alerting integrations.
+
+    See GitHub issue #9 for wiring this into Databricks SQL alerts or a webhook-
+    based incident pipeline once environment-specific routing is available.
+    """
+    logger.warning(
+        "operational_alert.pending issue=#9 subject=%s error_id=%s request_path=%s body=%s",
+        subject,
+        error_id or "unknown",
+        request_path or "unknown",
+        body,
+    )
+
+
 def run_sql(
     token: str,
     statement: str,
@@ -320,14 +344,27 @@ async def attach_data_freshness(
                 },
             )
         except Exception:
+            increment_observability_counter(
+                "data_freshness.audit_insert_failed_total",
+                tags={
+                    "error_id": error_id,
+                    "request_path": request_path or "unknown",
+                },
+            )
             logger.exception(
                 "data_freshness.audit_insert_failed error_id=%s request_path=%s",
                 error_id,
                 request_path or "unknown",
             )
-
-        # TODO: trigger a Databricks SQL alert or Lakehouse Monitoring webhook
-        # here once workspace-specific operational alerting is configured.
+        send_operational_alert(
+            subject="SPC data freshness lookup failed",
+            body=(
+                "Freshness metadata could not be attached. "
+                "Check spc_query_audit and Databricks SQL connectivity."
+            ),
+            error_id=error_id,
+            request_path=request_path or "unknown",
+        )
         raise RuntimeError(
             f"Data freshness lookup failed (error_id={error_id}). "
             "See spc_query_audit for details."

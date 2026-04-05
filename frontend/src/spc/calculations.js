@@ -269,24 +269,24 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
   const specWidth = (hasUsl && hasLsl) ? usl - lsl : null
 
   if (sigmaWithin && sigmaWithin > 0) {
-    if (specWidth != null) cp = round3(specWidth / (6 * sigmaWithin))
+    if (specWidth != null) cp = round6(specWidth / (6 * sigmaWithin))
     if (hasUsl && hasLsl) {
-      cpk = round3(Math.min((usl - xBar) / (3 * sigmaWithin), (xBar - lsl) / (3 * sigmaWithin)))
+      cpk = round6(Math.min((usl - xBar) / (3 * sigmaWithin), (xBar - lsl) / (3 * sigmaWithin)))
     } else if (hasUsl) {
-      cpk = round3((usl - xBar) / (3 * sigmaWithin))
+      cpk = round6((usl - xBar) / (3 * sigmaWithin))
     } else {
-      cpk = round3((xBar - lsl) / (3 * sigmaWithin))
+      cpk = round6((xBar - lsl) / (3 * sigmaWithin))
     }
   }
 
   if (sigmaOverall && sigmaOverall > 0) {
-    if (specWidth != null) pp = round3(specWidth / (6 * sigmaOverall))
+    if (specWidth != null) pp = round6(specWidth / (6 * sigmaOverall))
     if (hasUsl && hasLsl) {
-      ppk = round3(Math.min((usl - xBar) / (3 * sigmaOverall), (xBar - lsl) / (3 * sigmaOverall)))
+      ppk = round6(Math.min((usl - xBar) / (3 * sigmaOverall), (xBar - lsl) / (3 * sigmaOverall)))
     } else if (hasUsl) {
-      ppk = round3((usl - xBar) / (3 * sigmaOverall))
+      ppk = round6((usl - xBar) / (3 * sigmaOverall))
     } else {
-      ppk = round3((xBar - lsl) / (3 * sigmaOverall))
+      ppk = round6((xBar - lsl) / (3 * sigmaOverall))
     }
   }
 
@@ -294,12 +294,12 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
   let cpkLower95 = null, cpkUpper95 = null
   if (cpk !== null && n >= 25) {
     const se = Math.sqrt(1 / (9 * n) + cpk ** 2 / (2 * (n - 1)))
-    cpkLower95 = round3(cpk - 1.96 * se)
-    cpkUpper95 = round3(cpk + 1.96 * se)
+    cpkLower95 = round6(cpk - 1.96 * se)
+    cpkUpper95 = round6(cpk + 1.96 * se)
   }
 
   // Z-score and DPMO (long-term, 1.5σ shift convention)
-  const zScore = cpk !== null ? round3(cpk * 3) : null
+  const zScore = cpk !== null ? round6(cpk * 3) : null
   const dpmo   = zScore !== null ? Math.round(normalCDF(-(zScore - 1.5)) * 1_000_000) : null
 
   return { usl, lsl, cp, cpk, pp, ppk, sigmaOverall, xBar,
@@ -307,7 +307,7 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
            dpmo_convention: 'motorola_1.5sigma_shift' }
 }
 
-function round3(v) {
+function round6(v) {
   return Math.round(v * 1_000_000) / 1_000_000
 }
 

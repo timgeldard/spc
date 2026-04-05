@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const REASONS = [
   'Special-cause investigation',
@@ -11,9 +11,13 @@ const REASONS = [
 export default function ExclusionJustificationModal({ dialog, saving, onCancel, onSubmit }) {
   const [reason, setReason] = useState(REASONS[0])
   const [comment, setComment] = useState('')
+  const dialogRef = useRef(null)
+  const reasonRef = useRef(null)
+  const previousFocusRef = useRef(null)
 
   useEffect(() => {
     if (!dialog) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setReason(
       dialog.action === 'manual_restore'
         ? 'Manual review override'
@@ -22,6 +26,15 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
           : REASONS[0],
     )
     setComment('')
+
+    const frame = window.requestAnimationFrame(() => {
+      reasonRef.current?.focus()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      previousFocusRef.current?.focus?.()
+    }
   }, [dialog])
 
   if (!dialog) return null
@@ -54,6 +67,35 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
     onSubmit({ reason, comment: comment.trim(), justification })
   }
 
+  const handleKeyDown = (event) => {
+    if (!dialogRef.current) return
+
+    if (event.key === 'Escape' && !saving) {
+      event.preventDefault()
+      onCancel()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const focusables = [...dialogRef.current.querySelectorAll(
+      'button:not([disabled]), select:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    )]
+    if (focusables.length === 0) return
+
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div className="spc-modal-backdrop" role="presentation" onClick={saving ? undefined : onCancel}>
       <div
@@ -61,12 +103,15 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
         role="dialog"
         aria-modal="true"
         aria-labelledby="spc-exclusion-dialog-title"
+        aria-describedby="spc-exclusion-dialog-description"
         onClick={event => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        ref={dialogRef}
       >
         <div className="spc-modal-header">
           <div>
             <h3 id="spc-exclusion-dialog-title" className="spc-modal-title">{title}</h3>
-            <p className="spc-modal-subtitle">{description}</p>
+            <p id="spc-exclusion-dialog-description" className="spc-modal-subtitle">{description}</p>
           </div>
           <button className="spc-btn spc-btn--sm spc-btn--ghost" type="button" onClick={onCancel} disabled={saving}>
             Close
@@ -83,7 +128,13 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
         <form className="spc-modal-form" onSubmit={handleSubmit}>
           <label className="spc-filter-group">
             <span className="spc-filter-label">Reason</span>
-            <select className="spc-select" value={reason} onChange={event => setReason(event.target.value)} disabled={saving}>
+            <select
+              className="spc-select"
+              value={reason}
+              onChange={event => setReason(event.target.value)}
+              disabled={saving}
+              ref={reasonRef}
+            >
               {REASONS.map(option => (
                 <option key={option} value={option}>{option}</option>
               ))}

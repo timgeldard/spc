@@ -169,7 +169,8 @@ The Makefile:
 3. Runs `databricks bundle deploy` (uploads all files)
 4. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
 5. Applies the idempotent locked-limits migration (`scripts/migrations/000_setup_locked_limits.sql`)
-6. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
+6. Applies the exclusions audit migration (`scripts/migrations/001_create_spc_exclusions.sql`)
+7. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
 
 ### CI
 
@@ -178,8 +179,8 @@ GitHub Actions runs `lint-and-test` on every push to `main`:
 - Backend: `pytest backend/tests`
 
 When Databricks credentials are configured in GitHub Actions secrets, CI also
-applies the locked-limits migration to keep app-managed tables in sync with the
-deployed backend expectations.
+applies the locked-limits, exclusions, and query-audit migrations to keep
+app-managed tables in sync with the deployed backend expectations.
 
 ---
 

@@ -25,7 +25,7 @@ from backend.utils.rate_limit import limiter
 
 router = APIRouter()
 
-_CHART_TYPES = {"imr", "xbar_r"}
+_CHART_TYPES = {"imr", "xbar_r", "p_chart"}
 
 
 def _handle_sql_error(exc: Exception) -> None:
@@ -96,6 +96,15 @@ class SaveExclusionsRequest(BaseModel):
         return value
 
 
+class ChartTypeRequest(BaseModel):
+    chart_type: str = "imr"
+
+    @field_validator("chart_type")
+    @classmethod
+    def validate_chart_type(cls, value: str) -> str:
+        return SaveExclusionsRequest.validate_chart_type(value)
+
+
 @router.post("/exclusions")
 @limiter.limit("30/minute")
 async def save_exclusions(
@@ -128,7 +137,7 @@ async def save_exclusions(
 
     try:
         await insert_spc_exclusion_snapshot(token, payload)
-    except Exception as exc:
+    except RuntimeError as exc:
         _handle_sql_error(exc)
 
     try:
@@ -136,7 +145,7 @@ async def save_exclusions(
             token,
             "SELECT CURRENT_USER() AS user_id, CAST(CURRENT_TIMESTAMP() AS STRING) AS event_ts",
         )
-    except Exception:
+    except RuntimeError:
         actor_rows = [{"user_id": None, "event_ts": None}]
 
     return {
@@ -165,15 +174,8 @@ async def get_exclusions(
     check_warehouse_config()
 
     try:
-        SaveExclusionsRequest(
-            material_id=material_id,
-            mic_id=mic_id,
+        ChartTypeRequest(
             chart_type=chart_type,
-            plant_id=plant_id,
-            date_from=date_from,
-            date_to=date_to,
-            justification="valid",
-            excluded_points=[],
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -233,7 +235,7 @@ async def get_exclusions(
 
     try:
         rows = await run_sql_async(token, query, params)
-    except Exception as exc:
+    except RuntimeError as exc:
         _handle_sql_error(exc)
 
     if not rows:

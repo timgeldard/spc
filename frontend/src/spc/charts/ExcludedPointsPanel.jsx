@@ -54,8 +54,8 @@ export default function ExcludedPointsPanel({ snapshot, currentPoints = [], onRe
         </div>
       ) : (
         <div className="spc-audit-list">
-          {points.map(point => {
-            const pointKey = `${point.batch_id}-${point.sample_seq}-${point.original_index ?? 'saved'}`
+          {points.map((point, index) => {
+            const pointKey = `${point.batch_id}-${point.sample_seq}-${point.plant_id ?? ''}-${point.original_index ?? `saved-${index}`}`
             return (
               <div key={pointKey} className="spc-audit-item">
                 <div className="spc-audit-item-main">

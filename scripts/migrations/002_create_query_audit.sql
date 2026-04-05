@@ -10,5 +10,5 @@ CREATE TABLE IF NOT EXISTS `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_query_audit
 )
 USING DELTA
 TBLPROPERTIES (
-  delta.enableChangeDataFeed = true
+  'delta.enableChangeDataFeed' = 'true'
 );

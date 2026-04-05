@@ -8,6 +8,9 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
 
     steps:
       - name: Checkout
@@ -42,31 +45,38 @@ jobs:
         run: pytest backend/tests -v
 
       - name: Install Databricks CLI
-        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y gettext-base
           pip install databricks-cli
 
       - name: Configure Databricks CLI for migration checks
-        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
         run: |
           mkdir -p "$HOME"
           cat > "$HOME/.databrickscfg" <<EOF
-          [ci]
-          host = ${{ secrets.DATABRICKS_HOST }}
-          token = ${{ secrets.DATABRICKS_TOKEN }}
+[ci]
+host = ${DATABRICKS_HOST}
+token = ${DATABRICKS_TOKEN}
           EOF
 
       - name: Apply locked-limits migration
-        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
         env:
           TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
           TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
         run: make setup-locked-limits PROFILE=ci
 
+      - name: Apply exclusions migration
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-exclusions PROFILE=ci
+
       - name: Apply query-audit migration
-        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        if: ${{ env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' }}
         env:
           TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
           TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}

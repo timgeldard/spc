@@ -230,7 +230,7 @@ class PChartDataRequest(_DateRangeMixin):
         return v
 
 
-_CHART_TYPES = {"imr", "xbar_r"}
+_CHART_TYPES = {"imr", "xbar_r", "p_chart"}
 _MIC_ID_MAX_LEN = 40
 
 
@@ -274,6 +274,7 @@ async def spc_plants(
         {"plants": rows},
         token,
         ["gold_batch_mass_balance_v", "gold_plant", "gold_batch_quality_result_v"],
+        request_path=request.url.path,
     )
 
 
@@ -312,13 +313,14 @@ async def spc_validate_material(
             {"valid": False},
             token,
             ["gold_batch_quality_result_v", "gold_material"],
+            request_path=request.url.path,
         )
     row = rows[0]
     return await attach_data_freshness({
         "valid": True,
         "material_id": str(row["material_id"]),
         "material_name": str(row["material_name"]),
-    }, token, ["gold_batch_quality_result_v", "gold_material"])
+    }, token, ["gold_batch_quality_result_v", "gold_material"], request_path=request.url.path)
 
 
 @router.get("/materials")
@@ -353,6 +355,7 @@ async def spc_materials(
         {"materials": rows},
         token,
         ["gold_batch_quality_result_v", "gold_material"],
+        request_path=request.url.path,
     )
 
 
@@ -429,6 +432,7 @@ async def spc_characteristics(
         {"characteristics": characteristics, "attr_characteristics": attr_characteristics},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -462,6 +466,7 @@ async def spc_chart_data(
         {"points": rows, "count": len(rows), "stratified": body.stratify_all},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -693,6 +698,7 @@ async def spc_process_flow(
             {"nodes": [], "edges": []},
             token,
             ["gold_batch_lineage", "gold_material", "gold_plant", "gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+            request_path=request.url.path,
         )
 
     # Step 2: SPC health per node — use named params for all material IDs
@@ -796,6 +802,7 @@ async def spc_process_flow(
         {"nodes": nodes, "edges": edges},
         token,
         ["gold_batch_lineage", "gold_material", "gold_plant", "gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -985,6 +992,7 @@ async def spc_scorecard(
         {"scorecard": rows, "material_id": body.material_id},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -1047,6 +1055,7 @@ async def spc_attribute_characteristics(
         {"characteristics": rows},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -1132,6 +1141,7 @@ async def spc_p_chart_data(
         {"points": rows, "count": len(rows)},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -1241,6 +1251,7 @@ async def spc_count_chart_data(
         {"points": rows, "count": len(rows), "chart_subtype": body.chart_subtype},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 
@@ -1841,6 +1852,7 @@ async def spc_correlation(
         {"pairs": rows, "mics": mics, "pair_count": len(rows)},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
     )
 
 

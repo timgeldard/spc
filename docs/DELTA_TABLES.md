@@ -28,22 +28,26 @@ CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_locked_limits` (
   material_id    STRING  NOT NULL  COMMENT 'SAP material number',
   mic_id         STRING  NOT NULL  COMMENT 'Inspection characteristic code',
   plant_id       STRING            COMMENT 'Plant ID (NULL = all plants)',
-  chart_type     STRING  NOT NULL  COMMENT 'imr or xbar_r',
-  cl             DOUBLE  NOT NULL  COMMENT 'Centre line (grand mean or mean of means)',
-  ucl            DOUBLE  NOT NULL  COMMENT 'Upper control limit (individuals / Xbar)',
-  lcl            DOUBLE  NOT NULL  COMMENT 'Lower control limit (individuals / Xbar)',
+  chart_type     STRING  NOT NULL  COMMENT 'imr, xbar_r, or p_chart',
+  cl             DOUBLE            COMMENT 'Centre line (grand mean or mean of means)',
+  ucl            DOUBLE            COMMENT 'Upper control limit (individuals / Xbar)',
+  lcl            DOUBLE            COMMENT 'Lower control limit (individuals / Xbar)',
   ucl_r          DOUBLE            COMMENT 'UCL for range chart (xbar_r only)',
   lcl_r          DOUBLE            COMMENT 'LCL for range chart (xbar_r only)',
-  sigma_within   DOUBLE  NOT NULL  COMMENT 'Estimated within-subgroup sigma',
-  baseline_from  DATE              COMMENT 'Start of the baseline period used to lock limits',
-  baseline_to    DATE              COMMENT 'End of the baseline period used to lock limits',
+  sigma_within   DOUBLE            COMMENT 'Estimated within-subgroup sigma',
+  baseline_from  STRING            COMMENT 'Start of the baseline period used to lock limits',
+  baseline_to    STRING            COMMENT 'End of the baseline period used to lock limits',
   locked_by      STRING  NOT NULL  COMMENT 'Databricks identity (CURRENT_USER()) who locked limits',
   locked_at      TIMESTAMP NOT NULL COMMENT 'Timestamp when limits were locked'
 )
 USING DELTA
-TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'false')
 COMMENT 'SPC App: user-locked Phase II control limits';
 ```
+
+The nullable numeric columns match the live backend contract in
+`backend/routers/spc.py`, which allows partially populated limit rows for chart
+types that do not use every limit field.
 
 **Required Unity Catalog Grants:**
 
@@ -86,6 +90,66 @@ CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_query_audit` (
 )
 USING DELTA
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
+
+**Required Unity Catalog Grants:**
+
+```sql
+-- Write runtime audit rows from the SPC backend
+GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
+  TO `spc_app_backend`;
+
+-- Read audit history during investigations / reviews
+GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
+  TO `spc_admins`;
+```
+
+---
+
+## Table: `spc_exclusions`
+
+**Purpose:** Stores immutable exclusion snapshots for SPC control-chart points.
+Each save records the chart scope, justification, affected points, and
+before/after limit snapshots so exclusion actions remain attributable.
+
+**Feature:** Audited point exclusions / Phase I cleaning
+
+**DDL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_exclusions` (
+  event_id            STRING    NOT NULL,
+  material_id         STRING    NOT NULL,
+  mic_id              STRING    NOT NULL,
+  mic_name            STRING,
+  plant_id            STRING,
+  chart_type          STRING    NOT NULL,
+  date_from           STRING,
+  date_to             STRING,
+  rule_set            STRING,
+  justification       STRING    NOT NULL,
+  action              STRING,
+  excluded_count      INT       NOT NULL,
+  excluded_points_json STRING   NOT NULL,
+  before_limits_json  STRING,
+  after_limits_json   STRING,
+  user_id             STRING    NOT NULL,
+  event_ts            TIMESTAMP NOT NULL
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
+
+**Required Unity Catalog Grants:**
+
+```sql
+-- Persist exclusion audit snapshots from the app
+GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`
+  TO `spc_app_backend`;
+
+-- Review exclusion history during investigations
+GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`
+  TO `spc_quality_engineers`;
 ```
 
 ---

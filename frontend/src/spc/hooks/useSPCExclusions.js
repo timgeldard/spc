@@ -17,6 +17,7 @@ export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFr
     }
 
     let cancelled = false
+    const controller = new AbortController()
     setLoading(true)
 
     const params = new URLSearchParams({
@@ -28,7 +29,7 @@ export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFr
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
 
-    fetch(`/api/spc/exclusions?${params.toString()}`)
+    fetch(`/api/spc/exclusions?${params.toString()}`, { signal: controller.signal })
       .then(res => {
         if (!res.ok) return res.json().then(body => Promise.reject(body.detail ?? `Error ${res.status}`))
         return res.json()
@@ -37,13 +38,17 @@ export function useSPCExclusions({ materialId, micId, chartType, plantId, dateFr
         if (!cancelled) setSnapshot(data.exclusions ?? null)
       })
       .catch(err => {
+        if (err?.name === 'AbortError') return
         if (!cancelled) setError(String(err))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [scopeReady, materialId, micId, chartType, plantId, dateFrom, dateTo])
 
   const saveSnapshot = useCallback(async (payload) => {

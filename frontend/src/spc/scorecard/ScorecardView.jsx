@@ -132,7 +132,7 @@ export default function ScorecardView() {
           </p>
           {state.exclusionAudit && (state.exclusionAudit.excluded_count ?? 0) > 0 && state.selectedMIC && (
             <p className="spc-scorecard-stability-note">
-              {state.exclusionAudit.excluded_count} point{state.exclusionAudit.excluded_count !== 1 ? 's' : ''} excluded for
+              {state.exclusionAudit.excluded_count} point{state.exclusionAudit.excluded_count !== 1 ? 's' : ''} excluded from
               {' '}{state.selectedMIC.mic_name ?? state.selectedMIC.mic_id}
               {state.exclusionAudit.user_id ? ` by ${state.exclusionAudit.user_id}` : ''}
               {state.exclusionAudit.event_ts ? ` on ${String(state.exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : ''}.

@@ -52,13 +52,31 @@ function reducer(state, action) {
         exclusionDialog: null,
       }
     case 'SET_DATE_FROM':
-      return { ...state, dateFrom: action.payload, exclusionDialog: null }
+      return {
+        ...state,
+        dateFrom: action.payload,
+        excludedIndices: new Set(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
     case 'SET_DATE_TO':
-      return { ...state, dateTo: action.payload, exclusionDialog: null }
+      return {
+        ...state,
+        dateTo: action.payload,
+        excludedIndices: new Set(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload }
     case 'SET_CHART_TYPE_OVERRIDE':
-      return { ...state, chartTypeOverride: action.payload, exclusionDialog: null }
+      return {
+        ...state,
+        chartTypeOverride: action.payload,
+        excludedIndices: new Set(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
     case 'TOGGLE_EXCLUDE_INDEX': {
       const next = new Set(state.excludedIndices)
       if (next.has(action.payload)) {
@@ -87,7 +105,13 @@ function reducer(state, action) {
     case 'SET_LIMITS_MODE':
       return { ...state, limitsMode: action.payload }
     case 'TOGGLE_STRATIFY_ALL':
-      return { ...state, stratifyAll: !state.stratifyAll, exclusionDialog: null }
+      return {
+        ...state,
+        stratifyAll: !state.stratifyAll,
+        excludedIndices: new Set(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
     case 'SELECT_MATERIAL_AND_CHARTS':
       return {
         ...state,

@@ -14,9 +14,10 @@ APP_NAME ?= spc
 BUNDLE_NAME ?= spc
 MIGRATIONS_DIR ?= scripts/migrations
 LOCKED_LIMITS_MIGRATION ?= $(MIGRATIONS_DIR)/000_setup_locked_limits.sql
+EXCLUSIONS_MIGRATION ?= $(MIGRATIONS_DIR)/001_create_spc_exclusions.sql
 QUERY_AUDIT_MIGRATION ?= $(MIGRATIONS_DIR)/002_create_query_audit.sql
 
-.PHONY: build check-env deploy setup-locked-limits setup-query-audit
+.PHONY: build check-env deploy setup-locked-limits setup-exclusions setup-query-audit
 
 check-env:
 	@databricks current-user me --profile $(PROFILE) -o json > /dev/null 2>&1 || \
@@ -30,6 +31,7 @@ deploy: check-env build
 	databricks bundle deploy --profile $(PROFILE)
 	APP_NAME=$(APP_NAME) BUNDLE_NAME=$(BUNDLE_NAME) bash scripts/post-deploy.sh --profile $(PROFILE)
 	$(MAKE) setup-locked-limits PROFILE=$(PROFILE)
+	$(MAKE) setup-exclusions PROFILE=$(PROFILE)
 	$(MAKE) setup-query-audit PROFILE=$(PROFILE)
 
 setup-locked-limits: check-env
@@ -37,13 +39,21 @@ setup-locked-limits: check-env
 	@export TRACE_CATALOG=$${TRACE_CATALOG:-connected_plant_uat} && \
 	 export TRACE_SCHEMA=$${TRACE_SCHEMA:-gold} && \
 	 envsubst '$$TRACE_CATALOG $$TRACE_SCHEMA' < $(LOCKED_LIMITS_MIGRATION) | \
-	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat -)"
+	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat)"
 	@echo "✓ spc_locked_limits table ready"
+
+setup-exclusions: check-env
+	@echo "Applying exclusions migration from $(EXCLUSIONS_MIGRATION)..."
+	@export TRACE_CATALOG=$${TRACE_CATALOG:-connected_plant_uat} && \
+	 export TRACE_SCHEMA=$${TRACE_SCHEMA:-gold} && \
+	 envsubst '$$TRACE_CATALOG $$TRACE_SCHEMA' < $(EXCLUSIONS_MIGRATION) | \
+	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat)"
+	@echo "✓ spc_exclusions table ready"
 
 setup-query-audit: check-env
 	@echo "Applying query-audit migration from $(QUERY_AUDIT_MIGRATION)..."
 	@export TRACE_CATALOG=$${TRACE_CATALOG:-connected_plant_uat} && \
 	 export TRACE_SCHEMA=$${TRACE_SCHEMA:-gold} && \
 	 envsubst '$$TRACE_CATALOG $$TRACE_SCHEMA' < $(QUERY_AUDIT_MIGRATION) | \
-	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat -)"
+	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat)"
 	@echo "✓ spc_query_audit table ready"

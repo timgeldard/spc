@@ -149,6 +149,24 @@ It supports:
 The export router reuses shared SPC data-fetch helpers so exported files stay
 aligned with the datasets shown in the UI.
 
+### Exclusions API
+
+`/api/spc/exclusions` is the persisted audit trail for manual and auto-cleaned
+point exclusions. The endpoints are implemented in
+`backend/routers/exclusions.py` and mounted under the main SPC router.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/spc/exclusions` | Persist a new immutable exclusion snapshot for a chart scope |
+| `GET` | `/api/spc/exclusions` | Return the latest exclusion snapshot for a chart scope |
+
+The POST body includes scope fields (`material_id`, `mic_id`, `plant_id`,
+`chart_type`, `date_from`, `date_to`), the exclusion payload
+(`excluded_points`, `justification`, `action`), and optional
+`before_limits` / `after_limits` snapshots. Responses include audit metadata
+such as `event_id`, `user_id`, and `event_ts` so the frontend can show who made
+the change and when.
+
 ---
 
 ## Frontend
