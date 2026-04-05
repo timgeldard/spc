@@ -130,6 +130,14 @@ export default function ScorecardView() {
             Cpk values are shown without stability verification. Open the control chart for each
             characteristic to check for rule violations before interpreting capability.
           </p>
+          {state.exclusionAudit && (state.exclusionAudit.excluded_count ?? 0) > 0 && state.selectedMIC && (
+            <p className="spc-scorecard-stability-note">
+              {state.exclusionAudit.excluded_count} point{state.exclusionAudit.excluded_count !== 1 ? 's' : ''} excluded for
+              {' '}{state.selectedMIC.mic_name ?? state.selectedMIC.mic_id}
+              {state.exclusionAudit.user_id ? ` by ${state.exclusionAudit.user_id}` : ''}
+              {state.exclusionAudit.event_ts ? ` on ${String(state.exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : ''}.
+            </p>
+          )}
           <ScorecardTable rows={scorecard} />
         </>
       )}

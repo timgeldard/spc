@@ -19,6 +19,7 @@ frontend server in production.
 │  │                                                    │  │
 │  │  FastAPI                                           │  │
 │  │    /api/spc/*    ← backend/routers/spc.py          │  │
+│  │    /api/spc/export ← backend/routers/export.py     │  │
 │  │    /api/trace    ← backend/main.py                 │  │
 │  │    /api/health   ← backend/main.py                 │  │
 │  │    /assets       ← frontend/dist/assets/           │  │
@@ -47,7 +48,9 @@ backend/
 ├── main.py             App entry point, global exception handler,
 │                       traceability endpoints, SPA serving
 ├── routers/
-│   └── spc.py          9 SPC endpoints (router mounted at /api/spc)
+│   ├── spc.py          Core SPC endpoints (router mounted at /api/spc)
+│   ├── export.py       Export endpoints for scorecard / chart data / signals
+│   └── exclusions.py   Persisted exclusions audit trail endpoints
 └── utils/
     ├── db.py           SQL execution, token resolution, configuration
     ├── spc_thresholds.py  CPK/rejection rate threshold constants
@@ -131,6 +134,20 @@ The `/api/trace` endpoint returns a recursive tree structure. `_build_tree`:
 2. Builds a parent→children index from the deduplicated flat rows
 3. Wires children recursively with a `frozenset` ancestor path to detect and break cycles
 4. Selects the root as the node with no parent (or lowest depth if multiple candidates)
+
+### Export API
+
+`POST /api/spc/export` is a documented backend route, not a frontend-only helper.
+It supports:
+
+| Scope | Formats | Description |
+|---|---|---|
+| `scorecard` | `excel`, `csv` | Capability scorecard download |
+| `chart_data` | `excel`, `csv` | Raw chart-point export |
+| `signals` | `excel`, `csv` | Rule-violation log export |
+
+The export router reuses shared SPC data-fetch helpers so exported files stay
+aligned with the datasets shown in the UI.
 
 ---
 

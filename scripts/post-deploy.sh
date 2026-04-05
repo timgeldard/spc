@@ -14,7 +14,8 @@
 set -euo pipefail
 
 PROFILE="${DATABRICKS_PROFILE:-uat}"
-APP_NAME="spc"
+APP_NAME="${APP_NAME:-spc}"
+BUNDLE_NAME="${BUNDLE_NAME:-spc}"
 
 # Allow --profile flag to override the default
 while [[ $# -gt 0 ]]; do
@@ -24,7 +25,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-BUNDLE_PATH="/Workspace/Shared/.bundle/spc/${PROFILE}/files"
+BUNDLE_PATH="/Workspace/Shared/.bundle/${BUNDLE_NAME}/${PROFILE}/files"
 
 echo "→ Deploying app '${APP_NAME}' from ${BUNDLE_PATH}..."
 

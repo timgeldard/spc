@@ -24,8 +24,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 from backend.utils.db import (
+    attach_data_freshness,
     check_warehouse_config,
-    get_data_freshness,
     resolve_token,
     run_sql,
     run_sql_async,
@@ -43,23 +43,6 @@ router = APIRouter()
 # user (with restricted access), bypassing row-level security policies.
 # The Databricks SQL Warehouse result cache handles repeated identical queries
 # per authenticated user, making an app-level cache unnecessary.
-
-
-async def _with_freshness(payload: dict, token: str, source_views: list[str]) -> dict:
-    """Fetch data-freshness metadata without blocking — runs in the thread pool."""
-    try:
-        loop = asyncio.get_running_loop()
-        from backend.utils.db import _sql_executor
-        payload["data_freshness"] = await loop.run_in_executor(
-            _sql_executor, lambda: get_data_freshness(token, source_views)
-        )
-    except Exception as exc:
-        payload["data_freshness"] = {
-            "error": str(exc)[:300],
-            "sources": [],
-        }
-    return payload
-
 
 # ---------------------------------------------------------------------------
 # Error handler
@@ -82,9 +65,9 @@ def _handle_locked_limits_error(exc: Exception) -> None:
         raise HTTPException(
             status_code=503,
             detail=(
-                "Locked limits table not initialised. "
-                "Run: make setup-locked-limits, "
-                "or execute scripts/setup_locked_limits.sql manually."
+                "Locked limits table not initialised in this workspace. "
+                "Apply migration scripts/migrations/000_setup_locked_limits.sql "
+                "through the deploy pipeline before using locked limits."
             ),
         )
     _handle_sql_error(exc)
@@ -287,7 +270,7 @@ async def spc_plants(
     except Exception as exc:
         _handle_sql_error(exc)
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"plants": rows},
         token,
         ["gold_batch_mass_balance_v", "gold_plant", "gold_batch_quality_result_v"],
@@ -325,13 +308,13 @@ async def spc_validate_material(
         _handle_sql_error(exc)
 
     if not rows:
-        return await _with_freshness(
+        return await attach_data_freshness(
             {"valid": False},
             token,
             ["gold_batch_quality_result_v", "gold_material"],
         )
     row = rows[0]
-    return await _with_freshness({
+    return await attach_data_freshness({
         "valid": True,
         "material_id": str(row["material_id"]),
         "material_name": str(row["material_name"]),
@@ -366,7 +349,7 @@ async def spc_materials(
     except Exception as exc:
         _handle_sql_error(exc)
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"materials": rows},
         token,
         ["gold_batch_quality_result_v", "gold_material"],
@@ -442,7 +425,7 @@ async def spc_characteristics(
             row["chart_type"] = "xbar_r" if avg_spb > 1.5 else "imr"
             characteristics.append(row)
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"characteristics": characteristics, "attr_characteristics": attr_characteristics},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -475,7 +458,7 @@ async def spc_chart_data(
         body.stratify_all,
     )
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"points": rows, "count": len(rows), "stratified": body.stratify_all},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -706,7 +689,7 @@ async def spc_process_flow(
             material_ids.add(str(e["target"]))
 
     if not material_ids:
-        return await _with_freshness(
+        return await attach_data_freshness(
             {"nodes": [], "edges": []},
             token,
             ["gold_batch_lineage", "gold_material", "gold_plant", "gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -809,7 +792,7 @@ async def spc_process_flow(
             seen_edges.add((src, tgt))
             edges.append({"source": src, "target": tgt})
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"nodes": nodes, "edges": edges},
         token,
         ["gold_batch_lineage", "gold_material", "gold_plant", "gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -998,7 +981,7 @@ async def spc_scorecard(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
     rows = await _scorecard_rows(token, body.material_id, body.plant_id, body.date_from, body.date_to)
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"scorecard": rows, "material_id": body.material_id},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -1060,7 +1043,7 @@ async def spc_attribute_characteristics(
         row["p_bar"] = round(row["total_nonconforming"] / total, 4)
         row["chart_type"] = "p_chart"
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"characteristics": rows},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -1145,7 +1128,7 @@ async def spc_p_chart_data(
         row["n_nonconforming"] = int(float(row.get("n_nonconforming", 0) or 0))
         row["p_value"]         = float(row.get("p_value", 0) or 0)
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"points": rows, "count": len(rows)},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -1254,7 +1237,7 @@ async def spc_count_chart_data(
         row["n_inspected"]  = int(float(row.get("n_inspected", 0) or 0))
         row["defect_count"] = int(float(row.get("defect_count", 0) or 0))
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"points": rows, "count": len(rows), "chart_subtype": body.chart_subtype},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -1854,7 +1837,7 @@ async def spc_correlation(
 
     mics = [{"mic_id": k, "mic_name": v} for k, v in sorted(mic_map.items(), key=lambda x: x[1])]
 
-    return await _with_freshness(
+    return await attach_data_freshness(
         {"pairs": rows, "mics": mics, "pair_count": len(rows)},
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],

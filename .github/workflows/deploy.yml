@@ -40,3 +40,34 @@ jobs:
 
       - name: Run backend tests
         run: pytest backend/tests -v
+
+      - name: Install Databricks CLI
+        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+          pip install databricks-cli
+
+      - name: Configure Databricks CLI for migration checks
+        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        run: |
+          mkdir -p "$HOME"
+          cat > "$HOME/.databrickscfg" <<EOF
+          [ci]
+          host = ${{ secrets.DATABRICKS_HOST }}
+          token = ${{ secrets.DATABRICKS_TOKEN }}
+          EOF
+
+      - name: Apply locked-limits migration
+        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-locked-limits PROFILE=ci
+
+      - name: Apply query-audit migration
+        if: ${{ secrets.DATABRICKS_HOST != '' && secrets.DATABRICKS_TOKEN != '' }}
+        env:
+          TRACE_CATALOG: ${{ vars.TRACE_CATALOG || 'connected_plant_uat' }}
+          TRACE_SCHEMA: ${{ vars.TRACE_SCHEMA || 'gold' }}
+        run: make setup-query-audit PROFILE=ci

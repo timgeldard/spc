@@ -3,7 +3,8 @@ import { computeAll } from '../calculations.js'
 
 /**
  * Wraps the pure SPC calculations in a memoized hook.
- * Excluded indices are removed from the dataset before computing limits.
+ * Persisted/manual exclusions are removed from the dataset before computing
+ * limits and capability so the rendered state always reflects the filtered set.
  *
  * @param {Array} points              - raw points from useSPCChartData
  * @param {'imr'|'xbar_r'} chartType
@@ -29,6 +30,8 @@ export function useSPCCalculations(points, chartType, excludedIndices, ruleSet =
 
     const activePoints = points.filter((_, i) => !effectiveExclusions.has(i))
     const result = computeAll(activePoints, chartType, ruleSet)
+    result.filteredPointCount = activePoints.length
+    result.excludedPointCount = effectiveExclusions.size
 
     result.indexedPoints = points.map((p, i) => ({
       ...p,

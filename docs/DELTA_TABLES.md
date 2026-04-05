@@ -1,9 +1,9 @@
 # Delta Tables — App-Managed Persistent State
 
 This document describes the Delta tables created by the SPC App for persistent
-state that cannot live in the read-only gold views. These tables must be created
-once by a Databricks workspace administrator before the relevant features can
-be used.
+state that cannot live in the read-only gold views. The deploy pipeline is
+expected to apply the relevant migrations automatically; the SQL shown here is
+the underlying shape for audit and admin review.
 
 ## Recommendations
 
@@ -60,6 +60,33 @@ GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_locked_limits`
 > **Security note:** The application uses token passthrough — the logged-in user's
 > identity is forwarded to Databricks, and Unity Catalog enforces these grants
 > automatically. No service principal credentials are stored in the app.
+
+---
+
+## Table: `spc_query_audit`
+
+**Purpose:** Stores operational audit events for SPC runtime failures and
+eventually for SQL-query traceability. Freshness lookup failures write here with
+an error id so the API no longer returns a silent partial-success payload.
+
+**Feature:** Operational audit trail / compliance monitoring
+
+**DDL:**
+
+```sql
+CREATE TABLE IF NOT EXISTS `connected_plant_uat`.`gold`.`spc_query_audit` (
+  audit_id     STRING    NOT NULL,
+  event_type   STRING    NOT NULL,
+  sql_hash     STRING,
+  error_id     STRING,
+  request_path STRING,
+  detail_json  STRING    NOT NULL,
+  user_id      STRING    NOT NULL,
+  created_at   TIMESTAMP NOT NULL
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
 
 ---
 

@@ -160,6 +160,7 @@ npm run test:coverage       # with coverage report
 ```bash
 make deploy                 # builds frontend + deploys to UAT
 make deploy PROFILE=prod    # deploy to a different target profile
+make deploy PROFILE=dev APP_NAME=spc-dev TRACE_CATALOG=connected_plant_dev
 ```
 
 The Makefile:
@@ -167,6 +168,8 @@ The Makefile:
 2. Builds the frontend (`npm run build` → `frontend/dist/`)
 3. Runs `databricks bundle deploy` (uploads all files)
 4. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
+5. Applies the idempotent locked-limits migration (`scripts/migrations/000_setup_locked_limits.sql`)
+6. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
 
 ### CI
 
@@ -174,8 +177,9 @@ GitHub Actions runs `lint-and-test` on every push to `main`:
 - Frontend: `npm test` (Vitest)
 - Backend: `pytest backend/tests`
 
-Deployment is **not automated** — run `make deploy` from your local machine after
-the CI checks pass.
+When Databricks credentials are configured in GitHub Actions secrets, CI also
+applies the locked-limits migration to keep app-managed tables in sync with the
+deployed backend expectations.
 
 ---
 
@@ -203,6 +207,7 @@ the CI checks pass.
 | `POST` | `/api/spc/characteristics` | MIC list with statistical metadata (mean, stddev, chart type) |
 | `POST` | `/api/spc/attribute-characteristics` | Attribute (pass/fail) MIC list with p-bar |
 | `POST` | `/api/spc/chart-data` | Time-ordered measurement points for a material + MIC |
+| `POST` | `/api/spc/export` | Export scorecard, chart data, or signals as Excel / CSV |
 | `POST` | `/api/spc/p-chart-data` | Per-batch proportion nonconforming for a P-chart |
 | `POST` | `/api/spc/process-flow` | Material DAG (4 levels upstream, 3 downstream) with SPC health |
 | `POST` | `/api/spc/scorecard` | Pp/Ppk per MIC for a material, sorted by Ppk ascending |

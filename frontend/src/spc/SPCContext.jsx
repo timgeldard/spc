@@ -15,6 +15,8 @@ const initialState = {
   excludeOutliers: false,   // exclude ATTRIBUT='*' outliers from limit calc
   limitsMode: 'live',       // 'live' | 'locked'
   stratifyAll: false,       // show all plants as separate series
+  exclusionAudit: null,     // latest persisted exclusion snapshot for active chart scope
+  exclusionDialog: null,    // pending exclusion action requiring justification
 }
 
 function reducer(state, action) {
@@ -27,6 +29,8 @@ function reducer(state, action) {
         selectedMIC: null,
         excludedIndices: new Set(),
         chartTypeOverride: null,
+        exclusionAudit: null,
+        exclusionDialog: null,
       }
     case 'SET_PLANT':
       return {
@@ -35,6 +39,8 @@ function reducer(state, action) {
         selectedMIC: null,
         excludedIndices: new Set(),
         chartTypeOverride: null,
+        exclusionAudit: null,
+        exclusionDialog: null,
       }
     case 'SET_MIC':
       return {
@@ -42,15 +48,17 @@ function reducer(state, action) {
         selectedMIC: action.payload,
         excludedIndices: new Set(),
         chartTypeOverride: null,
+        exclusionAudit: null,
+        exclusionDialog: null,
       }
     case 'SET_DATE_FROM':
-      return { ...state, dateFrom: action.payload }
+      return { ...state, dateFrom: action.payload, exclusionDialog: null }
     case 'SET_DATE_TO':
-      return { ...state, dateTo: action.payload }
+      return { ...state, dateTo: action.payload, exclusionDialog: null }
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload }
     case 'SET_CHART_TYPE_OVERRIDE':
-      return { ...state, chartTypeOverride: action.payload }
+      return { ...state, chartTypeOverride: action.payload, exclusionDialog: null }
     case 'TOGGLE_EXCLUDE_INDEX': {
       const next = new Set(state.excludedIndices)
       if (next.has(action.payload)) {
@@ -62,8 +70,16 @@ function reducer(state, action) {
     }
     case 'CLEAR_EXCLUSIONS':
       return { ...state, excludedIndices: new Set() }
+    case 'OPEN_EXCLUSION_DIALOG':
+      return { ...state, exclusionDialog: action.payload }
+    case 'CLOSE_EXCLUSION_DIALOG':
+      return { ...state, exclusionDialog: null }
+    case 'SET_EXCLUSION_AUDIT':
+      return { ...state, exclusionAudit: action.payload }
+    case 'CLEAR_EXCLUSION_AUDIT':
+      return { ...state, exclusionAudit: null }
     case 'SET_RULE_SET':
-      return { ...state, ruleSet: action.payload }
+      return { ...state, ruleSet: action.payload, exclusionDialog: null }
     case 'TOGGLE_EXCLUDE_OUTLIERS':
       return { ...state, excludeOutliers: !state.excludeOutliers }
     case 'SET_EXCLUSIONS':
@@ -71,7 +87,7 @@ function reducer(state, action) {
     case 'SET_LIMITS_MODE':
       return { ...state, limitsMode: action.payload }
     case 'TOGGLE_STRATIFY_ALL':
-      return { ...state, stratifyAll: !state.stratifyAll }
+      return { ...state, stratifyAll: !state.stratifyAll, exclusionDialog: null }
     case 'SELECT_MATERIAL_AND_CHARTS':
       return {
         ...state,
@@ -81,6 +97,8 @@ function reducer(state, action) {
         activeTab: 'charts',
         excludedIndices: new Set(),
         chartTypeOverride: null,
+        exclusionAudit: null,
+        exclusionDialog: null,
       }
     default:
       return state

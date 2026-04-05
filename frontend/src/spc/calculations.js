@@ -2,8 +2,10 @@
  * SPC Statistical Calculations
  *
  * All functions are pure — no side effects, no DOM, no API calls.
- * Control limit formulas follow AIAG SPC Reference Manual 4th Edition.
- * Nelson rules follow the original Nelson (1984) formulation.
+ * Control-limit factors follow AIAG SPC Reference Manual, 4th Edition
+ * (Appendix B constant tables and chart-limit usage including Table III-4).
+ * WECO rules follow the Western Electric SQC Handbook (1956).
+ * Nelson rules follow Nelson (1984), Journal of Quality Technology.
  */
 
 import { getConstants } from './spcConstants.js'
@@ -306,7 +308,7 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
 }
 
 function round3(v) {
-  return Math.round(v * 1000) / 1000
+  return Math.round(v * 1_000_000) / 1_000_000
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +342,7 @@ export function detectWECORules(values, limits) {
   const signals = []
   const n = values.length
 
-  const side = (v) => v >= cl ? 1 : -1   // +1 above CL, -1 below CL
+  const side = (v) => v > cl ? 1 : v < cl ? -1 : 0
 
   // Rule 1: Single point outside ±3σ
   for (let i = 0; i < n; i++) {
@@ -397,7 +399,7 @@ export function detectWECORules(values, limits) {
   for (let i = 7; i < n; i++) {
     const w = values.slice(i - 7, i + 1)
     const s = side(w[0])
-    if (w.every(v => side(v) === s)) {
+    if (s !== 0 && w.every(v => side(v) === s)) {
       signals.push({
         rule: 4,
         indices: range(i - 7, i),
@@ -438,7 +440,7 @@ export function detectNelsonRules(values, limits) {
   const signals = []
   const n = values.length
 
-  const side = (v) => v >= cl ? 1 : -1
+  const side = (v) => v > cl ? 1 : v < cl ? -1 : 0
 
   // Rule 1: Single point outside ±3σ
   for (let i = 0; i < n; i++) {
@@ -451,7 +453,7 @@ export function detectNelsonRules(values, limits) {
   for (let i = 8; i < n; i++) {
     const w = values.slice(i - 8, i + 1)
     const s = side(w[0])
-    if (w.every(v => side(v) === s)) {
+    if (s !== 0 && w.every(v => side(v) === s)) {
       signals.push({ rule: 2, indices: range(i - 8, i), description: `9 consecutive points ${s === 1 ? 'above' : 'below'} the centre line` })
     }
   }
@@ -507,7 +509,9 @@ export function detectNelsonRules(values, limits) {
   // Rule 8: 8 consecutive points outside ±1σ on both sides
   for (let i = 7; i < n; i++) {
     const w = values.slice(i - 7, i + 1)
-    if (w.every(v => Math.abs(v - cl) > sigma1)) {
+    const hasAbove = w.some(v => v > cl + sigma1)
+    const hasBelow = w.some(v => v < cl - sigma1)
+    if (hasAbove && hasBelow && w.every(v => Math.abs(v - cl) > sigma1)) {
       signals.push({ rule: 8, indices: range(i - 7, i), description: '8 consecutive points outside Zone C (mixture pattern)' })
     }
   }

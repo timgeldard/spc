@@ -29,12 +29,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.responses import Response
 from backend.utils.db import (
+    attach_data_freshness,
     DATABRICKS_HOST,
     TRACE_CATALOG,
     TRACE_SCHEMA,
     WAREHOUSE_HTTP_PATH,
     check_warehouse_config,
-    get_data_freshness,
     hostname,
     resolve_token,
     run_sql,
@@ -71,8 +71,10 @@ app.add_middleware(SlowAPIMiddleware)
 
 from backend.routers.spc import router as spc_router  # noqa: E402
 from backend.routers.export import router as export_router  # noqa: E402
+from backend.routers.exclusions import router as exclusions_router  # noqa: E402
 app.include_router(spc_router, prefix="/api/spc", tags=["SPC"])
 app.include_router(export_router, prefix="/api/spc", tags=["SPC Export"])
+app.include_router(exclusions_router, prefix="/api/spc", tags=["SPC Exclusions"])
 
 
 # ---------------------------------------------------------------------------
@@ -126,15 +128,13 @@ class BatchDetailsRequest(BaseModel):
 # are all imported from backend.utils.db.
 
 
-def _with_freshness(payload: dict, token: str, source_views: list[str]) -> dict:
-    try:
-        payload["data_freshness"] = get_data_freshness(token, source_views)
-    except Exception as exc:
-        payload["data_freshness"] = {
-            "error": str(exc)[:300],
-            "sources": [],
-        }
-    return payload
+async def _with_freshness(request: Request, payload: dict, token: str, source_views: list[str]) -> dict:
+    return await attach_data_freshness(
+        payload,
+        token,
+        source_views,
+        request_path=request.url.path,
+    )
 
 
 def _build_tree(rows: list[dict]) -> Optional[dict]:
@@ -421,7 +421,8 @@ async def trace(
         )
 
     tree = _build_tree(rows)
-    return _with_freshness(
+    return await _with_freshness(
+        request,
         {"tree": tree, "total_nodes": len(rows)},
         token,
         [
@@ -489,7 +490,8 @@ async def summary(
     if not rows:
         raise HTTPException(status_code=404, detail=f"No summary data for Batch '{body.batch_id}'.")
 
-    return _with_freshness(
+    return await _with_freshness(
+        request,
         rows[0],
         token,
         ["gold_batch_stock_v", "gold_batch_mass_balance_v"],
@@ -666,7 +668,7 @@ async def batch_details(
     if not summary_rows:
         raise HTTPException(status_code=404, detail=f"No data for Batch '{body.batch_id}'.")
 
-    return _with_freshness({
+    return await _with_freshness(request, {
         "summary": summary_rows[0],
         "coa_results": coa_rows,
         "customers": customer_rows,
@@ -749,7 +751,7 @@ async def impact(
             raise HTTPException(status_code=403, detail="Access Denied.") from exc
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return _with_freshness({
+    return await _with_freshness(request, {
         "customers": customers_rows,
         "cross_batch_exposure": cross_rows,
     }, token, ["gold_batch_delivery_v", "gold_batch_lineage"])

@@ -148,7 +148,7 @@ export default function IndividualsChart({ spc, indexedPoints, signals, excluded
       </div>
       <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
       {onPointClick && (
-        <p className="spc-chart-hint">Click any point to toggle exclusion from control limit calculation</p>
+        <p className="spc-chart-hint">Click any point to open the reviewed exclusion flow for control-limit calculation</p>
       )}
     </div>
   )
