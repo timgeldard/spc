@@ -431,7 +431,7 @@ async def spc_characteristics(
     return await attach_data_freshness(
         {"characteristics": characteristics, "attr_characteristics": attr_characteristics},
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["gold_batch_quality_result_v"],
         request_path=request.url.path,
     )
 
@@ -1051,10 +1051,14 @@ async def spc_attribute_characteristics(
         row["p_bar"] = round(row["total_nonconforming"] / total, 4)
         row["chart_type"] = "p_chart"
 
+    source_views = ["gold_batch_quality_result_v"]
+    if body.plant_id:
+        source_views.append("gold_batch_mass_balance_v")
+
     return await attach_data_freshness(
         {"characteristics": rows},
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        source_views,
         request_path=request.url.path,
     )
 
@@ -1296,6 +1300,10 @@ class LockLimitsRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_limit_order(self) -> "LockLimitsRequest":
+        if self.chart_type == "p_chart":
+            if self.ucl < self.lcl:
+                raise ValueError("ucl must be greater than or equal to lcl for p_chart")
+            return self
         if self.ucl <= self.lcl:
             raise ValueError("ucl must be greater than lcl")
         return self

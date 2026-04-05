@@ -7,6 +7,7 @@ trail of who changed what, when, and with which before/after limits.
 """
 
 import json
+import logging
 import uuid
 from typing import Optional
 
@@ -15,6 +16,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 
 from backend.utils.db import (
     check_warehouse_config,
+    classify_sql_runtime_error,
     insert_spc_exclusion_snapshot,
     resolve_token,
     run_sql_async,
@@ -24,25 +26,28 @@ from backend.utils.db import (
 from backend.utils.rate_limit import limiter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _CHART_TYPES = {"imr", "xbar_r", "p_chart"}
 
 
 def _handle_sql_error(exc: Exception) -> None:
-    msg = str(exc).lower()
-    if "permission denied" in msg or "no access" in msg or "403" in msg:
-        raise HTTPException(status_code=403, detail="Access denied by Unity Catalog policy.")
-    if "401" in msg or "unauthorized" in msg:
-        raise HTTPException(status_code=401, detail="Token rejected by Databricks.")
-    if "table or view not found" in msg or "does not exist" in msg or "doesn't exist" in msg:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Exclusions audit table not initialised. "
-                "Run the exclusions migration before using manual point exclusions."
-            ),
-        )
-    raise HTTPException(status_code=500, detail=str(exc))
+    mapped_error = classify_sql_runtime_error(
+        exc,
+        missing_table_detail=(
+            "Exclusions audit table not initialised. "
+            "Run the exclusions migration before using manual point exclusions."
+        ),
+    )
+    if mapped_error is not None:
+        raise mapped_error
+
+    error_id = str(uuid.uuid4())
+    logger.exception("exclusions.sql_error error_id=%s", error_id, exc_info=exc)
+    raise HTTPException(
+        status_code=500,
+        detail=f"Internal server error; reference id: {error_id}",
+    )
 
 
 class LimitSnapshot(BaseModel):
@@ -87,6 +92,14 @@ class SaveExclusionsRequest(BaseModel):
         if value not in _CHART_TYPES:
             raise ValueError(f"chart_type must be one of {sorted(_CHART_TYPES)}")
         return value
+
+    @field_validator("mic_name", "plant_id", "date_from", "date_to", "rule_set", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
     @field_validator("justification")
     @classmethod
@@ -148,14 +161,16 @@ async def save_exclusions(
             token,
             "SELECT CURRENT_USER() AS user_id, CAST(CURRENT_TIMESTAMP() AS STRING) AS event_ts",
         )
-    except RuntimeError:
+    except RuntimeError as exc:
+        logger.warning("exclusions.actor_metadata_lookup_failed: %s", exc)
         actor_rows = [{"user_id": None, "event_ts": None}]
+    actor = actor_rows[0] if actor_rows else {"user_id": None, "event_ts": None}
 
     return {
         "saved": True,
         "event_id": payload["event_id"],
-        "user_id": actor_rows[0].get("user_id"),
-        "event_ts": actor_rows[0].get("event_ts"),
+        "user_id": actor.get("user_id"),
+        "event_ts": actor.get("event_ts"),
     }
 
 
@@ -184,6 +199,10 @@ async def get_exclusions(
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    plant_id = (plant_id or "").strip() or None
+    date_from = (date_from or "").strip() or None
+    date_to = (date_to or "").strip() or None
 
     params = [
         sql_param("material_id", material_id),

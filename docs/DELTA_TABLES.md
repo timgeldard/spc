@@ -95,9 +95,9 @@ TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
 **Required Unity Catalog Grants:**
 
 ```sql
--- Write runtime audit rows from the SPC backend
+-- Write runtime audit rows (must match the principal used at execution time)
 GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
-  TO `spc_app_backend`;
+  TO `<principal-used-by-caller-token>`;
 
 -- Read audit history during investigations / reviews
 GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_query_audit`
@@ -144,9 +144,9 @@ TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
 **Required Unity Catalog Grants:**
 
 ```sql
--- Persist exclusion audit snapshots from the app
+-- Persist exclusion audit snapshots (must match the principal used at execution time)
 GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`
-  TO `spc_app_backend`;
+  TO `<principal-used-by-caller-token>`;
 
 -- Review exclusion history during investigations
 GRANT SELECT ON TABLE `connected_plant_uat`.`gold`.`spc_exclusions`

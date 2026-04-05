@@ -17,8 +17,8 @@ import hashlib
 import json
 import logging
 import os
-import time
 import re
+import time
 import uuid
 import urllib.error
 import urllib.request
@@ -100,6 +100,26 @@ def sql_param(name: str, value: Optional[object]) -> dict:
         params    = [sql_param("my_id", some_value)]
     """
     return {"name": name, "value": str(value) if value is not None else None, "type": "STRING"}
+
+
+def classify_sql_runtime_error(
+    exc: Exception,
+    *,
+    missing_table_detail: Optional[str] = None,
+) -> Optional[HTTPException]:
+    """Map Databricks SQL runtime failures to client-facing HTTP errors."""
+    msg = str(exc).lower()
+    if "permission denied" in msg or "no access" in msg or "403" in msg:
+        return HTTPException(status_code=403, detail="Access denied by Unity Catalog policy.")
+    if "401" in msg or "unauthorized" in msg:
+        return HTTPException(status_code=401, detail="Token rejected by Databricks.")
+    if missing_table_detail and (
+        "table or view not found" in msg
+        or "does not exist" in msg
+        or "doesn't exist" in msg
+    ):
+        return HTTPException(status_code=503, detail=missing_table_detail)
+    return None
 
 
 def increment_observability_counter(name: str, *, tags: Optional[dict[str, str]] = None) -> None:
@@ -325,6 +345,12 @@ async def attach_data_freshness(
         )
         return payload
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        mapped_error = classify_sql_runtime_error(exc)
+        if mapped_error is not None:
+            raise mapped_error from exc
+
         error_id = str(uuid.uuid4())
         logger.exception(
             "data_freshness.failed error_id=%s request_path=%s source_views=%s",
