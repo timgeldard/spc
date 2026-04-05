@@ -166,11 +166,12 @@ make deploy PROFILE=dev APP_NAME=spc-dev TRACE_CATALOG=connected_plant_dev
 The Makefile:
 1. Verifies Databricks CLI authentication
 2. Builds the frontend (`npm run build` → `frontend/dist/`)
-3. Runs `databricks bundle deploy` (uploads all files)
-4. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
-5. Applies the idempotent locked-limits migration (`scripts/migrations/000_setup_locked_limits.sql`)
-6. Applies the exclusions audit migration (`scripts/migrations/001_create_spc_exclusions.sql`)
-7. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
+3. Renders `app.yaml` from `app.template.yaml` using the active warehouse/catalog/schema values
+4. Runs `databricks bundle deploy` (uploads all files)
+5. Runs `scripts/post-deploy.sh` (triggers snapshot, re-applies `user_api_scopes: ["sql"]`)
+6. Applies the idempotent locked-limits migration (`scripts/migrations/000_setup_locked_limits.sql`)
+7. Applies the exclusions audit migration (`scripts/migrations/001_create_spc_exclusions.sql`)
+8. Applies the query-audit migration (`scripts/migrations/002_create_query_audit.sql`)
 
 ### CI
 
@@ -304,7 +305,8 @@ credential storage and no app-level data filtering.
 
 ```
 spc/
-├── app.yaml                    Databricks Apps startup config (command + env vars)
+├── app.yaml                    Rendered Databricks Apps runtime config
+├── app.template.yaml           Template used by `make deploy` to render app.yaml
 ├── databricks.yml              Databricks Asset Bundle (DAB) config
 ├── Makefile                    Build and deploy automation
 ├── start.sh                    Alt startup script

@@ -9,10 +9,10 @@ trail of who changed what, when, and with which before/after limits.
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, ValidationError, field_validator
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, field_validator
 
 from backend.utils.db import (
     check_warehouse_config,
@@ -110,14 +110,24 @@ class SaveExclusionsRequest(BaseModel):
         return value
 
 
-class ChartTypeRequest(BaseModel):
-    stratify_all: bool = False
+class GetExclusionsQuery(BaseModel):
+    material_id: str
+    mic_id: str
     chart_type: str = "imr"
+    plant_id: Optional[str] = None
+    stratify_all: bool = False
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
 
     @field_validator("chart_type")
     @classmethod
     def validate_chart_type(cls, value: str) -> str:
         return SaveExclusionsRequest.validate_chart_type(value)
+
+    @field_validator("plant_id", "date_from", "date_to", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        return SaveExclusionsRequest.normalize_optional_text(value)
 
 
 @router.post("/exclusions")
@@ -178,13 +188,7 @@ async def save_exclusions(
 @limiter.limit("120/minute")
 async def get_exclusions(
     request: Request,
-    material_id: str,
-    mic_id: str,
-    chart_type: str = "imr",
-    plant_id: Optional[str] = None,
-    stratify_all: bool = False,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    query: Annotated[GetExclusionsQuery, Depends()],
     x_forwarded_access_token: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
@@ -192,26 +196,14 @@ async def get_exclusions(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
 
-    try:
-        ChartTypeRequest(
-            stratify_all=stratify_all,
-            chart_type=chart_type,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-    plant_id = (plant_id or "").strip() or None
-    date_from = (date_from or "").strip() or None
-    date_to = (date_to or "").strip() or None
-
     params = [
-        sql_param("material_id", material_id),
-        sql_param("mic_id", mic_id),
-        sql_param("plant_id", plant_id),
-        sql_param("stratify_all", stratify_all),
-        sql_param("chart_type", chart_type),
-        sql_param("date_from", date_from),
-        sql_param("date_to", date_to),
+        sql_param("material_id", query.material_id),
+        sql_param("mic_id", query.mic_id),
+        sql_param("plant_id", query.plant_id),
+        sql_param("stratify_all", query.stratify_all),
+        sql_param("chart_type", query.chart_type),
+        sql_param("date_from", query.date_from),
+        sql_param("date_to", query.date_to),
     ]
 
     query = f"""

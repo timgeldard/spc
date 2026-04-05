@@ -401,6 +401,9 @@ env:
 ```
 
 `DATABRICKS_HOST` is injected automatically by the Apps runtime.
+`make deploy` renders `app.yaml` from `app.template.yaml` before bundle upload so
+the runtime file always contains concrete values rather than unresolved bundle
+placeholders.
 
 ### CI (GitHub Actions)
 

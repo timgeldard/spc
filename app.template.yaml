@@ -10,10 +10,10 @@ command:
 
 env:
   - name: DATABRICKS_WAREHOUSE_HTTP_PATH
-    value: "/sql/1.0/warehouses/e76480b94bea6ed5"
+    value: "$DATABRICKS_WAREHOUSE_HTTP_PATH"
 
   - name: TRACE_CATALOG
-    value: "connected_plant_uat"
+    value: "$TRACE_CATALOG"
 
   - name: TRACE_SCHEMA
-    value: "gold"
+    value: "$TRACE_SCHEMA"
