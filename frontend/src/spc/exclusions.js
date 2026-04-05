@@ -58,8 +58,8 @@ export function getLimitsSnapshot(spc) {
   }
 }
 
-export function recomputeForExcludedSet(points, excludedIndices, chartType, ruleSet = 'weco') {
+export function recomputeForExcludedSet(points, excludedIndices, chartType, ruleSet = 'weco', normality = null) {
   const excluded = new Set(excludedIndices)
   const activePoints = points.filter((_, index) => !excluded.has(index))
-  return computeAll(activePoints, chartType, ruleSet)
+  return computeAll(activePoints, chartType, ruleSet, { normality })
 }

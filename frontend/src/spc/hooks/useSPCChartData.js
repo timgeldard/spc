@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 
 export function useSPCChartData(materialId, micId, micName, dateFrom, dateTo, plantId, stratifyAll = false) {
   const [points, setPoints] = useState([])
+  const [normality, setNormality] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     setPoints([])
+    setNormality(null)
     setError(null)
     if (!materialId || !micId || !micName) {
       setLoading(false)
@@ -34,7 +36,10 @@ export function useSPCChartData(materialId, micId, micName, dateFrom, dateTo, pl
         return res.json()
       })
       .then(data => {
-        if (!cancelled) setPoints(data.points ?? [])
+        if (!cancelled) {
+          setPoints(data.points ?? [])
+          setNormality(data.normality ?? null)
+        }
       })
       .catch(err => {
         if (!cancelled) setError(String(err))
@@ -46,5 +51,5 @@ export function useSPCChartData(materialId, micId, micName, dateFrom, dateTo, pl
     return () => { cancelled = true }
   }, [materialId, micId, micName, dateFrom, dateTo, plantId, stratifyAll])
 
-  return { points, loading, error }
+  return { points, normality, loading, error }
 }

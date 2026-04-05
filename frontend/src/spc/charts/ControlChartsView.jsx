@@ -113,7 +113,7 @@ export default function ControlChartsView() {
 
   const { stratifyAll, limitsMode } = state
 
-  const { points: quantPoints, loading: quantLoading, error: quantError } = useSPCChartData(
+  const { points: quantPoints, normality: quantNormality, loading: quantLoading, error: quantError } = useSPCChartData(
     isQuantitative ? selectedMaterial?.material_id : null,
     selectedMIC?.mic_id,
     selectedMIC?.mic_name,
@@ -171,6 +171,7 @@ export default function ControlChartsView() {
     excludedIndices,
     ruleSet,
     excludeOutliers,
+    quantNormality,
   )
 
   const trendData = useMemo(
@@ -202,7 +203,7 @@ export default function ControlChartsView() {
     if (!selectedMaterial || !selectedMIC || !effectiveChartType) return
 
     const beforeLimits = getLimitsSnapshot(spc)
-    const recomputed = recomputeForExcludedSet(quantPoints, nextExcludedIndices, effectiveChartType, ruleSet)
+    const recomputed = recomputeForExcludedSet(quantPoints, nextExcludedIndices, effectiveChartType, ruleSet, quantNormality)
     const payload = {
       material_id: selectedMaterial.material_id,
       mic_id: selectedMIC.mic_id,

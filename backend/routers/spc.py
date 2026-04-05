@@ -108,6 +108,64 @@ def _infer_spec_type(usl: Optional[float], lsl: Optional[float]) -> str:
     return "bilateral_symmetric"
 
 
+def _compute_normality_result(values: list[Optional[float]]) -> dict:
+    """Return normality metadata for variable capability analysis.
+
+    Shapiro-Wilk is preferred for small to moderate datasets. For datasets over
+    5000 points, the test is run on an evenly sampled subset because SciPy warns
+    that p-values become unreliable beyond that size.
+    """
+    alpha = 0.05
+    valid_values = [
+        float(v) for v in values
+        if v is not None and isinstance(v, (int, float)) and math.isfinite(v)
+    ]
+    result = {
+        "method": "shapiro_wilk",
+        "p_value": None,
+        "alpha": alpha,
+        "is_normal": None,
+        "warning": None,
+    }
+
+    if len(valid_values) < 3:
+        result["warning"] = "Normality requires at least 3 quantitative points."
+        return result
+
+    try:
+        from scipy.stats import shapiro
+    except ImportError:
+        result["warning"] = "scipy is not installed; Shapiro-Wilk normality testing skipped."
+        return result
+
+    sample = valid_values
+    if len(valid_values) > 5000:
+        last_index = len(valid_values) - 1
+        sample = [
+            valid_values[round(i * last_index / 4999)]
+            for i in range(5000)
+        ]
+        result["method"] = "shapiro_wilk_sampled"
+        result["warning"] = (
+            "Dataset exceeded 5000 points; normality was evaluated on an evenly "
+            "sampled 5000-point subset."
+        )
+
+    try:
+        _, p_value = shapiro(sample)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        result["warning"] = f"Normality test failed: {str(exc)[:160]}"
+        return result
+
+    if p_value is None or math.isnan(float(p_value)):
+        result["warning"] = "Shapiro-Wilk returned an invalid p-value."
+        return result
+
+    result["p_value"] = round(float(p_value), 6)
+    result["is_normal"] = bool(float(p_value) >= alpha)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -463,7 +521,12 @@ async def spc_chart_data(
     )
 
     return await attach_data_freshness(
-        {"points": rows, "count": len(rows), "stratified": body.stratify_all},
+        {
+            "points": rows,
+            "count": len(rows),
+            "stratified": body.stratify_all,
+            "normality": _compute_normality_result([row.get("value") for row in rows]),
+        },
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
         request_path=request.url.path,

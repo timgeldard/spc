@@ -35,6 +35,29 @@ export function stddevSample(values) {
   return Math.sqrt(variance)
 }
 
+// Mean Square Successive Difference sigma estimator.
+// For a stable independent process, E(MSSD) = 2σ², so σ = sqrt(MSSD / 2).
+export function stddevMSSD(values) {
+  if (!values || values.length < 2) return null
+  let sumSquares = 0
+  for (let i = 1; i < values.length; i++) {
+    const diff = values[i] - values[i - 1]
+    sumSquares += diff * diff
+  }
+  return Math.sqrt(sumSquares / (2 * (values.length - 1)))
+}
+
+function hasMonotonicTrend(values, minRunLength = 6) {
+  if (!values || values.length < minRunLength) return false
+  for (let end = minRunLength - 1; end < values.length; end++) {
+    const window = values.slice(end - minRunLength + 1, end + 1)
+    const increasing = window.every((v, idx) => idx === 0 || v > window[idx - 1])
+    const decreasing = window.every((v, idx) => idx === 0 || v < window[idx - 1])
+    if (increasing || decreasing) return true
+  }
+  return false
+}
+
 // ---------------------------------------------------------------------------
 // I-MR Chart (Individuals + Moving Range)
 // Use when avg samples per batch ≤ 1.5 (one measurement per batch)
@@ -70,12 +93,19 @@ export function computeIMR(values) {
 
   const xBar = mean(values)
   const mrBar = mean(movingRanges)
-  const sigmaWithin = mrBar / d2
+  const sigmaMR = mrBar / d2
+  const sigmaMSSD = stddevMSSD(values)
+  const useMSSD = values.length <= 8 || hasMonotonicTrend(values)
+  const sigmaMethod = (useMSSD && sigmaMSSD && sigmaMSSD > 0) ? 'mssd' : 'mr'
+  const sigmaWithin = sigmaMethod === 'mssd' ? sigmaMSSD : sigmaMR
 
   return {
     xBar,
     mrBar,
     sigmaWithin,
+    sigmaMR,
+    sigmaMSSD,
+    sigmaMethod,
     ucl_x:  xBar + 3 * sigmaWithin,
     lcl_x:  xBar - 3 * sigmaWithin,
     ucl_mr: D4 * mrBar,
@@ -139,7 +169,8 @@ export function computeXbarR(subgroups) {
     const n = sg.values.length
     const xbar = mean(sg.values)
     const range = Math.max(...sg.values) - Math.min(...sg.values)
-    return { ...sg, n, xbar, range }
+    const stddev = n > 1 ? stddevSample(sg.values) : null
+    return { ...sg, n, xbar, range, stddev }
   })
 
   const grandMean = mean(subgroupStats.map(s => s.xbar))
@@ -148,11 +179,13 @@ export function computeXbarR(subgroups) {
   // Detect variable subgroup size
   const sizes = [...new Set(subgroupStats.map(s => s.n))]
   const constantN = sizes.length === 1 ? sizes[0] : null
+  const mixedSubgroupSizes = constantN == null
+  const averageSubgroupSize = mean(subgroupStats.map(s => s.n))
 
   // Per-subgroup limits (handles variable subgroup sizes)
   const statsWithLimits = subgroupStats.map(s => {
     const { d2, A2, D3, D4 } = getConstants(s.n)
-    const sigmaWithin = rBar / d2
+    const sigmaWithin = s.n > 1 ? s.range / d2 : null
     return {
       ...s,
       ucl_x: grandMean + A2 * rBar,
@@ -163,22 +196,55 @@ export function computeXbarR(subgroups) {
     }
   })
 
-  // Overall limits from constant n (used for reference lines)
+  const sigmaFromRanges = mean(
+    subgroupStats
+      .filter(s => s.n > 1)
+      .map(s => s.range / getConstants(s.n).d2)
+  )
+  const pooledVarianceNumerator = subgroupStats.reduce(
+    (sum, s) => sum + ((s.n - 1) > 0 && s.stddev != null ? (s.n - 1) * (s.stddev ** 2) : 0),
+    0,
+  )
+  const pooledDegrees = subgroupStats.reduce((sum, s) => sum + Math.max(0, s.n - 1), 0)
+  const pooledSigmaWithin = pooledDegrees > 0 ? Math.sqrt(pooledVarianceNumerator / pooledDegrees) : null
+
   let ucl_x, lcl_x, ucl_r, lcl_r, sigmaWithin, sigma1, sigma2
-  const refN = constantN ?? Math.round(mean(subgroupStats.map(s => s.n)))
-  const { d2: refD2, A2: refA2, D3: refD3, D4: refD4 } = getConstants(refN)
-  sigmaWithin = rBar / refD2
-  ucl_x = grandMean + refA2 * rBar
-  lcl_x = grandMean - refA2 * rBar
-  ucl_r = refD4 * rBar
-  lcl_r = refD3 * rBar
-  sigma1 = sigmaWithin
-  sigma2 = 2 * sigmaWithin
+  let limitStrategy = 'constant_n_aiag'
+  let referenceSubgroupSize = constantN
+  let sigmaXbarReference
+  if (constantN != null) {
+    const { d2: refD2, A2: refA2, D3: refD3, D4: refD4 } = getConstants(constantN)
+    sigmaWithin = rBar / refD2
+    sigmaXbarReference = sigmaWithin / Math.sqrt(constantN)
+    ucl_x = grandMean + refA2 * rBar
+    lcl_x = grandMean - refA2 * rBar
+    ucl_r = refD4 * rBar
+    lcl_r = refD3 * rBar
+  } else {
+    sigmaWithin = pooledSigmaWithin ?? sigmaFromRanges ?? 0
+    sigmaXbarReference = averageSubgroupSize > 0
+      ? sigmaWithin / Math.sqrt(averageSubgroupSize)
+      : 0
+    ucl_x = grandMean + 3 * sigmaXbarReference
+    lcl_x = grandMean - 3 * sigmaXbarReference
+    ucl_r = mean(statsWithLimits.map(s => s.ucl_r))
+    lcl_r = mean(statsWithLimits.map(s => s.lcl_r))
+    limitStrategy = pooledSigmaWithin != null ? 'pooled_sigma_average_n' : 'range_sigma_average_n'
+    referenceSubgroupSize = null
+  }
+  sigma1 = sigmaXbarReference
+  sigma2 = 2 * sigmaXbarReference
 
   return {
     grandMean,
     rBar,
     sigmaWithin,
+    pooledSigmaWithin,
+    sigmaFromRanges,
+    mixedSubgroupSizes,
+    averageSubgroupSize,
+    limitStrategy,
+    referenceSubgroupSize,
     subgroupStats: statsWithLimits,
     ucl_x, lcl_x, ucl_r, lcl_r,
     sigma1, sigma2,
@@ -216,18 +282,23 @@ export function normalCDF(z) {
  * @returns {{ usl, lsl, cp, cpk, pp, ppk, sigmaOverall, xBar,
  *             cpkLower95, cpkUpper95, zScore, dpmo, spec_type }}
  */
-export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaWithin, sigmaWithinIfOld) {
+export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaWithin, sigmaWithinIfOld, maybeOptions = {}) {
   // Backward-compat shim: detect old (values, nominal, tolerance, sigmaWithin) signature
-  let specConfig, sigmaWithin
+  let specConfig, sigmaWithin, options
   if (typeof specConfigOrNominal === 'number' || specConfigOrNominal === null || specConfigOrNominal === undefined) {
     const nominal   = specConfigOrNominal
     const tolerance = toleranceOrSigmaWithin
     sigmaWithin     = sigmaWithinIfOld
     specConfig      = { spec_type: 'bilateral_symmetric', nominal, tolerance }
+    options = maybeOptions ?? {}
   } else {
     specConfig  = specConfigOrNominal
     sigmaWithin = toleranceOrSigmaWithin
+    options = (sigmaWithinIfOld && typeof sigmaWithinIfOld === 'object' && !Array.isArray(sigmaWithinIfOld))
+      ? sigmaWithinIfOld
+      : {}
   }
+  const normality = options.normality ?? null
 
   const { spec_type = 'bilateral_symmetric', nominal, tolerance } = specConfig ?? {}
 
@@ -240,7 +311,8 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
       // Fall back to computing from nominal ± tolerance when direct limits not supplied
       if (nominal == null || tolerance == null || tolerance <= 0) {
         return { cp: null, cpk: null, pp: null, ppk: null, usl: null, lsl: null,
-                 cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type }
+                 cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type, normality,
+                 normalityWarning: normality?.is_normal === false ? 'Warning: Data is non-normal. Cpk and DPMO estimates may be invalid.' : null }
       }
       usl = nominal + tolerance
       lsl = nominal - tolerance
@@ -252,12 +324,14 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
   const hasLsl = lsl != null
   if (!hasUsl && !hasLsl) {
     return { cp: null, cpk: null, pp: null, ppk: null, usl, lsl,
-             cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type }
+             cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type, normality,
+             normalityWarning: normality?.is_normal === false ? 'Warning: Data is non-normal. Cpk and DPMO estimates may be invalid.' : null }
   }
 
   if (!values || values.length < 5) {
     return { cp: null, cpk: null, pp: null, ppk: null, usl, lsl,
-             cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type }
+             cpkLower95: null, cpkUpper95: null, zScore: null, dpmo: null, spec_type, normality,
+             normalityWarning: normality?.is_normal === false ? 'Warning: Data is non-normal. Cpk and DPMO estimates may be invalid.' : null }
   }
 
   const xBar        = mean(values)
@@ -304,7 +378,9 @@ export function computeCapability(values, specConfigOrNominal, toleranceOrSigmaW
 
   return { usl, lsl, cp, cpk, pp, ppk, sigmaOverall, xBar,
            cpkLower95, cpkUpper95, zScore, dpmo, spec_type,
-           dpmo_convention: 'motorola_1.5sigma_shift' }
+           dpmo_convention: 'motorola_1.5sigma_shift',
+           normality,
+           normalityWarning: normality?.is_normal === false ? 'Warning: Data is non-normal. Cpk and DPMO estimates may be invalid.' : null }
 }
 
 function round6(v) {
@@ -641,9 +717,21 @@ export function normalCurve(mu, sigma, minX, maxX, n, binWidth) {
  *   tolerance: number|null,
  * }}
  */
-export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
+export function computeAll(points, chartType = 'imr', ruleSet = 'weco', options = {}) {
   if (!points || points.length === 0) {
-    return { chartType, ruleSet, values: [], sorted: [], imr: null, xbarR: null, subgroups: null, capability: null, signals: [], mrSignals: [] }
+    return {
+      chartType,
+      ruleSet,
+      values: [],
+      sorted: [],
+      imr: null,
+      xbarR: null,
+      subgroups: null,
+      capability: null,
+      signals: [],
+      mrSignals: [],
+      normality: options.normality ?? null,
+    }
   }
 
   const sorted = [...points].sort((a, b) =>
@@ -691,7 +779,7 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
     const xbarR      = computeXbarR(subgroups)
     const xbarValues = xbarR.subgroupStats.map(s => s.xbar)
     const capability = {
-      ...computeCapability(values, specConfig, xbarR.sigmaWithin),
+      ...computeCapability(values, specConfig, xbarR.sigmaWithin, { normality: options.normality ?? null }),
       hasMixedSpec,
       specWarning: specConfig.specWarning,
     }
@@ -713,6 +801,7 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
       nominal,
       tolerance,
       specConfig,
+      normality: options.normality ?? null,
     }
   }
 
@@ -721,7 +810,7 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
   if (!imr) return { chartType: 'imr', ruleSet, values, sorted, imr: null, xbarR: null, subgroups: null, capability: null, signals: [], mrSignals: [] }
 
   const capability = {
-    ...computeCapability(values, specConfig, imr.sigmaWithin),
+    ...computeCapability(values, specConfig, imr.sigmaWithin, { normality: options.normality ?? null }),
     hasMixedSpec,
     specWarning: specConfig.specWarning,
   }
@@ -743,6 +832,7 @@ export function computeAll(points, chartType = 'imr', ruleSet = 'weco') {
     nominal,
     tolerance,
     specConfig,
+    normality: options.normality ?? null,
   }
 }
 

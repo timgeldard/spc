@@ -50,7 +50,7 @@ function MetricCard({ label, value, tier, subtitle, note }) {
 export default function CapabilityPanel({ spc }) {
   if (!spc?.capability) return null
 
-  const { cp, cpk, pp, ppk, cpkLower95, cpkUpper95, zScore, dpmo, spec_type } = spc.capability
+  const { cp, cpk, pp, ppk, cpkLower95, cpkUpper95, zScore, dpmo, spec_type, normality, normalityWarning } = spc.capability
   const isUnilateral = spec_type === 'unilateral_upper' || spec_type === 'unilateral_lower'
   const cpkTier = getTier(cpk)
 
@@ -58,6 +58,15 @@ export default function CapabilityPanel({ spc }) {
     <div className="spc-capability-panel">
       <div className="spc-capability-panel-title">Process Capability</div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
+      {normality?.is_normal === false && (
+        <p className="text-xs text-red-700 mb-2">
+          {normalityWarning}
+          {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
+        </p>
+      )}
+      {normality?.warning && normality?.is_normal == null && (
+        <p className="text-xs text-amber-700 mb-2">{normality.warning}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
         {!isUnilateral && <MetricCard label="Cp" value={cp} note="Short-term" />}
