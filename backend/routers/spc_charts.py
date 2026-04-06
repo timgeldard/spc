@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import ValidationError
 
 from backend.dal.spc_charts_dal import (
+    decode_chart_cursor,
     delete_locked_limits,
     fetch_chart_data_page,
     fetch_chart_data_values,
@@ -44,11 +45,9 @@ async def spc_chart_data(
     check_warehouse_config()
     if cursor is not None:
         try:
-            batch_seq_str, sample_seq_str = cursor.split(":", 1)
-            int(batch_seq_str)
-            int(sample_seq_str)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=422, detail="cursor must be formatted as 'batch_seq:sample_seq'")
+            decode_chart_cursor(cursor)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         page = await fetch_chart_data_page(
             token,

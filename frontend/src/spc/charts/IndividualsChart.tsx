@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import type { IndexedChartPoint, LockedLimits, SPCComputationResult, SPCSignal } from '../types'
 import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
@@ -166,7 +166,7 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
         Individuals Chart (X)
         <span className={chartNClass}>n = {indexedPoints.length}</span>
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
       <p className={chartHintClass}>
         Sigma estimator: {imr.sigmaMethod === 'mssd' ? 'MSSD (trend-aware / low-n)' : 'Moving range (MR̄ / d2)'}
       </p>

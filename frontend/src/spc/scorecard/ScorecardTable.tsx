@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import { AllCommunityModule, ModuleRegistry, type ColDef, type ICellRendererParams, type RowClickedEvent } from 'ag-grid-community'
+import {
+  ClientSideRowModelModule,
+  CsvExportModule,
+  ModuleRegistry,
+  type ColDef,
+  type ICellRendererParams,
+  type RowClickedEvent,
+} from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 import { useSPC } from '../SPCContext'
@@ -17,7 +24,7 @@ import {
   statusPillClass,
 } from '../uiClasses.js'
 
-ModuleRegistry.registerModules([AllCommunityModule])
+ModuleRegistry.registerModules([ClientSideRowModelModule, CsvExportModule])
 
 const STATUS_CONFIG = {
   excellent: { label: 'Excellent', color: '#059669', bg: '#d1fae5' },
@@ -144,4 +151,3 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     </div>
   )
 }
-

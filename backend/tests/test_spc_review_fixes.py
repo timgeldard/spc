@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import HTTPException
 
-from backend.dal import spc_analysis_dal, spc_metadata_dal
+from backend.dal import spc_analysis_dal, spc_charts_dal, spc_metadata_dal
 from backend.routers import spc_common
 
 
@@ -70,3 +70,29 @@ def test_handle_sql_error_masks_internal_details():
         assert "secret SQL details" not in exc.detail
     else:  # pragma: no cover
         raise AssertionError("Expected HTTPException")
+
+
+def test_apply_chart_row_formatting_raises_on_bad_numeric_value():
+    rows = [
+        {
+            "batch_id": "BATCH-1",
+            "cursor_sample_id": "SAMPLE-7",
+            "value": "not-a-number",
+            "nominal": "10.0",
+            "tolerance": "1.0",
+            "lsl": None,
+            "usl": None,
+            "sample_seq": "1",
+            "attribut": "",
+        }
+    ]
+
+    try:
+        spc_charts_dal._apply_chart_row_formatting(rows)
+    except ValueError as exc:
+        message = str(exc)
+        assert "field 'value'" in message
+        assert "batch_id='BATCH-1'" in message
+        assert "'not-a-number'" in message
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError")

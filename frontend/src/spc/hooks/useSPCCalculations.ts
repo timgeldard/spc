@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { computeAll } from '../calculations'
-import type { ChartDataPoint, NormalityResult } from '../types'
+import type { ChartDataPoint, NormalityResult, QuantChartType, RuleSet } from '../types'
 
 export function useSPCCalculations(
   points: ChartDataPoint[],
-  chartType: 'imr' | 'xbar_r' | string,
+  chartType: QuantChartType,
   excludedIndices: Set<number>,
-  ruleSet: 'weco' | 'nelson' = 'weco',
+  ruleSet: RuleSet = 'weco',
   excludeOutliers = false,
   normality: NormalityResult | null = null,
 ) {
@@ -36,4 +36,3 @@ export function useSPCCalculations(
     return result
   }, [points, chartType, excludedKey, ruleSet, excludeOutliers, normality])
 }
-

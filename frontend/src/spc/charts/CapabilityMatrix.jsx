@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import { useSPC } from '../SPCContext.jsx'
 import { chartHintClass, emptyStateClass, surfacePanelClass } from '../uiClasses.js'
 
@@ -128,7 +128,7 @@ export default function CapabilityMatrix({ rows }) {
 
   return (
     <div className={surfacePanelClass}>
-      <ReactECharts option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge />
+      <EChart option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge />
       <p className={chartHintClass}>
         Bubble size = batch count · Click a bubble to open the control chart · Green = Capable &amp; Stable
       </p>

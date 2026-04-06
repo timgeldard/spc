@@ -1,5 +1,14 @@
 import type { Dispatch, ReactNode } from 'react'
 
+export type RuleSet = 'weco' | 'nelson'
+export type QuantChartType = 'imr' | 'xbar_r'
+export type SpecType =
+  | 'bilateral_symmetric'
+  | 'bilateral_asymmetric'
+  | 'unilateral_upper'
+  | 'unilateral_lower'
+  | (string & {})
+
 export interface MaterialRef {
   material_id: string
   material_name?: string | null
@@ -75,7 +84,7 @@ export interface SpecConfig {
   tolerance?: number | null
   usl?: number | null
   lsl?: number | null
-  spec_type?: string | null
+  spec_type?: SpecType | null
   hasMixedSpec?: boolean
   specWarning?: string | null
 }
@@ -96,13 +105,21 @@ export interface CapabilityMetrics {
   ppk?: number | null
   zScore?: number | null
   dpmo?: number | null
-  spec_type?: string | null
+  spec_type?: SpecType | null
   normality?: NormalityResult | null
   normalityWarning?: string | null
   specWarning?: string | null
   cpkLower95?: number | null
   cpkUpper95?: number | null
   dpmo_convention?: string | null
+  hasMixedSpec?: boolean
+}
+
+export interface CapabilityResult extends ControlLimits, CapabilityMetrics {
+  usl?: number | null
+  lsl?: number | null
+  sigmaOverall?: number | null
+  xBar?: number | null
 }
 
 export interface ExclusionAuditSnapshot {
@@ -143,6 +160,31 @@ export interface SPCSignal {
   chart?: string
 }
 
+export interface AutoCleanPhaseIIterationLog {
+  iteration: number
+  removedCount: number
+  removedOriginalIndices: number[]
+  ucl?: number | null
+  cl?: number | null
+  lcl?: number | null
+}
+
+export interface AutoCleanPhaseIResult {
+  stable: boolean
+  cleanedIndices: Set<number>
+  iterationLog: AutoCleanPhaseIIterationLog[]
+}
+
+export interface RollingCapabilityPoint {
+  windowEnd: number
+  batchSeq: number
+  batchDate?: string | null
+  n: number
+  cpk?: number | null
+  cp?: number | null
+  zScore?: number | null
+}
+
 export interface IMRResult {
   xBar: number
   mrBar: number
@@ -166,13 +208,27 @@ export interface XbarSubgroupStat {
   n: number
   xbar: number
   range: number
+  stddev?: number | null
   ucl_x?: number | null
   lcl_x?: number | null
+  ucl_r?: number | null
+  lcl_r?: number | null
+  sigmaWithin?: number | null
+}
+
+export interface XbarSubgroup {
+  batchSeq: number
+  batchId?: string | null
+  batchDate?: string | null
+  values: number[]
 }
 
 export interface XbarRResult {
   grandMean: number
+  rBar: number
   sigmaWithin: number
+  pooledSigmaWithin?: number | null
+  sigmaFromRanges?: number | null
   sigma1: number
   sigma2: number
   ucl_x: number
@@ -180,17 +236,37 @@ export interface XbarRResult {
   ucl_r: number
   lcl_r: number
   mixedSubgroupSizes?: boolean
+  averageSubgroupSize?: number | null
+  limitStrategy?: string
   referenceSubgroupSize?: number | null
   subgroupStats: XbarSubgroupStat[]
 }
 
+export interface HistogramBin {
+  x0: number
+  x1: number
+  midpoint: number
+  count: number
+}
+
+export interface HistogramResult {
+  bins: HistogramBin[]
+  binWidth: number
+}
+
+export interface NormalCurvePoint {
+  x: number
+  y: number
+}
+
 export interface SPCComputationResult {
-  chartType: 'imr' | 'xbar_r'
+  chartType: QuantChartType
+  ruleSet?: RuleSet
   values?: number[]
   nominal?: number | null
   tolerance?: number | null
   specConfig?: SpecConfig
-  capability?: CapabilityMetrics | null
+  capability?: CapabilityResult | null
   indexedPoints?: IndexedChartPoint[]
   filteredPointCount?: number
   excludedPointCount?: number
@@ -199,6 +275,8 @@ export interface SPCComputationResult {
   sorted?: ChartDataPoint[]
   imr?: IMRResult | null
   xbarR?: XbarRResult | null
+  subgroups?: XbarSubgroup[] | null
+  normality?: NormalityResult | null
   [key: string]: unknown
 }
 
