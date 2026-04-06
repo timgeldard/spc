@@ -1,17 +1,37 @@
-# SPC App — Stratification Plan
+# SPC App — Stratification Roadmap
 
-**Question:** Can the app slice control charts and capability metrics by
-**plant**, **machine / work centre**, **vendor batch**, or **operator**?
-
-**Short answer:**
-- Plant — Yes, data is already in the gold layer. Low effort.
-- Machine / Work Centre — Likely available via production order routing. Medium effort.
-- Vendor batch — Requires joining to purchasing / batch master. Medium–high effort.
-- Operator — Requires production confirmation data. High effort; data may not flow to gold.
+Plan for implementing multi-dimensional root-cause analysis in the SPC App.
 
 ---
 
-## 1. Current filter model
+## 1. Phase I: Core Dimensionality [COMPLETED]
+Goal: Enable basic slicing by key SAP master data attributes.
+
+*   **[x] Plant Stratification** — Filter all charts/scorecards by producing plant.
+*   **[x] Lot-level Stratification** — Slice data by `INSPECTION_LOT_ID`.
+*   **[x] Operation-level Stratification** — Slice data by `OPERATION_ID`.
+*   **[x] SQL Whitelisting** — Implemented strict column whitelisting in `spc_charts_dal.py` to prevent logic errors.
+
+---
+
+## 2. Phase II: Advanced Categorical Stratification [IN PROGRESS]
+Goal: Enable deeper root-cause identification across the supply chain.
+
+*   **[ ] Work Center / Resource** — Stratify by the specific machine or production line ($PP-PI$ Resource).
+*   **[ ] Shift / Operator** — Filter by production shift or the recorded inspector (Q03).
+*   **[ ] Vendor / Raw Material Batch** — Link SPC signals to upstream raw material origins.
+
+---
+
+## 3. Phase III: Multi-Variate Stratification [BACKLOG]
+Goal: Automate the discovery of variation sources.
+
+*   **[ ] ANOVA Integration** — Automatically suggest which dimension (Plant vs. Line vs. Machine) is contributing the most to the total variance.
+*   **[ ] Split-Grid View** — Render multiple small-multiples charts for each unique value in a stratification dimension.
+
+---
+
+## 4. Current filter model
 
 The SPC filter bar currently exposes:
 
