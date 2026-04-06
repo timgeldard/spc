@@ -1,4 +1,7 @@
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
-databricks-sql-connector>=3.3.0
 python-dotenv>=1.0.1
+openpyxl>=3.1.0
+scipy>=1.13.0
+cachetools>=5.3.0
+pypika>=0.51.1
