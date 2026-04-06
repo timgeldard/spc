@@ -1,6 +1,6 @@
 import { useSPC } from '../SPCContext'
 import type { IndexedChartPoint, SPCSignal } from '../types'
-import { buttonBaseClass, buttonSecondaryClass, buttonSmClass, surfacePanelClass } from '../uiClasses'
+import { buttonBaseClass, buttonSecondaryClass, buttonSmClass, heroCardDenseClass } from '../uiClasses'
 
 const WECO_RULES = {
   desc: {
@@ -63,6 +63,8 @@ export default function SignalsPanel({
   if (allSignals.length === 0) {
     return (
       <div
+        role="status"
+        aria-live="polite"
         className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium"
         style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}
       >
@@ -75,12 +77,18 @@ export default function SignalsPanel({
   }
 
   return (
-    <div className={surfacePanelClass}>
-      <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--c-text)]">
-        {label} Signals
-        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-600">
-          {allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}
-        </span>
+    <div className={`${heroCardDenseClass} space-y-4`} aria-label={`${label} signal queue`}>
+      <div>
+        <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Signal queue</div>
+        <div className="mt-1 flex items-center gap-2 text-sm font-bold text-[var(--c-text)]">
+          {label} Signals
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-600">
+            {allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-[var(--c-text-muted)]">
+          Signals are ordered evidence of instability. Resolve assignable causes before trusting capability.
+        </p>
       </div>
 
       <div className="relative ml-2 mt-2">
@@ -136,6 +144,7 @@ export default function SignalsPanel({
         style={{ marginTop: 12 }}
         onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'correlation' })}
         title="Investigate whether correlated characteristics may share assignable causes"
+        aria-label="Open correlation analysis for signal investigation"
       >
         Investigate Correlations
       </button>

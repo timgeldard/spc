@@ -35,6 +35,7 @@ export function CustomDot({ cx, cy, index, signals = [], excluded = false }: Cus
   if (isOOC) {
     return (
       <g>
+        <title>Critical signal: point beyond the 3 sigma control limit</title>
         <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="#fff" strokeWidth="1.5" />
         <text x={cx} y={cy - 10} textAnchor="middle" fontSize="9" fill="#ef4444" fontWeight="700">!</text>
       </g>
@@ -43,7 +44,10 @@ export function CustomDot({ cx, cy, index, signals = [], excluded = false }: Cus
 
   if (isSignal) {
     return (
-      <circle cx={cx} cy={cy} r={5} fill="#f59e0b" stroke="#fff" strokeWidth="1.5" />
+      <g>
+        <title>Warning signal: Nelson or WECO rule triggered for this point</title>
+        <rect x={cx - 4} y={cy - 4} width={8} height={8} rx={1.5} fill="#f59e0b" stroke="#fff" strokeWidth="1.5" />
+      </g>
     )
   }
 

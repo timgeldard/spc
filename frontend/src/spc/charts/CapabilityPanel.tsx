@@ -1,6 +1,6 @@
 import CapabilityHistogram from './CapabilityHistogram'
 import type { SPCComputationResult } from '../types'
-import { surfacePanelClass } from '../uiClasses'
+import { heroCardDenseClass } from '../uiClasses'
 
 interface StabilityWarningProps {
   signals?: SPCComputationResult['signals']
@@ -95,11 +95,17 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
   const usesNonParametricCapability = capabilityMethod === 'non_parametric'
 
   return (
-    <div className={surfacePanelClass}>
-      <div className="mb-3 text-sm font-bold text-[var(--c-text)]">Process Capability</div>
+    <div className={`${heroCardDenseClass} space-y-4`}>
+      <div>
+        <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Capability evidence</div>
+        <div className="mt-1 text-base font-bold text-[var(--c-text)]">Process Capability</div>
+        <p className="mt-1 text-sm text-[var(--c-text-muted)]">
+          Short-term capability reflects within-subgroup variation; long-term capability reflects observed process performance.
+        </p>
+      </div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
       {normality?.is_normal === false && (
-        <p className="mb-2 text-xs text-red-700">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           Distribution is non-normal. Non-parametric capability calculations (P50, P99.865, P0.135) applied.
           {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
         </p>
@@ -111,7 +117,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p className="mb-2 text-xs text-amber-700">{normality.warning}</p>
       )}
 
-      <div className="mb-3 grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+      <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
         {!isUnilateral && <MetricCard label="Cp" value={cp} note="Short-term" />}
         <MetricCard
           label="Cpk"
@@ -135,22 +141,25 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
       </div>
 
       {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && (
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="text-xs text-gray-500">
           Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
         </p>
       )}
       {isUnilateral && (
-        <p className="mb-2 text-xs text-gray-400">Cp / Pp not defined for one-sided specification</p>
+        <p className="text-xs text-gray-400">Cp / Pp not defined for one-sided specification</p>
       )}
       {spc.capability?.specWarning && (
-        <p className="mb-2 text-xs text-amber-700">{spc.capability.specWarning}</p>
+        <p className="text-xs text-amber-700">{spc.capability.specWarning}</p>
       )}
 
       {usesNonParametricCapability ? (
-        <div className="mb-3 grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-          <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
-          <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
-          <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
+        <div className="space-y-2">
+          <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Empirical percentile evidence</div>
+          <div className="grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+            <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
+            <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
+            <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
+          </div>
         </div>
       ) : (
         <CapabilityHistogram spc={spc} />
@@ -158,7 +167,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
 
       <div className="flex flex-wrap gap-2 text-xs">
         {TIERS.map((t, i) => (
-          <span key={i} style={{ color: t.color }}>
+          <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: t.color }}>
             {i < TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< 1.00 ${t.label}`}
           </span>
         ))}

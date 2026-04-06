@@ -2,8 +2,16 @@ import type { ComponentProps } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import { echarts } from './echartsCore'
 
-type EChartProps = ComponentProps<typeof ReactEChartsCore>
+type BaseProps = ComponentProps<typeof ReactEChartsCore>
 
-export default function EChart(props: EChartProps) {
-  return <ReactEChartsCore echarts={echarts} {...props} />
+interface EChartProps extends BaseProps {
+  ariaLabel?: string
+}
+
+export default function EChart({ ariaLabel, ...props }: EChartProps) {
+  return (
+    <div role="img" aria-label={ariaLabel}>
+      <ReactEChartsCore echarts={echarts} {...props} />
+    </div>
+  )
 }
