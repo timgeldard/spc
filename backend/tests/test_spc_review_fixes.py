@@ -1,8 +1,11 @@
 import asyncio
 
 from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.requests import Request
 
 from backend.dal import spc_analysis_dal, spc_charts_dal, spc_metadata_dal
+from backend.routers import exclusions
 from backend.routers import spc_common
 
 
@@ -96,3 +99,52 @@ def test_apply_chart_row_formatting_raises_on_bad_numeric_value():
         assert "'not-a-number'" in message
     else:  # pragma: no cover
         raise AssertionError("Expected ValueError")
+
+
+def test_get_exclusions_query_rejects_invalid_stratify_by():
+    try:
+        exclusions.GetExclusionsQuery(
+            material_id="MAT-1",
+            mic_id="MIC-1",
+            stratify_by="bad_column",
+        )
+    except ValidationError as exc:
+        assert "stratify_by must be one of" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValidationError")
+
+
+def test_get_exclusions_includes_legacy_plant_fallback(monkeypatch):
+    calls = []
+
+    async def fake_run_sql_async(_token, query, params=None):
+        calls.append((query, params or []))
+        return []
+
+    monkeypatch.setattr(exclusions, "run_sql_async", fake_run_sql_async)
+    monkeypatch.setattr(exclusions, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(exclusions, "check_warehouse_config", lambda: None)
+
+    request = Request({"type": "http", "method": "GET", "headers": []})
+    query = exclusions.GetExclusionsQuery(
+        material_id="MAT-1",
+        mic_id="MIC-1",
+        plant_id="PLANT-1",
+        stratify_all=True,
+        stratify_by="plant_id",
+    )
+
+    result = asyncio.run(
+        exclusions.get_exclusions(
+            request=request,
+            query=query,
+            x_forwarded_access_token=None,
+            authorization=None,
+        )
+    )
+
+    assert result == {"exclusions": None}
+    sql, params = calls[0]
+    assert "AND stratify_by IS NULL" in sql
+    assert "AND :stratify_by = 'plant_id'" in sql
+    assert any(param["name"] == "stratify_by" and param["value"] == "plant_id" for param in params)

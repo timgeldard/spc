@@ -135,6 +135,11 @@ class GetExclusionsQuery(BaseModel):
     def validate_chart_type(cls, value: str) -> str:
         return SaveExclusionsRequest.validate_chart_type(value)
 
+    @field_validator("stratify_by")
+    @classmethod
+    def validate_stratify_by(cls, value: Optional[str]) -> Optional[str]:
+        return SaveExclusionsRequest.validate_stratify_by(value)
+
     @field_validator("plant_id", "date_from", "date_to", "stratify_by", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
@@ -246,7 +251,14 @@ async def get_exclusions(
           AND chart_type = :chart_type
           AND plant_id <=> :plant_id
           AND COALESCE(stratify_all, false) = CAST(:stratify_all AS BOOLEAN)
-          AND stratify_by <=> :stratify_by
+          AND (
+            stratify_by <=> :stratify_by
+            OR (
+              CAST(:stratify_all AS BOOLEAN) = true
+              AND :stratify_by = 'plant_id'
+              AND stratify_by IS NULL
+            )
+          )
           AND date_from <=> :date_from
           AND date_to <=> :date_to
         ORDER BY event_ts DESC

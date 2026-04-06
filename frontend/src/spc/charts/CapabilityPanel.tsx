@@ -100,7 +100,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
       {normality?.is_normal === false && (
         <p className="mb-2 text-xs text-red-700">
-          Distribution is non-normal. Non-parametric capability calculations (P50, P99.8, P0.1) applied.
+          Distribution is non-normal. Non-parametric capability calculations (P50, P99.865, P0.135) applied.
           {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
         </p>
       )}
