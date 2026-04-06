@@ -54,6 +54,35 @@ D2_TABLE = {
     15: 3.472,
 }
 
+
+async def _attach_validation_freshness(
+    payload: dict,
+    token: str,
+    request_path: str,
+) -> dict:
+    """Best-effort freshness for material validation.
+
+    Material validation is a preflight UX step, so a temporary freshness lookup
+    failure should not masquerade as "material not found". Preserve the
+    validation result and surface the freshness failure as warning metadata.
+    """
+    try:
+        return await attach_data_freshness(
+            payload,
+            token,
+            ["gold_batch_quality_result_v", "gold_material"],
+            request_path=request_path,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 503 and detail.get("message") == "Data freshness lookup failed":
+            return {
+                **payload,
+                "data_freshness": None,
+                "data_freshness_warning": detail,
+            }
+        raise
+
 # In-process caching of process-flow results was removed.
 # Rationale: the cache was keyed only by material_id + date range, so results
 # from one user (with broad Unity Catalog access) could be served to another
@@ -384,18 +413,21 @@ async def spc_validate_material(
         _handle_sql_error(exc)
 
     if not rows:
-        return await attach_data_freshness(
+        return await _attach_validation_freshness(
             {"valid": False},
             token,
-            ["gold_batch_quality_result_v", "gold_material"],
-            request_path=request.url.path,
+            request.url.path,
         )
     row = rows[0]
-    return await attach_data_freshness({
-        "valid": True,
-        "material_id": str(row["material_id"]),
-        "material_name": str(row["material_name"]),
-    }, token, ["gold_batch_quality_result_v", "gold_material"], request_path=request.url.path)
+    return await _attach_validation_freshness(
+        {
+            "valid": True,
+            "material_id": str(row["material_id"]),
+            "material_name": str(row["material_name"]),
+        },
+        token,
+        request.url.path,
+    )
 
 
 @router.get("/materials")
