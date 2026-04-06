@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import { loadingClass, spinnerClass, surfacePanelClass } from '../uiClasses.js'
 
 function linearRegression(points) {
@@ -111,7 +111,7 @@ export default function CorrelationScatter({ result, loading, error }) {
 
   return (
     <div className={surfacePanelClass}>
-      <ReactECharts option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
     </div>
   )
 }

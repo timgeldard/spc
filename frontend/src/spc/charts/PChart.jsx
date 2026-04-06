@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import { computePChart } from '../calculations.js'
 import { chartHintClass, chartNClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
@@ -113,7 +113,7 @@ export default function PChart({ points }) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
       <p className={chartHintClass}>
         p̄ = {(pChart.pBar * 100).toFixed(2)}% overall nonconforming · Variable control limits shown per batch size
       </p>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import { computeNPChart } from '../calculations.js'
 import { chartHintClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
@@ -90,7 +90,7 @@ export default function NPChart({ points }) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
       <p className={chartHintClass}>
         n̄p̄ = {chart.npBar.toFixed(2)} · UCL = {chart.ucl.toFixed(2)} · LCL = {Math.max(0, chart.lcl).toFixed(2)}
       </p>

@@ -1,22 +1,49 @@
+from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import quote, unquote
 
 from backend.dal.spc_shared import infer_spec_type
+from backend.dal.sql_builder import SqlSelectBuilder, SqlWithQueryBuilder
 from backend.utils.db import run_sql_async, sql_param, tbl
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
 
 
+def _format_chart_row_error(field: str, raw_value: object, row: dict) -> str:
+    batch_id = row.get("batch_id")
+    sample_id = row.get("SAMPLE_ID") or row.get("cursor_sample_id") or row.get("sample_seq")
+    return (
+        f"Invalid chart row value for field '{field}' in batch_id={batch_id!r}, "
+        f"sample_id={sample_id!r}: {raw_value!r}; row={row!r}"
+    )
+
+
+def _coerce_chart_float(row: dict, field: str) -> None:
+    value = row.get(field)
+    if value is None:
+        return
+    try:
+        row[field] = float(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(_format_chart_row_error(field, value, row)) from exc
+
+
+def _coerce_chart_int(row: dict, field: str) -> None:
+    value = row.get(field)
+    if value is None:
+        return
+    try:
+        row[field] = int(float(value))
+    except (ValueError, TypeError) as exc:
+        raise ValueError(_format_chart_row_error(field, value, row)) from exc
+
+
 def _apply_chart_row_formatting(rows: list[dict]) -> list[dict]:
-    numeric_fields = ["value", "nominal", "tolerance", "lsl", "usl", "batch_seq", "sample_seq"]
     for row in rows:
-        for field in numeric_fields:
-            value = row.get(field)
-            if value is not None:
-                try:
-                    row[field] = float(value) if field not in ("batch_seq", "sample_seq") else int(float(value))
-                except (ValueError, TypeError):
-                    row[field] = None
+        for field in ["value", "nominal", "tolerance", "lsl", "usl"]:
+            _coerce_chart_float(row, field)
+        _coerce_chart_int(row, "sample_seq")
         row["is_outlier"] = row.get("attribut") == "*"
         usl = row.get("usl")
         lsl = row.get("lsl")
@@ -31,7 +58,48 @@ def _apply_chart_row_formatting(rows: list[dict]) -> list[dict]:
         row["spec_type"] = infer_spec_type(row["usl"], row["lsl"])
         if "plant_id" not in row:
             row["plant_id"] = None
+        row.pop("cursor_batch_date_epoch", None)
+        row.pop("cursor_sample_id", None)
     return rows
+
+
+def encode_chart_cursor(batch_date_epoch: int, batch_id: str, sample_id: str) -> str:
+    return f"{batch_date_epoch}:{quote(batch_id, safe='')}:{quote(sample_id, safe='')}"
+
+
+def decode_chart_cursor(cursor: str) -> tuple[int, str, str]:
+    try:
+        batch_date_epoch_str, batch_id_raw, sample_id_raw = cursor.split(":", 2)
+        batch_date_epoch = int(batch_date_epoch_str)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError("cursor must be formatted as 'batch_date(epoch):batch_id:sample_id'") from exc
+
+    batch_id = unquote(batch_id_raw)
+    sample_id = unquote(sample_id_raw)
+    if not batch_id:
+        raise ValueError("cursor batch_id must not be empty")
+    return batch_date_epoch, batch_id, sample_id
+
+
+def _assign_batch_sequence(rows: list[dict]) -> list[dict]:
+    batch_seq = 0
+    last_batch_key: Optional[tuple[Optional[str], Optional[str]]] = None
+    for row in rows:
+        batch_key = (row.get("batch_date"), row.get("batch_id"))
+        if batch_key != last_batch_key:
+            batch_seq += 1
+            last_batch_key = batch_key
+        row["batch_seq"] = batch_seq
+    return rows
+
+
+@dataclass
+class ChartFilterSpec:
+    params: list[dict]
+    batch_date_conditions: list[str] = field(default_factory=list)
+    quality_conditions: list[str] = field(default_factory=list)
+    final_where_conditions: list[str] = field(default_factory=list)
+    select_extra_columns: list[str] = field(default_factory=list)
 
 
 def _build_chart_filters(
@@ -42,31 +110,190 @@ def _build_chart_filters(
     date_from: Optional[str],
     date_to: Optional[str],
     stratify_all: bool = False,
-) -> tuple[list[dict], str, str, str]:
+) -> ChartFilterSpec:
     params = [
         sql_param("material_id", material_id),
         sql_param("mic_id", mic_id),
     ]
+    batch_date_conditions = [
+        "MATERIAL_ID = :material_id",
+        "MOVEMENT_CATEGORY = 'Production'",
+    ]
+    quality_conditions = [
+        "r.MATERIAL_ID = :material_id",
+        "r.MIC_ID = :mic_id",
+        "r.QUANTITATIVE_RESULT IS NOT NULL",
+        "(r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')",
+    ]
+    final_where_conditions: list[str] = []
+    select_extra_columns: list[str] = []
+
     if mic_name:
         params.append(sql_param("mic_name", mic_name))
-
-    date_clauses = []
+        quality_conditions.append("r.MIC_NAME = :mic_name")
     if date_from:
-        date_clauses.append("POSTING_DATE >= :date_from")
+        batch_date_conditions.append("POSTING_DATE >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        date_clauses.append("POSTING_DATE <= :date_to")
+        batch_date_conditions.append("POSTING_DATE <= :date_to")
         params.append(sql_param("date_to", date_to))
-    date_filter = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
-
-    plant_filter = ""
     if plant_id and not stratify_all:
-        plant_filter = "AND (bd.plant_id = :plant_id OR bd.plant_id IS NULL)"
         params.append(sql_param("plant_id", plant_id))
+        quality_conditions.append("(bd.plant_id = :plant_id OR bd.plant_id IS NULL)")
+    if stratify_all:
+        select_extra_columns.append("plant_id")
+    return ChartFilterSpec(
+        params=params,
+        batch_date_conditions=batch_date_conditions,
+        quality_conditions=quality_conditions,
+        final_where_conditions=final_where_conditions,
+        select_extra_columns=select_extra_columns,
+    )
 
-    mic_name_filter = "AND r.MIC_NAME = :mic_name" if mic_name else ""
-    plant_select = ", plant_id" if stratify_all else ""
-    return params, date_filter, plant_filter, mic_name_filter + plant_select
+
+def _build_batch_dates_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
+    return (
+        SqlSelectBuilder()
+        .select(
+            "MATERIAL_ID",
+            "BATCH_ID",
+            "MIN(POSTING_DATE) AS batch_date",
+            "MAX(PLANT_ID) AS plant_id",
+        )
+        .from_(tbl("gold_batch_mass_balance_v"))
+        .where(filters.batch_date_conditions[0])
+        .where(filters.batch_date_conditions[1])
+        .where(filters.batch_date_conditions[2] if len(filters.batch_date_conditions) > 2 else None)
+        .where(filters.batch_date_conditions[3] if len(filters.batch_date_conditions) > 3 else None)
+        .group_by("MATERIAL_ID", "BATCH_ID")
+    )
+
+
+def _build_quality_data_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
+    return (
+        SqlSelectBuilder()
+        .select(
+            "r.BATCH_ID AS batch_id",
+            "r.INSPECTION_LOT_ID",
+            "r.OPERATION_ID",
+            "r.SAMPLE_ID",
+            "r.attribute AS attribut",
+            "CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value",
+            "TRY_CAST(r.TARGET_VALUE AS DOUBLE) AS nominal",
+            "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
+            "THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1) END AS DOUBLE) AS lsl",
+            "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
+            "THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3) END AS DOUBLE) AS usl",
+            "CASE WHEN LOCATE('...', r.TOLERANCE) = 0 THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END AS tolerance",
+            "r.INSPECTION_RESULT_VALUATION AS valuation",
+            "bd.batch_date",
+            "bd.plant_id",
+            "COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400) AS cursor_batch_date_epoch",
+            "COALESCE(CAST(r.SAMPLE_ID AS STRING), '') AS cursor_sample_id",
+            "ROW_NUMBER() OVER (PARTITION BY r.BATCH_ID "
+            "ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID) AS sample_seq",
+        )
+        .from_(f"{tbl('gold_batch_quality_result_v')} r")
+        .join(
+            "LEFT JOIN batch_dates bd\n"
+            "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
+            "   AND bd.BATCH_ID = r.BATCH_ID"
+        )
+        .where(filters.quality_conditions[0])
+        .where(filters.quality_conditions[1])
+        .where(filters.quality_conditions[2] if len(filters.quality_conditions) > 2 else None)
+        .where(filters.quality_conditions[3] if len(filters.quality_conditions) > 3 else None)
+        .where(filters.quality_conditions[4] if len(filters.quality_conditions) > 4 else None)
+        .where(filters.quality_conditions[5] if len(filters.quality_conditions) > 5 else None)
+    )
+
+
+def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], limit: int) -> tuple[str, list[dict]]:
+    params = list(filters.params)
+    if cursor:
+        cursor_batch_date_epoch, cursor_batch_id, cursor_sample_id = decode_chart_cursor(cursor)
+        params.extend(
+            [
+                sql_param("cursor_batch_date_epoch", cursor_batch_date_epoch),
+                sql_param("cursor_batch_id", cursor_batch_id),
+                sql_param("cursor_sample_id", cursor_sample_id),
+            ]
+        )
+        filters.final_where_conditions.extend(
+            [
+                "("
+                "cursor_batch_date_epoch > :cursor_batch_date_epoch "
+                "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id > :cursor_batch_id) "
+                "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id = :cursor_batch_id "
+                "AND cursor_sample_id > :cursor_sample_id)"
+                ")"
+            ]
+        )
+
+    final_query = (
+        SqlSelectBuilder()
+        .select(
+            "batch_id",
+            "CAST(batch_date AS STRING) AS batch_date",
+            "sample_seq",
+            "attribut",
+            "value",
+            "nominal",
+            "tolerance",
+            "lsl",
+            "usl",
+            "valuation",
+            "cursor_batch_date_epoch",
+            "cursor_sample_id",
+            *filters.select_extra_columns,
+        )
+        .from_("quality_data")
+        .where(filters.final_where_conditions[0] if filters.final_where_conditions else None)
+        .order_by(
+            "cursor_batch_date_epoch",
+            "batch_id",
+            "cursor_sample_id",
+            "INSPECTION_LOT_ID",
+            "OPERATION_ID",
+        )
+        .limit(limit + 1)
+    )
+    query = (
+        SqlWithQueryBuilder()
+        .with_cte("batch_dates", _build_batch_dates_cte(filters))
+        .with_cte("quality_data", _build_quality_data_cte(filters))
+        .select(final_query)
+        .build()
+    )
+    return query, params
+
+
+def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tuple[str, list[dict]]:
+    final_query = (
+        SqlSelectBuilder()
+        .select("CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value")
+        .from_(f"{tbl('gold_batch_quality_result_v')} r")
+        .join(
+            "LEFT JOIN batch_dates bd\n"
+            "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
+            "   AND bd.BATCH_ID = r.BATCH_ID"
+        )
+        .where(filters.quality_conditions[0])
+        .where(filters.quality_conditions[1])
+        .where(filters.quality_conditions[2] if len(filters.quality_conditions) > 2 else None)
+        .where(filters.quality_conditions[3] if len(filters.quality_conditions) > 3 else None)
+        .where(filters.quality_conditions[4] if len(filters.quality_conditions) > 4 else None)
+        .where(filters.quality_conditions[5] if len(filters.quality_conditions) > 5 else None)
+        .order_by("COALESCE(bd.batch_date, '9999-12-31')", "r.BATCH_ID", "r.SAMPLE_ID", "r.INSPECTION_LOT_ID")
+        .limit(max_points)
+    )
+    query = (
+        SqlWithQueryBuilder()
+        .with_cte("batch_dates", _build_batch_dates_cte(filters))
+        .select(final_query)
+        .build()
+    )
+    return query, list(filters.params)
 
 
 async def fetch_chart_data_page(
@@ -81,7 +308,7 @@ async def fetch_chart_data_page(
     cursor: Optional[str] = None,
     limit: int = 1000,
 ) -> dict:
-    params, date_filter, plant_filter, filter_tail = _build_chart_filters(
+    filters = _build_chart_filters(
         material_id,
         mic_id,
         mic_name,
@@ -90,103 +317,19 @@ async def fetch_chart_data_page(
         date_to,
         stratify_all,
     )
-    mic_name_filter = filter_tail.replace(", plant_id", "")
-    plant_select = ", plant_id" if stratify_all else ""
-
-    cursor_filter = ""
-    if cursor:
-        batch_seq_str, sample_seq_str = cursor.split(":", 1)
-        params.extend([
-            sql_param("cursor_batch_seq", int(batch_seq_str)),
-            sql_param("cursor_sample_seq", int(sample_seq_str)),
-        ])
-        cursor_filter = """
-        WHERE batch_seq > :cursor_batch_seq
-           OR (batch_seq = :cursor_batch_seq AND sample_seq > :cursor_sample_seq)
-        """
-
-    query = f"""
-        WITH batch_dates AS (
-            SELECT
-                MATERIAL_ID,
-                BATCH_ID,
-                MIN(POSTING_DATE) AS batch_date,
-                MAX(PLANT_ID) AS plant_id
-            FROM {tbl('gold_batch_mass_balance_v')}
-            WHERE MATERIAL_ID = :material_id
-              AND MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        quality_data AS (
-            SELECT
-                r.BATCH_ID,
-                r.INSPECTION_LOT_ID,
-                r.OPERATION_ID,
-                r.SAMPLE_ID,
-                r.attribute                              AS attribut,
-                CAST(r.QUANTITATIVE_RESULT AS DOUBLE)    AS value,
-                TRY_CAST(r.TARGET_VALUE AS DOUBLE)       AS nominal,
-                TRY_CAST(
-                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                         THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
-                    END AS DOUBLE)                        AS lsl,
-                TRY_CAST(
-                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                         THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
-                    END AS DOUBLE)                        AS usl,
-                CASE WHEN LOCATE('...', r.TOLERANCE) = 0
-                     THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END AS tolerance,
-                r.INSPECTION_RESULT_VALUATION            AS valuation,
-                bd.batch_date,
-                bd.plant_id,
-                ROW_NUMBER() OVER (
-                    PARTITION BY r.BATCH_ID
-                    ORDER BY r.SAMPLE_ID, r.INSPECTION_LOT_ID
-                ) AS sample_seq
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID
-               AND bd.BATCH_ID    = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID       = :mic_id
-              {mic_name_filter}
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {plant_filter}
-        ),
-        ranked AS (
-            SELECT *,
-                DENSE_RANK() OVER (
-                    ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID
-                ) AS batch_seq
-            FROM quality_data
-        )
-        SELECT
-            BATCH_ID       AS batch_id,
-            CAST(batch_date AS STRING) AS batch_date,
-            batch_seq,
-            sample_seq,
-            attribut,
-            value,
-            nominal,
-            tolerance,
-            lsl,
-            usl,
-            valuation
-            {plant_select}
-        FROM ranked
-        {cursor_filter}
-        ORDER BY batch_seq, sample_seq
-        LIMIT {limit + 1}
-    """
+    query, params = _build_chart_page_query(filters, cursor, limit)
     rows = await run_sql_async(token, query, params)
     has_more = len(rows) > limit
-    page_rows = _apply_chart_row_formatting(rows[:limit])
+    raw_page_rows = rows[:limit]
+    page_rows = _apply_chart_row_formatting(raw_page_rows)
     next_cursor = None
-    if has_more and page_rows:
-        last_row = page_rows[-1]
-        next_cursor = f"{last_row['batch_seq']}:{last_row['sample_seq']}"
+    if has_more and raw_page_rows:
+        last_row = raw_page_rows[-1]
+        next_cursor = encode_chart_cursor(
+            int(last_row["cursor_batch_date_epoch"]),
+            str(last_row["batch_id"]),
+            str(last_row.get("cursor_sample_id") or ""),
+        )
     return {
         "data": page_rows,
         "next_cursor": next_cursor,
@@ -205,7 +348,7 @@ async def fetch_chart_data_values(
     stratify_all: bool = False,
     max_points: int = _NORMALITY_MAX_POINTS,
 ) -> list[Optional[float]]:
-    params, date_filter, plant_filter, filter_tail = _build_chart_filters(
+    filters = _build_chart_filters(
         material_id,
         mic_id,
         mic_name,
@@ -214,34 +357,7 @@ async def fetch_chart_data_values(
         date_to,
         stratify_all,
     )
-    mic_name_filter = filter_tail.replace(", plant_id", "")
-    query = f"""
-        WITH batch_dates AS (
-            SELECT
-                MATERIAL_ID,
-                BATCH_ID,
-                MIN(POSTING_DATE) AS batch_date,
-                MAX(PLANT_ID) AS plant_id
-            FROM {tbl('gold_batch_mass_balance_v')}
-            WHERE MATERIAL_ID = :material_id
-              AND MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        )
-        SELECT CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value
-        FROM {tbl('gold_batch_quality_result_v')} r
-        LEFT JOIN batch_dates bd
-            ON bd.MATERIAL_ID = r.MATERIAL_ID
-           AND bd.BATCH_ID    = r.BATCH_ID
-        WHERE r.MATERIAL_ID = :material_id
-          AND r.MIC_ID       = :mic_id
-          {mic_name_filter}
-          AND r.QUANTITATIVE_RESULT IS NOT NULL
-          AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-          {plant_filter}
-        ORDER BY COALESCE(bd.batch_date, '9999-12-31'), r.BATCH_ID, r.SAMPLE_ID, r.INSPECTION_LOT_ID
-        LIMIT {max_points}
-    """
+    query, params = _build_chart_values_query(filters, max_points)
     rows = await run_sql_async(token, query, params)
     values = []
     for row in rows:
@@ -284,7 +400,7 @@ async def fetch_chart_data(
         if not page["has_more"]:
             break
         cursor = page["next_cursor"]
-    return all_rows[:max_rows]
+    return _assign_batch_sequence(all_rows[:max_rows])
 
 
 async def fetch_p_chart_data(

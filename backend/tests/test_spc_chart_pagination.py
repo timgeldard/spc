@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 import backend.main as main_module
 import backend.routers.spc_charts as spc_charts_module
+from backend.dal import spc_charts_dal
 
 
 client = TestClient(main_module.app)
@@ -17,12 +18,11 @@ def test_chart_data_returns_paginated_shape(monkeypatch):
                 {
                     "batch_id": "B1",
                     "batch_date": "2026-04-01",
-                    "batch_seq": 1,
                     "sample_seq": 1,
                     "value": 1.23,
                 }
             ],
-            "next_cursor": "1:1",
+            "next_cursor": "1711929600:B1:1",
             "has_more": True,
         }
 
@@ -53,7 +53,7 @@ def test_chart_data_returns_paginated_shape(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["data"][0]["batch_id"] == "B1"
-    assert body["next_cursor"] == "1:1"
+    assert body["next_cursor"] == "1711929600:B1:1"
     assert body["has_more"] is True
     assert body["count"] == 1
     assert body["limit"] == 1000
@@ -104,7 +104,7 @@ def test_chart_data_skips_normality_fetch_on_non_initial_pages(monkeypatch):
     monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
 
     response = client.post(
-        "/api/spc/chart-data?limit=1000&include_summary=true&cursor=1:1",
+        "/api/spc/chart-data?limit=1000&include_summary=true&cursor=1711929600:B1:1",
         headers={"x-forwarded-access-token": "not-a-real-jwt"},
         json={
             "material_id": "MAT-1",
@@ -119,3 +119,9 @@ def test_chart_data_skips_normality_fetch_on_non_initial_pages(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["normality"] is None
+
+
+def test_encode_and_decode_chart_cursor_round_trip():
+    cursor = spc_charts_dal.encode_chart_cursor(1711929600, "BATCH:01", "SAMPLE/1")
+    assert cursor == "1711929600:BATCH%3A01:SAMPLE%2F1"
+    assert spc_charts_dal.decode_chart_cursor(cursor) == (1711929600, "BATCH:01", "SAMPLE/1")

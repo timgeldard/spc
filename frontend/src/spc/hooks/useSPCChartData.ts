@@ -11,6 +11,23 @@ interface PaginatedChartResponse {
 const PAGE_SIZE = 1000
 const MAX_CHART_POINTS = 10000
 
+function assignBatchSequence(points: ChartDataPoint[]): ChartDataPoint[] {
+  let batchSeq = 0
+  let lastBatchKey: string | null = null
+
+  return points.map(point => {
+    const batchKey = `${point.batch_date ?? ''}::${point.batch_id ?? ''}`
+    if (batchKey !== lastBatchKey) {
+      batchSeq += 1
+      lastBatchKey = batchKey
+    }
+    return {
+      ...point,
+      batch_seq: batchSeq,
+    }
+  })
+}
+
 export function useSPCChartData(
   materialId: string | null | undefined,
   micId: string | null | undefined,
@@ -87,7 +104,7 @@ export function useSPCChartData(
       }
 
       if (!cancelled) {
-        setPoints(allPoints)
+        setPoints(assignBatchSequence(allPoints))
         setNormality(summaryNormality)
         setDataTruncated(truncated)
       }

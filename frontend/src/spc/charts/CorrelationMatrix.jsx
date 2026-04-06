@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 
 /**
  * Bubble matrix of pairwise Pearson correlations.
@@ -138,7 +138,7 @@ export default function CorrelationMatrix({ pairs, mics, onCellClick }) {
 
   return (
     <div>
-      <ReactECharts
+      <EChart
         option={option}
         theme="spc"
         style={{ height: size, width: '100%' }}

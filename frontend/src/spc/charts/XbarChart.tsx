@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import type { LockedLimits, SPCComputationResult, SPCSignal } from '../types'
 import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
@@ -156,7 +156,7 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
         X̄ Chart (Subgroup Means)
         <span className={chartNClass}>{xbarR.subgroupStats.length} subgroups</span>
       </div>
-      <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
       {xbarR.mixedSubgroupSizes && (
         <p className={chartHintClass}>
           Subgroup sizes vary. Dashed red limits are calculated per subgroup; the centre band uses pooled σ with average n for reference.

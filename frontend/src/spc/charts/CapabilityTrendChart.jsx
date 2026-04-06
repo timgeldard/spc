@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import EChart from './EChart'
 import { emptyCardClass } from '../uiClasses.js'
 
 /**
@@ -86,5 +86,5 @@ export default function CapabilityTrendChart({ trendData, windowSize }) {
     )
   }
 
-  return <ReactECharts option={option} style={{ height: 220, width: '100%' }} theme="spc" />
+  return <EChart option={option} style={{ height: 220, width: '100%' }} theme="spc" />
 }
