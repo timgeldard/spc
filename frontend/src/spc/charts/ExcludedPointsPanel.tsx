@@ -66,6 +66,7 @@ export default function ExcludedPointsPanel({
         <div className={auditMetaClass}>
           {snapshot?.user_id && <span>By {snapshot.user_id}</span>}
           {snapshot?.event_ts && <span>{String(snapshot.event_ts).replace('T', ' ').slice(0, 19)}</span>}
+          {snapshot?.stratify_by && <span>Scope {snapshot.stratify_by.replace(/_/g, ' ')}</span>}
           {snapshot?.justification && <span>{snapshot.justification}</span>}
         </div>
       ) : null}

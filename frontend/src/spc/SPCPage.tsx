@@ -4,7 +4,18 @@ import {
 } from 'lucide-react'
 import { SPCProvider, useSPC } from './SPCContext'
 import SPCFilterBar from './SPCFilterBar'
+import SPCPageHeader from './SPCPageHeader'
 import type { SPCState } from './types'
+import {
+  pageShellClass,
+  shellSidebarClass,
+  sidebarGroupLabelClass,
+  sidebarItemActiveClass,
+  sidebarItemClass,
+  sidebarNavClass,
+  workspaceClass,
+  workspaceMainClass,
+} from './uiClasses'
 
 type TabId = SPCState['activeTab']
 
@@ -50,47 +61,31 @@ function TabLoadingState() {
 function Sidebar() {
   const { state, dispatch } = useSPC()
   return (
-    <aside style={{
-      width: 200,
-      flexShrink: 0,
-      borderRight: '1px solid var(--c-border)',
-      background: 'var(--c-surface)',
-      display: 'flex',
-      flexDirection: 'column',
-      paddingTop: 8,
-      paddingBottom: 8,
-      gap: 2,
-    }}>
-      {TABS.map(({ id, label, Icon }) => {
-        const active = state.activeTab === id
-        return (
-          <button
-            key={id}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: id })}
-            title={label}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 14px',
-              border: 'none',
-              background: active ? 'rgba(27,58,75,0.08)' : 'transparent',
-              borderLeft: `3px solid ${active ? 'var(--c-brand)' : 'transparent'}`,
-              color: active ? 'var(--c-brand)' : 'var(--c-text-muted)',
-              fontWeight: active ? 600 : 400,
-              fontSize: '0.8125rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              borderRadius: '0 6px 6px 0',
-              marginRight: 8,
-              transition: 'background 0.12s, color 0.12s',
-            }}
-          >
-            <Icon size={16} strokeWidth={active ? 2.5 : 1.75} />
-            {label}
-          </button>
-        )
-      })}
+    <aside className={shellSidebarClass}>
+      <div className={sidebarGroupLabelClass}>Modules</div>
+      <div className={sidebarNavClass}>
+        {TABS.map(({ id, label, Icon }) => {
+          const active = state.activeTab === id
+          return (
+            <button
+              key={id}
+              onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: id })}
+              title={label}
+              className={`${sidebarItemClass} ${active ? sidebarItemActiveClass : ''}`}
+            >
+              <Icon size={17} strokeWidth={active ? 2.5 : 1.9} />
+              <span>{label}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-6 rounded-xl border border-[var(--c-border)] bg-slate-50/80 p-3 text-sm text-[var(--c-text-muted)]">
+        <div className="text-[0.7rem] font-semibold uppercase tracking-[0.06em]">Review posture</div>
+        <p className="mt-2 leading-6">
+          Use the chart workspace for signal interpretation, the scorecard for portfolio triage,
+          and the evidence rail for exclusions and capability context.
+        </p>
+      </div>
     </aside>
   )
 }
@@ -99,11 +94,12 @@ function SPCContent() {
   const { state } = useSPC()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
+    <div className={pageShellClass}>
+      <SPCPageHeader />
       <SPCFilterBar />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className={workspaceClass}>
         <Sidebar />
-        <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem 2rem' }}>
+        <div className={workspaceMainClass}>
           <Suspense fallback={<TabLoadingState />}>
             <ActiveView />
           </Suspense>

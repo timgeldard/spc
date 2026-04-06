@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import './ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
@@ -36,6 +36,7 @@ import {
   autoCleanLogClass,
   badgeAmberClass,
   badgeGreenClass,
+  badgeSlateClass,
   buttonBaseClass,
   buttonDangerClass,
   buttonGhostClass,
@@ -44,24 +45,39 @@ import {
   buttonSmClass,
   chartsBottomClass,
   chartsHeaderClass,
+  chartsHeaderTopClass,
   chartsHeaderRightClass,
   chartsLayoutClass,
   chartsMainClass,
   chartsMaterialClass,
   chartsMicMetaClass,
   chartsTitleClass,
+  chartsWorkspaceClass,
   checkboxLabelClass,
+  comparisonGridClass,
+  evidenceRailClass,
   emptyCardClass,
   emptyIconClass,
   emptySubClass,
+  heroCardDenseClass,
+  infoBannerClass,
   loadingClass,
+  metricCardClass,
+  metricCardLabelClass,
+  metricCardMetaClass,
+  metricCardValueClass,
+  metricGridClass,
   rollingHeaderClass,
   rollingPanelClass,
   rollingTitleClass,
   rollingWindowInputClass,
   rollingWindowLabelClass,
+  settingsRailClass,
+  settingsRailLabelClass,
+  settingsRailRowClass,
   sideStackClass,
   spinnerClass,
+  statusChipClass,
   strataSectionClass,
   strataSectionHeaderClass,
   strataSectionMetaClass,
@@ -184,6 +200,10 @@ interface StratumSection {
   spc: SPCComputationResult | null
 }
 
+function getCapabilityHeadlineValue(spc: SPCComputationResult | null): number | null {
+  return spc?.capability?.cpk ?? spc?.capability?.ppk ?? null
+}
+
 function isQuantChartType(value: string | null | undefined): value is QuantChartType {
   return value === 'imr' || value === 'xbar_r'
 }
@@ -200,6 +220,46 @@ function ChartLoadingState() {
   return (
     <div className="flex min-h-[520px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm">
       Loading chart…
+    </div>
+  )
+}
+
+function StatusChip({ children, tone = 'slate' }: { children: ReactNode; tone?: 'slate' | 'amber' | 'green' | 'blue' }) {
+  const toneClass = tone === 'amber'
+    ? badgeAmberClass
+    : tone === 'green'
+      ? badgeGreenClass
+      : tone === 'blue'
+        ? 'bg-sky-50 text-sky-700'
+        : badgeSlateClass
+
+  return <span className={`${statusChipClass} ${toneClass}`}>{children}</span>
+}
+
+function SummaryMetric({
+  label,
+  value,
+  meta,
+  tone = 'slate',
+}: {
+  label: string
+  value: string
+  meta: string
+  tone?: 'slate' | 'green' | 'amber' | 'red'
+}) {
+  const toneClass = tone === 'green'
+    ? 'border-emerald-200 bg-emerald-50'
+    : tone === 'amber'
+      ? 'border-amber-200 bg-amber-50'
+      : tone === 'red'
+        ? 'border-red-200 bg-red-50'
+        : 'border-[var(--c-border)] bg-slate-50/80'
+
+  return (
+    <div className={`${metricCardClass} ${toneClass}`}>
+      <div className={metricCardLabelClass}>{label}</div>
+      <div className={metricCardValueClass}>{value}</div>
+      <div className={metricCardMetaClass}>{meta}</div>
     </div>
   )
 }
@@ -521,7 +581,15 @@ export default function ControlChartsView() {
   }
 
   if (error) {
-    return <div className="banner banner--error">Failed to load chart data: {error}</div>
+    return (
+      <div
+        className={infoBannerClass}
+        role="alert"
+        style={{ borderColor: '#fca5a5', background: '#fef2f2', color: '#991b1b' }}
+      >
+        Failed to load chart data: {error}
+      </div>
+    )
   }
 
   if (!points.length) {
@@ -542,6 +610,14 @@ export default function ControlChartsView() {
   }
 
   const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
+  const totalSignals = (spc?.signals?.length ?? 0) + (spc?.mrSignals?.length ?? 0)
+  const exclusionCount = excludedIndices.size
+  const chartFamilyLabel = isAttributeChart
+    ? `${attrChartType.toUpperCase()} attribute chart`
+    : spc?.chartType === 'xbar_r'
+      ? 'X̄-R variable chart'
+      : 'I-MR variable chart'
+  const capabilityHeadline = getCapabilityHeadlineValue(spc)
 
   const headerLeft = (
     <div>
@@ -560,9 +636,17 @@ export default function ControlChartsView() {
     return (
       <div className={chartsLayoutClass}>
         <div className={chartsHeaderClass}>
-          {headerLeft}
-          <div className={chartsHeaderRightClass}>
-            <AttributeChartTypeToggle attrChartType={attrChartType} onSet={setAttrChartType} />
+          <div className={chartsHeaderTopClass}>
+            <div>
+              {headerLeft}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <StatusChip tone="blue">{chartFamilyLabel}</StatusChip>
+                {stratifyLabel && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}
+              </div>
+            </div>
+            <div className={chartsHeaderRightClass}>
+              <AttributeChartTypeToggle attrChartType={attrChartType} onSet={setAttrChartType} />
+            </div>
           </div>
         </div>
         <div className={chartsMainClass}>
@@ -580,139 +664,94 @@ export default function ControlChartsView() {
   return (
     <div className={chartsLayoutClass}>
       <div className={chartsHeaderClass}>
-        {headerLeft}
-        <div className={chartsHeaderRightClass}>
-          <RuleSetToggle
-            ruleSet={ruleSet}
-            onSet={v => dispatch({ type: 'SET_RULE_SET', payload: v })}
+        <div className={chartsHeaderTopClass}>
+          <div>
+            {headerLeft}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusChip tone="blue">{chartFamilyLabel}</StatusChip>
+              <StatusChip tone={totalSignals > 0 ? 'amber' : 'green'}>
+                {totalSignals > 0 ? `${totalSignals} active signal${totalSignals === 1 ? '' : 's'}` : 'No active signals'}
+              </StatusChip>
+              {capabilityHeadline != null && (
+                <StatusChip tone={capabilityHeadline >= 1.33 ? 'green' : capabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
+                  Headline Cpk {capabilityHeadline.toFixed(2)}
+                </StatusChip>
+              )}
+              {stratifyBy && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}
+              {exclusionCount > 0 && <StatusChip tone="amber">{exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}</StatusChip>}
+              {quantNormality?.is_normal === false && <StatusChip tone="amber">Non-normal capability override</StatusChip>}
+            </div>
+          </div>
+          <div className={chartsHeaderRightClass}>
+            <button
+              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+              disabled={exporting}
+              onClick={() => exportData({
+                export_type: 'excel',
+                export_scope: 'chart_data',
+                material_id: selectedMaterial.material_id,
+                mic_id: selectedMIC.mic_id,
+                plant_id: selectedPlant?.plant_id ?? null,
+                date_from: dateFrom || null,
+                date_to: dateTo || null,
+              })}
+              aria-label="Export current chart analysis to Excel"
+            >
+              {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+            <button
+              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+              onClick={() => window.print()}
+              aria-label="Print the current chart view or save as PDF"
+            >
+              Print / PDF
+            </button>
+          </div>
+        </div>
+        <div className={metricGridClass}>
+          <SummaryMetric
+            label="Signals"
+            value={String(totalSignals)}
+            meta={totalSignals > 0 ? 'Investigate assignable causes before interpreting capability' : 'No current signal breaches'}
+            tone={totalSignals > 0 ? 'amber' : 'green'}
           />
-          <ChartTypeToggle
-            chartType={selectedMIC.chart_type}
-            override={chartTypeOverride}
-            onOverride={v => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: v })}
+          <SummaryMetric
+            label="Excluded points"
+            value={String(exclusionCount)}
+            meta={exclusionCount > 0 ? 'Persisted with justification and limits snapshot' : 'No active exclusions'}
+            tone={exclusionCount > 0 ? 'amber' : 'slate'}
           />
-          {stratifyBy && (
-            <span
-              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-              title={`Stratified by ${stratifyLabel}`}
-            >
-              Stratified by {stratifyLabel}
-            </span>
-          )}
-          {lockedLimits && (
-            <button
-              className={`${buttonBaseClass} ${buttonSmClass} ${limitsMode === 'locked' ? buttonPrimaryClass : buttonSecondaryClass}`}
-              onClick={() => dispatch({ type: 'SET_LIMITS_MODE', payload: limitsMode === 'locked' ? 'live' : 'locked' })}
-              title={`Locked ${lockedLimits.locked_at?.substring(0, 10) ?? ''} by ${lockedLimits.locked_by ?? 'unknown'}`}
-            >
-              {limitsMode === 'locked' ? 'Locked Limits' : 'Use Locked Limits'}
-            </button>
-          )}
-          {spc && limitsMode === 'live' && (
-            <button
-              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-              onClick={() => {
-                const limits: LockedLimits = spc.chartType === 'imr'
-                  ? {
-                      cl: spc.imr?.xBar,
-                      ucl: spc.imr?.ucl_x,
-                      lcl: spc.imr?.lcl_x,
-                      ucl_r: spc.imr?.ucl_mr,
-                      lcl_r: spc.imr?.lcl_mr,
-                      sigma_within: spc.imr?.sigmaWithin,
-                    }
-                  : {
-                      cl: spc.xbarR?.grandMean,
-                      ucl: spc.xbarR?.ucl_x,
-                      lcl: spc.xbarR?.lcl_x,
-                      ucl_r: spc.xbarR?.ucl_r,
-                      lcl_r: spc.xbarR?.lcl_r,
-                      sigma_within: spc.xbarR?.sigmaWithin,
-                    }
-
-                if (limits.cl == null || limits.ucl == null || limits.lcl == null) return
-                void saveLimits(limits)
-              }}
-              title="Lock current control limits for Phase II monitoring"
-            >
-              Lock Limits
-            </button>
-          )}
-          {lockedLimits && limitsMode === 'locked' && (
-            <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonDangerClass}`} onClick={() => { void deleteLimits() }} title="Remove locked limits">
-              Delete Lock
-            </button>
-          )}
-          {quantPoints.some((p: ChartDataPoint) => p.is_outlier) && (
-            <label className={checkboxLabelClass}>
-              <input
-                type="checkbox"
-                checked={excludeOutliers}
-                onChange={() => dispatch({ type: 'TOGGLE_EXCLUDE_OUTLIERS' })}
-              />
-              Exclude attribute outliers ({quantPoints.filter((p: ChartDataPoint) => p.is_outlier).length})
-            </label>
-          )}
-          {excludedIndices.size > 0 && (
-            <button
-              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-              disabled={exclusionsSaving}
-              onClick={handleRestoreAll}
-            >
-              Clear {excludedIndices.size} exclusion{excludedIndices.size !== 1 ? 's' : ''}
-            </button>
-          )}
-          {(spc?.indexedPoints?.length ?? 0) > 0 && (
-            <button
-              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-              disabled={exclusionsSaving}
-              onClick={handleAutoClean}
-              title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
-            >
-              {exclusionsSaving ? 'Saving…' : 'Auto-clean Phase I'}
-            </button>
-          )}
-          <button
-            className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-            disabled={exporting}
-            onClick={() => exportData({
-              export_type: 'excel',
-              export_scope: 'chart_data',
-              material_id: selectedMaterial.material_id,
-              mic_id: selectedMIC.mic_id,
-              plant_id: selectedPlant?.plant_id ?? null,
-              date_from: dateFrom || null,
-              date_to: dateTo || null,
-            })}
-          >
-            {exporting ? 'Exporting…' : 'Export Excel'}
-          </button>
-          <button
-            className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-            onClick={() => window.print()}
-          >
-            Print / PDF
-          </button>
+          <SummaryMetric
+            label="Rule set"
+            value={ruleSet === 'nelson' ? 'Nelson 8' : 'WECO'}
+            meta="Sensitivity profile for signal detection"
+          />
+          <SummaryMetric
+            label="Capability mode"
+            value={quantNormality?.is_normal === false ? 'Empirical' : 'Parametric'}
+            meta={quantNormality?.is_normal === false ? 'Non-normal percentiles are active' : 'Standard sigma-based capability'}
+            tone={quantNormality?.is_normal === false ? 'amber' : 'green'}
+          />
         </div>
       </div>
 
       {lockedLimitsError && (
-        <div className="banner banner--error">Locked limits error: {lockedLimitsError}</div>
+        <div className={infoBannerClass} role="alert" style={{ borderColor: '#fca5a5', background: '#fef2f2', color: '#991b1b' }}>Locked limits error: {lockedLimitsError}</div>
       )}
       {exclusionsError && (
-        <div className="banner banner--error">Exclusions audit error: {exclusionsError}</div>
+        <div className={infoBannerClass} role="alert" style={{ borderColor: '#fca5a5', background: '#fef2f2', color: '#991b1b' }}>Exclusions audit error: {exclusionsError}</div>
       )}
       {exclusionsLoading && (
-        <div className="banner banner--info">Loading persisted exclusions…</div>
+        <div className={infoBannerClass} role="status" aria-live="polite" style={{ borderColor: '#bfdbfe', background: '#eff6ff', color: '#1d4ed8' }}>Loading persisted exclusions…</div>
       )}
       {dataTruncated && (
-        <div className="banner banner--warning" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className={infoBannerClass} role="alert" style={{ borderColor: '#fcd34d', background: '#fffbeb', color: '#92400e' }}>
           <AlertTriangle size={16} />
           <span>Data limit reached. Only the first 10,000 points are displayed. Please narrow your Date Range for a complete analysis.</span>
         </div>
       )}
       {exclusionAudit && (
-        <div className="banner banner--info">
+        <div className={infoBannerClass} role="status" aria-live="polite" style={{ borderColor: '#cbd5e1', background: '#f8fafc', color: '#334155' }}>
           {exclusionAudit.excluded_count ?? 0} point{(exclusionAudit.excluded_count ?? 0) !== 1 ? 's' : ''} excluded
           {exclusionAudit.user_id ? ` by ${exclusionAudit.user_id}` : ''}
           {exclusionAudit.event_ts ? ` on ${String(exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : ''}
@@ -720,39 +759,129 @@ export default function ControlChartsView() {
         </div>
       )}
 
-      <div className={chartsMainClass}>
-        <Suspense fallback={<ChartLoadingState />}>
-          {spc?.chartType === 'imr' ? (
-            <IMRChart
-              spc={spc}
-              indexedPoints={spc.indexedPoints}
-              signals={spc.signals}
-              mrSignals={spc.mrSignals}
-              excludedIndices={excludedIndices}
-              onPointClick={handlePointClick}
-              externalLimits={externalLimits}
-            />
-          ) : (
-            <XbarRChart
-              spc={spc}
-              signals={spc?.signals}
-              mrSignals={spc?.mrSignals}
-              externalLimits={externalLimits}
-            />
-          )}
-        </Suspense>
-      </div>
-
-      <div className={chartsBottomClass}>
-        <Suspense fallback={<PanelLoadingState />}>
-          <SignalsPanel
-            signals={spc?.signals}
-            mrSignals={spc?.mrSignals}
-            indexedPoints={spc?.indexedPoints}
-            ruleSet={ruleSet}
-          />
-        </Suspense>
+      <div className={chartsWorkspaceClass}>
         <div className={sideStackClass}>
+          <div className={settingsRailClass}>
+            <div className={settingsRailLabelClass}>Analysis controls</div>
+            <div className={settingsRailRowClass}>
+              <RuleSetToggle
+                ruleSet={ruleSet}
+                onSet={v => dispatch({ type: 'SET_RULE_SET', payload: v })}
+              />
+              <ChartTypeToggle
+                chartType={selectedMIC.chart_type}
+                override={chartTypeOverride}
+                onOverride={v => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: v })}
+              />
+            </div>
+            <div className={settingsRailRowClass}>
+              {lockedLimits && (
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${limitsMode === 'locked' ? buttonPrimaryClass : buttonSecondaryClass}`}
+                  onClick={() => dispatch({ type: 'SET_LIMITS_MODE', payload: limitsMode === 'locked' ? 'live' : 'locked' })}
+                  title={`Locked ${lockedLimits.locked_at?.substring(0, 10) ?? ''} by ${lockedLimits.locked_by ?? 'unknown'}`}
+                  aria-label={limitsMode === 'locked' ? 'Switch to live limits' : 'Use locked limits'}
+                >
+                  {limitsMode === 'locked' ? 'Locked Limits' : 'Use Locked Limits'}
+                </button>
+              )}
+              {spc && limitsMode === 'live' && (
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+                  onClick={() => {
+                    const limits: LockedLimits = spc.chartType === 'imr'
+                      ? {
+                          cl: spc.imr?.xBar,
+                          ucl: spc.imr?.ucl_x,
+                          lcl: spc.imr?.lcl_x,
+                          ucl_r: spc.imr?.ucl_mr,
+                          lcl_r: spc.imr?.lcl_mr,
+                          sigma_within: spc.imr?.sigmaWithin,
+                        }
+                      : {
+                          cl: spc.xbarR?.grandMean,
+                          ucl: spc.xbarR?.ucl_x,
+                          lcl: spc.xbarR?.lcl_x,
+                          ucl_r: spc.xbarR?.ucl_r,
+                          lcl_r: spc.xbarR?.lcl_r,
+                          sigma_within: spc.xbarR?.sigmaWithin,
+                        }
+
+                    if (limits.cl == null || limits.ucl == null || limits.lcl == null) return
+                    void saveLimits(limits)
+                  }}
+                  title="Lock current control limits for Phase II monitoring"
+                  aria-label="Lock current control limits for Phase II monitoring"
+                >
+                  Lock Limits
+                </button>
+              )}
+              {lockedLimits && limitsMode === 'locked' && (
+                <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonDangerClass}`} onClick={() => { void deleteLimits() }} title="Remove locked limits" aria-label="Delete locked control limits">
+                  Delete Lock
+                </button>
+              )}
+            </div>
+            <div className={settingsRailRowClass}>
+              {quantPoints.some((p: ChartDataPoint) => p.is_outlier) && (
+                <label className={checkboxLabelClass}>
+                  <input
+                    type="checkbox"
+                    checked={excludeOutliers}
+                    onChange={() => dispatch({ type: 'TOGGLE_EXCLUDE_OUTLIERS' })}
+                  />
+                  Exclude attribute outliers ({quantPoints.filter((p: ChartDataPoint) => p.is_outlier).length})
+                </label>
+              )}
+              {excludedIndices.size > 0 && (
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+                  disabled={exclusionsSaving}
+                  onClick={handleRestoreAll}
+                  aria-label="Clear all persisted exclusions for this chart scope"
+                >
+                  Clear {excludedIndices.size} exclusion{excludedIndices.size !== 1 ? 's' : ''}
+                </button>
+              )}
+              {(spc?.indexedPoints?.length ?? 0) > 0 && (
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+                  disabled={exclusionsSaving}
+                  onClick={handleAutoClean}
+                  title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
+                  aria-label="Auto-clean Phase I points and persist exclusions with justification"
+                >
+                  {exclusionsSaving ? 'Saving…' : 'Auto-clean Phase I'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className={chartsMainClass}>
+            <Suspense fallback={<ChartLoadingState />}>
+              {spc?.chartType === 'imr' ? (
+                <IMRChart
+                  spc={spc}
+                  indexedPoints={spc.indexedPoints}
+                  signals={spc.signals}
+                  mrSignals={spc.mrSignals}
+                  excludedIndices={excludedIndices}
+                  onPointClick={handlePointClick}
+                  externalLimits={externalLimits}
+                />
+              ) : (
+                <XbarRChart
+                  spc={spc}
+                  signals={spc?.signals}
+                  mrSignals={spc?.mrSignals}
+                  externalLimits={externalLimits}
+                />
+              )}
+            </Suspense>
+          </div>
+        </div>
+
+        <div className={evidenceRailClass}>
           <Suspense fallback={<PanelLoadingState />}>
             <CapabilityPanel spc={spc} />
           </Suspense>
@@ -765,13 +894,69 @@ export default function ControlChartsView() {
               saving={exclusionsSaving}
             />
           </Suspense>
+          <div className={heroCardDenseClass}>
+            <div className={rollingHeaderClass}>
+              <div className={rollingTitleClass}>Interpretation guide</div>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
+              Establish stability first, then interpret capability. Signals point to assignable causes;
+              exclusions and locked limits are preserved as audit evidence for the active chart scope.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusChip tone="green">Cp/Cpk = short-term</StatusChip>
+              <StatusChip tone="blue">Pp/Ppk = long-term</StatusChip>
+              {quantNormality?.is_normal === false && <StatusChip tone="amber">Empirical percentiles active</StatusChip>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={chartsBottomClass}>
+        <Suspense fallback={<PanelLoadingState />}>
+          <SignalsPanel
+            signals={spc?.signals}
+            mrSignals={spc?.mrSignals}
+            indexedPoints={spc?.indexedPoints}
+            ruleSet={ruleSet}
+          />
+        </Suspense>
+        <div className={rollingPanelClass}>
+          <div className={rollingHeaderClass}>
+            <div className={rollingTitleClass}>Capability storyline</div>
+            <label className={rollingWindowLabelClass}>
+              Window
+              <input
+                type="number"
+                min={5}
+                max={Math.max(5, spc?.sorted?.length ?? 5)}
+                value={rollingWindowSize}
+                className={rollingWindowInputClass}
+                onChange={event => {
+                  const next = Number(event.target.value)
+                  if (Number.isFinite(next) && next >= 5) setRollingWindowSize(next)
+                }}
+              />
+            </label>
+          </div>
+          <Suspense fallback={<PanelLoadingState />}>
+            <CapabilityTrendChart trendData={trendData} windowSize={rollingWindowSize} />
+          </Suspense>
         </div>
       </div>
 
       {stratumSections.length > 1 && (
         <div className="flex flex-col gap-5">
-          {stratumSections.map(section => (
-            <section key={section.label} className={strataSectionClass}>
+          {stratumSections.map(section => {
+            const stratumSignalCount = (section.spc?.signals?.length ?? 0) + (section.spc?.mrSignals?.length ?? 0)
+            const stratumCapabilityHeadline = getCapabilityHeadlineValue(section.spc)
+
+            return (
+            <section
+              key={section.label}
+              className={strataSectionClass}
+              role="region"
+              aria-label={`Stratum analysis for ${section.label}`}
+            >
               <div className={strataSectionHeaderClass}>
                 <div>
                   <div className={strataSectionTitleClass}>
@@ -781,6 +966,37 @@ export default function ControlChartsView() {
                     Stratified by {stratifyBy?.replace(/_/g, ' ')} · {section.points.length} point{section.points.length !== 1 ? 's' : ''}
                   </div>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusChip tone={stratumSignalCount > 0 ? 'amber' : 'green'}>
+                    {stratumSignalCount > 0 ? `${stratumSignalCount} signal${stratumSignalCount === 1 ? '' : 's'}` : 'No active signals'}
+                  </StatusChip>
+                  {stratumCapabilityHeadline != null && (
+                    <StatusChip tone={stratumCapabilityHeadline >= 1.33 ? 'green' : stratumCapabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
+                      Headline Cpk {stratumCapabilityHeadline.toFixed(2)}
+                    </StatusChip>
+                  )}
+                </div>
+              </div>
+
+              <div className="mb-5 grid gap-3 md:grid-cols-3">
+                <SummaryMetric
+                  label="Points"
+                  value={String(section.points.length)}
+                  meta="Data included after the current exclusion and outlier rules"
+                  tone="slate"
+                />
+                <SummaryMetric
+                  label="Signals"
+                  value={String(stratumSignalCount)}
+                  meta={stratumSignalCount > 0 ? 'Assignable-cause review still required' : 'No active rule breaches'}
+                  tone={stratumSignalCount > 0 ? 'amber' : 'green'}
+                />
+                <SummaryMetric
+                  label="Capability"
+                  value={stratumCapabilityHeadline != null ? stratumCapabilityHeadline.toFixed(2) : '—'}
+                  meta={section.spc?.capability?.capabilityMethod === 'non_parametric' ? 'Empirical percentile method active' : 'Short-term and long-term evidence available'}
+                  tone={stratumCapabilityHeadline == null ? 'slate' : stratumCapabilityHeadline >= 1.33 ? 'green' : stratumCapabilityHeadline >= 1.0 ? 'amber' : 'red'}
+                />
               </div>
 
               <div className={chartsMainClass}>
@@ -805,7 +1021,7 @@ export default function ControlChartsView() {
                 </Suspense>
               </div>
 
-              <div className="mt-5 grid items-start gap-5 lg:grid-cols-[1fr_1.6fr]">
+              <div className={`mt-5 ${comparisonGridClass}`}>
                 <Suspense fallback={<PanelLoadingState />}>
                   <SignalsPanel
                     signals={section.spc?.signals}
@@ -821,7 +1037,7 @@ export default function ControlChartsView() {
                 </div>
               </div>
             </section>
-          ))}
+          )})}
         </div>
       )}
 
@@ -841,28 +1057,6 @@ export default function ControlChartsView() {
               {' '}· UCL={iter.ucl?.toFixed(4) ?? '—'}, CL={iter.cl?.toFixed(4) ?? '—'}, LCL={iter.lcl?.toFixed(4) ?? '—'}
             </div>
           ))}
-        </div>
-      )}
-
-      {spc?.sorted?.length && spc.sorted.length >= 15 && (
-        <div className={rollingPanelClass}>
-          <div className={rollingHeaderClass}>
-            <span className={rollingTitleClass}>Rolling Capability Trend</span>
-            <label className={rollingWindowLabelClass}>
-              Window:
-              <input
-                type="number"
-                className={rollingWindowInputClass}
-                min={10}
-                max={50}
-                value={rollingWindowSize}
-                onChange={e => setRollingWindowSize(Math.max(10, Math.min(50, Number(e.target.value))))}
-              />
-            </label>
-          </div>
-          <Suspense fallback={<PanelLoadingState />}>
-            <CapabilityTrendChart trendData={trendData} windowSize={rollingWindowSize} />
-          </Suspense>
         </div>
       )}
 

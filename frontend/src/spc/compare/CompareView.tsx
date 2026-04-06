@@ -9,6 +9,8 @@ import {
   buttonGhostClass,
   buttonSecondaryClass,
   buttonSmClass,
+  cardSubClass,
+  cardTitleClass,
   compareBadgeClass,
   compareBadgeCommonClass,
   compareInputLabelClass,
@@ -16,11 +18,13 @@ import {
   compareInputsClass,
   compareSummaryClass,
   compareViewClass,
+  heroCardDenseClass,
   inputBaseClass,
   loadingClass,
+  moduleEyebrowClass,
+  moduleHeaderCardClass,
+  splitPanelClass,
   spinnerClass,
-  sectionSubClass,
-  sectionTitleClass,
 } from '../uiClasses'
 
 export default function CompareView() {
@@ -53,30 +57,45 @@ export default function CompareView() {
 
   return (
     <div className={compareViewClass}>
-      <h3 className={sectionTitleClass}>Multi-Material Capability Comparison</h3>
-      <p className={sectionSubClass}>Compare Cpk across common characteristics for 2–3 materials.</p>
+      <div className={moduleHeaderCardClass}>
+        <div className={moduleEyebrowClass}>Cross-material analysis</div>
+        <h3 className={cardTitleClass}>Multi-Material Capability Comparison</h3>
+        <p className={cardSubClass}>Compare Cpk across common characteristics for 2–3 materials using the same selected plant and date scope.</p>
+      </div>
 
-      <div className={compareInputsClass}>
-        {materialInputs.map((val, i) => (
-          <div key={i} className={compareInputRowClass}>
-            <div className="flex-1">
-              <label className={compareInputLabelClass}>Material {i + 1}</label>
-              <input
-                className={inputBaseClass}
-                type="text"
-                placeholder="Material ID"
-                value={val}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => updateMaterial(i, e.target.value)}
-              />
+      <div className={splitPanelClass}>
+        <div className={compareInputsClass}>
+          <div className={moduleEyebrowClass}>Comparison inputs</div>
+          {materialInputs.map((val, i) => (
+            <div key={i} className={compareInputRowClass}>
+              <div className="flex-1">
+                <label className={compareInputLabelClass}>Material {i + 1}</label>
+                <input
+                  className={inputBaseClass}
+                  type="text"
+                  placeholder="Material ID"
+                  value={val}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateMaterial(i, e.target.value)}
+                />
+              </div>
+              {materialInputs.length > 2 && (
+                <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonGhostClass}`} onClick={() => removeMaterial(i)}>✕</button>
+              )}
             </div>
-            {materialInputs.length > 2 && (
-              <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonGhostClass}`} onClick={() => removeMaterial(i)}>✕</button>
-            )}
+          ))}
+          {materialInputs.length < 3 && (
+            <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass} w-fit`} onClick={addMaterial}>+ Add material</button>
+          )}
+        </div>
+        <aside className={`${heroCardDenseClass} space-y-3`}>
+          <div className={moduleEyebrowClass}>How to use this view</div>
+          <p className="text-sm text-[var(--c-text-muted)]">Compare materials that share common MICs and operating context. This is best for process transfers, supplier changes, or recipe alternatives.</p>
+          <div className="space-y-2 text-sm text-[var(--c-text-muted)]">
+            <p>1. Enter 2–3 materials.</p>
+            <p>2. Review common-characteristic overlap.</p>
+            <p>3. Use the grouped bar chart to spot capability gaps quickly.</p>
           </div>
-        ))}
-        {materialInputs.length < 3 && (
-          <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`} onClick={addMaterial}>+ Add material</button>
-        )}
+        </aside>
       </div>
 
       {validIds.length >= 2 && loading && (

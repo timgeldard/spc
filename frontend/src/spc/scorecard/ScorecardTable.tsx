@@ -132,12 +132,27 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     <div className={scorecardTableWrapClass}>
       <div className={scorecardTableHeaderClass}>
         <span className={scorecardCountClass}>{rows.length} characteristic{rows.length !== 1 ? 's' : ''}</span>
-        <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`} onClick={exportCSV}>Export CSV</button>
-        <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`} disabled={exporting} onClick={exportExcel}>
+        <button
+          className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+          onClick={exportCSV}
+          aria-label="Export scorecard table as CSV"
+        >
+          Export CSV
+        </button>
+        <button
+          className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+          disabled={exporting}
+          onClick={exportExcel}
+          aria-label="Export scorecard table as Excel"
+        >
           {exporting ? 'Exporting…' : 'Export Excel'}
         </button>
       </div>
-      <div className={dark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'} style={{ height: 450, width: '100%' }}>
+      <div
+        className={dark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'}
+        style={{ height: 450, width: '100%' }}
+        aria-label="SPC scorecard results table"
+      >
         <AgGridReact<ScorecardRow>
           ref={gridRef}
           rowData={rows}

@@ -9,15 +9,19 @@ import type { ChangeEvent } from 'react'
 import {
   buttonBaseClass,
   buttonPrimaryClass,
+  cardSubClass,
+  cardTitleClass,
   controlsRowClass,
   correlationMetaClass,
   correlationViewClass,
   emptyStateClass,
+  heroCardDenseClass,
   inputBaseClass,
   inputSmClass,
   inlineLabelClass,
-  sectionSubClass,
-  sectionTitleClass,
+  moduleEyebrowClass,
+  moduleHeaderCardClass,
+  splitPanelClass,
 } from '../uiClasses'
 
 interface SelectedCorrelationPair {
@@ -69,27 +73,39 @@ export default function CorrelationView() {
 
   return (
     <div className={correlationViewClass}>
-      <h3 className={sectionTitleClass}>Correlation Explorer</h3>
-      <p className={sectionSubClass}>
-        Pairwise Pearson correlation between all characteristics for {state.selectedMaterial.material_name}.
-        Click a cell to see the scatter plot.
-      </p>
+      <div className={moduleHeaderCardClass}>
+        <div className={moduleEyebrowClass}>Relationship analysis</div>
+        <h3 className={cardTitleClass}>Correlation Explorer</h3>
+        <p className={cardSubClass}>
+          Pairwise Pearson correlation between all characteristics for {state.selectedMaterial.material_name}.
+          Click a cell to see the scatter plot and validate whether a relationship is operationally meaningful.
+        </p>
+      </div>
 
-      <div className={controlsRowClass}>
-        <label className={inlineLabelClass}>
-          Min batches:
-          <input
-            type="number"
-            className={`${inputBaseClass} ${inputSmClass} w-20`}
-            min={5}
-            max={100}
-            value={minBatches}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value))))}
-          />
-        </label>
-        <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} onClick={handleRun} disabled={loading}>
-          {loading ? 'Computing…' : 'Run Correlation'}
-        </button>
+      <div className={splitPanelClass}>
+        <div className={`${heroCardDenseClass} space-y-3`}>
+          <div className={moduleEyebrowClass}>Analysis controls</div>
+          <div className={controlsRowClass}>
+            <label className={inlineLabelClass}>
+              Min batches:
+              <input
+                type="number"
+                className={`${inputBaseClass} ${inputSmClass} w-20`}
+                min={5}
+                max={100}
+                value={minBatches}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value))))}
+              />
+            </label>
+            <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} onClick={handleRun} disabled={loading}>
+              {loading ? 'Computing…' : 'Run Correlation'}
+            </button>
+          </div>
+        </div>
+        <aside className={`${heroCardDenseClass} space-y-3`}>
+          <div className={moduleEyebrowClass}>Interpretation guardrails</div>
+          <p className="text-sm text-[var(--c-text-muted)]">Correlation is a directional clue, not proof of causation. Use the scatter plot to separate real structure from coincidence or common trend.</p>
+        </aside>
       </div>
 
       {error && <div className="banner banner--error">{error}</div>}
