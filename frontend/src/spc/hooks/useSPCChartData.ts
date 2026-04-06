@@ -8,6 +8,9 @@ interface PaginatedChartResponse {
   normality?: NormalityResult | null
 }
 
+const PAGE_SIZE = 1000
+const MAX_CHART_POINTS = 10000
+
 export function useSPCChartData(
   materialId: string | null | undefined,
   micId: string | null | undefined,
@@ -52,10 +55,11 @@ export function useSPCChartData(
       let nextCursor: string | null = null
       let hasMore = true
       let summaryNormality: NormalityResult | null = null
+      let truncated = false
 
-      while (hasMore && !cancelled) {
+      while (hasMore && !cancelled && allPoints.length < MAX_CHART_POINTS) {
         const url = new URL('/api/spc/chart-data', window.location.origin)
-        url.searchParams.set('limit', '1000')
+        url.searchParams.set('limit', String(Math.min(PAGE_SIZE, MAX_CHART_POINTS - allPoints.length)))
         if (nextCursor) url.searchParams.set('cursor', nextCursor)
         if (allPoints.length === 0) url.searchParams.set('include_summary', 'true')
 
@@ -78,10 +82,14 @@ export function useSPCChartData(
         if (data.normality) summaryNormality = data.normality
       }
 
+      if (hasMore && allPoints.length >= MAX_CHART_POINTS) {
+        truncated = true
+      }
+
       if (!cancelled) {
         setPoints(allPoints)
         setNormality(summaryNormality)
-        setDataTruncated(false)
+        setDataTruncated(truncated)
       }
     }
 
@@ -101,4 +109,3 @@ export function useSPCChartData(
 
   return { points, normality, dataTruncated, loading, error }
 }
-

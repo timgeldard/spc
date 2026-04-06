@@ -59,6 +59,16 @@ async def fetch_materials(token: str) -> list[dict]:
 async def fetch_characteristics(token: str, material_id: str, plant_id: Optional[str] = None) -> tuple[list[dict], list[dict]]:
     params = [sql_param("material_id", material_id)]
     plant_filter = ""
+    if plant_id:
+        plant_filter = f"""
+          AND BATCH_ID IN (
+              SELECT DISTINCT BATCH_ID
+              FROM {tbl('gold_batch_mass_balance_v')}
+              WHERE MATERIAL_ID = :material_id
+                AND PLANT_ID = :plant_id
+                AND MOVEMENT_CATEGORY = 'Production'
+          )"""
+        params.append(sql_param("plant_id", plant_id))
     query = f"""
         SELECT
             MIC_ID                                                       AS mic_id,

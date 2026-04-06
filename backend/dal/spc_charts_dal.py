@@ -3,6 +3,9 @@ from typing import Optional
 from backend.dal.spc_shared import infer_spec_type
 from backend.utils.db import run_sql_async, sql_param, tbl
 
+_NORMALITY_MAX_POINTS = 5000
+_FULL_CHART_MAX_ROWS = 10000
+
 
 def _apply_chart_row_formatting(rows: list[dict]) -> list[dict]:
     numeric_fields = ["value", "nominal", "tolerance", "lsl", "usl", "batch_seq", "sample_seq"]
@@ -200,6 +203,7 @@ async def fetch_chart_data_values(
     date_from: Optional[str],
     date_to: Optional[str],
     stratify_all: bool = False,
+    max_points: int = _NORMALITY_MAX_POINTS,
 ) -> list[Optional[float]]:
     params, date_filter, plant_filter, filter_tail = _build_chart_filters(
         material_id,
@@ -235,6 +239,8 @@ async def fetch_chart_data_values(
           AND r.QUANTITATIVE_RESULT IS NOT NULL
           AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
           {plant_filter}
+        ORDER BY COALESCE(bd.batch_date, '9999-12-31'), r.BATCH_ID, r.SAMPLE_ID, r.INSPECTION_LOT_ID
+        LIMIT {max_points}
     """
     rows = await run_sql_async(token, query, params)
     values = []
@@ -256,10 +262,12 @@ async def fetch_chart_data(
     date_from: Optional[str],
     date_to: Optional[str],
     stratify_all: bool = False,
+    max_rows: int = _FULL_CHART_MAX_ROWS,
 ) -> list[dict]:
     all_rows: list[dict] = []
     cursor = None
-    while True:
+    while len(all_rows) < max_rows:
+        remaining = max_rows - len(all_rows)
         page = await fetch_chart_data_page(
             token,
             material_id,
@@ -270,13 +278,13 @@ async def fetch_chart_data(
             date_to,
             stratify_all,
             cursor=cursor,
-            limit=1000,
+            limit=min(1000, remaining),
         )
         all_rows.extend(page["data"])
         if not page["has_more"]:
             break
         cursor = page["next_cursor"]
-    return all_rows
+    return all_rows[:max_rows]
 
 
 async def fetch_p_chart_data(

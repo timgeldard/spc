@@ -26,6 +26,7 @@ from backend.utils.db import attach_data_freshness, check_warehouse_config, reso
 from backend.utils.rate_limit import limiter
 
 router = APIRouter()
+_NORMALITY_MAX_POINTS = 5000
 
 
 @router.post("/chart-data")
@@ -75,9 +76,10 @@ async def spc_chart_data(
                     body.date_from,
                     body.date_to,
                     body.stratify_all,
+                    max_points=_NORMALITY_MAX_POINTS,
                 )
             )
-            if include_summary else None
+            if include_summary and cursor is None else None
         )
     except Exception as exc:
         handle_sql_error(exc)

@@ -1,7 +1,8 @@
-import asyncio
 import math
 import uuid
 from typing import Optional
+
+from scipy.stats import pearsonr
 
 from backend.dal.spc_shared import D2_TABLE, infer_spec_type, normal_cdf
 from backend.utils.db import run_sql_async, sql_param, tbl
@@ -99,7 +100,11 @@ async def fetch_process_flow(
         SELECT
             r.MATERIAL_ID                                               AS material_id,
             COALESCE(m.MATERIAL_NAME, r.MATERIAL_ID)                    AS material_name,
-            p.PLANT_NAME                                                AS plant_name,
+            CASE
+                WHEN COUNT(DISTINCT COALESCE(p.PLANT_NAME, mb.PLANT_ID)) = 1
+                THEN MIN(COALESCE(p.PLANT_NAME, mb.PLANT_ID))
+                ELSE NULL
+            END                                                         AS plant_name,
             COUNT(DISTINCT r.BATCH_ID)                                  AS total_batches,
             COUNT(DISTINCT CASE
                 WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN r.BATCH_ID
@@ -116,7 +121,7 @@ async def fetch_process_flow(
             ON p.PLANT_ID = mb.PLANT_ID
         WHERE r.MATERIAL_ID IN ({in_clause})
           {date_filter_mb}
-        GROUP BY r.MATERIAL_ID, m.MATERIAL_NAME, p.PLANT_NAME
+        GROUP BY r.MATERIAL_ID, m.MATERIAL_NAME
     """
     health_rows = await run_sql_async(token, health_query, mat_params + date_params)
 
@@ -698,16 +703,15 @@ async def fetch_correlation_scatter(
 
     n = len(points)
     pearson_r = None
-    if n >= 3:
+    if n >= 2:
         xs = [point["x"] for point in points]
         ys = [point["y"] for point in points]
-        mx = sum(xs) / n
-        my = sum(ys) / n
-        numerator = sum((xi - mx) * (yi - my) for xi, yi in zip(xs, ys))
-        den_x = math.sqrt(sum((xi - mx) ** 2 for xi in xs))
-        den_y = math.sqrt(sum((yi - my) ** 2 for yi in ys))
-        if den_x > 0 and den_y > 0:
-            pearson_r = round(numerator / (den_x * den_y), 4)
+        try:
+            corr, _p_value = pearsonr(xs, ys)
+        except ValueError:
+            corr = math.nan
+        if not math.isnan(corr):
+            pearson_r = round(float(corr), 4)
 
     return {
         "points": points,
@@ -716,4 +720,3 @@ async def fetch_correlation_scatter(
         "mic_a_name": mic_a_name,
         "mic_b_name": mic_b_name,
     }
-
