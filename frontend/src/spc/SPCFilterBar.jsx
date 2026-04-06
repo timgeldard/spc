@@ -102,7 +102,7 @@ export default function SPCFilterBar() {
         </div>
         {(validateError || notFound) && (
           <span style={{ color: 'var(--spc-red, #c0392b)', fontSize: '0.82rem', marginTop: '0.2rem', display: 'block' }}>
-            Material not found
+            {validateError || 'Material not found'}
           </span>
         )}
         {state.selectedMaterial && !validateError && (
