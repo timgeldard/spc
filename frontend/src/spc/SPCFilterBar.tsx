@@ -11,10 +11,14 @@ import {
   buttonBaseClass,
   buttonPrimaryClass,
   dateInputClass,
+  filterActionsClass,
   filterBarClass,
+  filterCardClass,
   filterGroupClass,
   filterLabelClass,
   filterMetaClass,
+  filterSectionClass,
+  filterValueClass,
   selectClass,
 } from './uiClasses'
 
@@ -38,6 +42,7 @@ export default function SPCFilterBar() {
   const [inputValue, setInputValue] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [recents] = useState<MaterialRef[]>(() => getRecentMaterials())
+  const materialFeedbackId = 'spc-material-feedback'
   const stratifyOptions: Array<{ value: StratifyByKey; label: string }> = [
     { value: 'plant_id', label: 'Plant' },
     { value: 'inspection_lot_id', label: 'Inspection Lot' },
@@ -105,169 +110,219 @@ export default function SPCFilterBar() {
   }
 
   return (
-    <div className={filterBarClass}>
-      <div className={filterGroupClass}>
-        <label className={filterLabelClass} htmlFor="spc-material">Material</label>
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-          <input
-            id="spc-material"
-            type="text"
-            className={selectClass}
-            placeholder="Enter material ID"
-            value={inputValue}
-            onChange={event => {
-              setInputValue(event.target.value)
-              setNotFound(false)
-            }}
-            onKeyDown={handleKeyDown}
-            disabled={validating}
-          />
-          <button
-            className={`${buttonBaseClass} ${buttonPrimaryClass}`}
-            onClick={() => void handleValidate()}
-            disabled={validating || !inputValue.trim()}
-          >
-            {validating ? 'Validating...' : 'Validate'}
-          </button>
-        </div>
-        {(validateError || notFound) && (
-          <span style={{ color: 'var(--spc-red, #c0392b)', fontSize: '0.82rem', marginTop: '0.2rem', display: 'block' }}>
-            {validateError || 'Material not found'}
-          </span>
-        )}
-        {state.selectedMaterial && !validateError && (
-          <span style={{ color: 'var(--spc-green, #27ae60)', fontSize: '0.82rem', marginTop: '0.2rem', display: 'block' }}>
-            {state.selectedMaterial.material_name || state.selectedMaterial.material_id}
-          </span>
-        )}
-        {!state.selectedMaterial && recents.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {recents.map(material => (
+    <div className={filterBarClass} aria-label="SPC analysis filters">
+      <div className={filterSectionClass}>
+        <div className={filterCardClass}>
+          <div className={filterGroupClass}>
+            <label className={filterLabelClass} htmlFor="spc-material">Material</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="spc-material"
+                type="text"
+                className={selectClass}
+                placeholder="Enter material ID"
+                value={inputValue}
+                aria-describedby={materialFeedbackId}
+                aria-invalid={Boolean(validateError || notFound)}
+                onChange={event => {
+                  setInputValue(event.target.value)
+                  setNotFound(false)
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={validating}
+              />
               <button
-                key={material.material_id}
-                onClick={() => selectRecent(material)}
-                className="inline-flex cursor-pointer items-center rounded-full border-0 bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                className={`${buttonBaseClass} ${buttonPrimaryClass}`}
+                onClick={() => void handleValidate()}
+                disabled={validating || !inputValue.trim()}
+                aria-label="Validate material"
               >
-                {material.material_name || material.material_id}
+                {validating ? 'Validating...' : 'Validate'}
               </button>
-            ))}
+            </div>
+            {(validateError || notFound) ? (
+              <span
+                id={materialFeedbackId}
+                role="alert"
+                aria-live="polite"
+                style={{ color: 'var(--spc-red, #c0392b)', fontSize: '0.82rem', marginTop: '0.2rem', display: 'block' }}
+              >
+                {validateError || 'Material not found'}
+              </span>
+            ) : (
+              <span id={materialFeedbackId} className="text-xs text-[var(--c-text-muted)]">
+                Validate the material before narrowing plant, characteristic, or date scope.
+              </span>
+            )}
+            {state.selectedMaterial && !validateError && (
+              <span className={filterValueClass}>
+                {state.selectedMaterial.material_name || state.selectedMaterial.material_id}
+              </span>
+            )}
+            {!state.selectedMaterial && recents.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {recents.map(material => (
+                  <button
+                    key={material.material_id}
+                    onClick={() => selectRecent(material)}
+                    className="inline-flex cursor-pointer items-center rounded-full border-0 bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                    aria-label={`Use recent material ${material.material_name || material.material_id}`}
+                  >
+                    {material.material_name || material.material_id}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {state.selectedMaterial && (
+          <div className={filterCardClass}>
+            <div className={filterGroupClass}>
+              <label className={filterLabelClass} htmlFor="spc-plant">Plant</label>
+              <select
+                id="spc-plant"
+                className={selectClass}
+                value={state.selectedPlant?.plant_id ?? ''}
+                onChange={handlePlantChange}
+                disabled={plantsLoading}
+              >
+                <option value="">
+                  {plantsLoading ? 'Loading…' : plants.length > 1 ? '— All plants —' : plants.length === 1 ? '— Select plant —' : 'No plant data'}
+                </option>
+                {plants.map(plant => (
+                  <option key={plant.plant_id} value={plant.plant_id}>
+                    {plant.plant_name || plant.plant_id}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-[var(--c-text-muted)]">
+                Keep broad for portfolio review, narrow for local diagnosis.
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className={filterCardClass}>
+          <div className={filterGroupClass}>
+            <label className={filterLabelClass} htmlFor="spc-mic">Characteristic (MIC)</label>
+            <select
+              id="spc-mic"
+              className={selectClass}
+              value={state.selectedMIC ? `${state.selectedMIC.mic_id}|${state.selectedMIC.mic_name}` : ''}
+              onChange={handleMICChange}
+              disabled={!state.selectedMaterial || charsLoading}
+            >
+              <option value="">
+                {!state.selectedMaterial
+                  ? '— Select material first —'
+                  : charsLoading
+                    ? 'Loading…'
+                    : allCharacteristics.length === 0
+                      ? 'No characteristics found'
+                      : '— Select a characteristic —'}
+              </option>
+              {allCharacteristics.map(characteristic => (
+                <option
+                  key={`${characteristic.mic_id}|${characteristic.mic_name}`}
+                  value={`${characteristic.mic_id}|${characteristic.mic_name}`}
+                  title={characteristic.inspection_method || undefined}
+                >
+                  {characteristic.chart_type === 'p_chart' ? '[Attribute] ' : ''}
+                  {characteristic.mic_name || characteristic.mic_id}
+                  {characteristic.batch_count ? ` (${characteristic.batch_count} batches)` : ''}
+                </option>
+              ))}
+            </select>
+            {state.selectedMIC?.inspection_method && (
+              <span className="text-xs text-[var(--c-text-muted)]">
+                Method: {state.selectedMIC.inspection_method}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {state.selectedMaterial && (
+          <div className={filterCardClass}>
+            <div className={filterGroupClass}>
+              <label className={filterLabelClass} htmlFor="spc-stratify-by">Stratify By</label>
+              <select
+                id="spc-stratify-by"
+                className={selectClass}
+                value={state.stratifyBy ?? ''}
+                onChange={handleStratifyChange}
+              >
+                <option value="">— None —</option>
+                {stratifyOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-[var(--c-text-muted)]">
+                Compare hidden variation by plant, lot, or operation.
+              </span>
+            </div>
           </div>
         )}
       </div>
 
-      {state.selectedMaterial && (
-        <div className={filterGroupClass}>
-          <label className={filterLabelClass} htmlFor="spc-plant">Plant</label>
-          <select
-            id="spc-plant"
-            className={selectClass}
-            value={state.selectedPlant?.plant_id ?? ''}
-            onChange={handlePlantChange}
-            disabled={plantsLoading}
-          >
-            <option value="">
-              {plantsLoading ? 'Loading…' : plants.length > 1 ? '— All plants —' : plants.length === 1 ? '— Select plant —' : 'No plant data'}
-            </option>
-            {plants.map(plant => (
-              <option key={plant.plant_id} value={plant.plant_id}>
-                {plant.plant_name || plant.plant_id}
-              </option>
-            ))}
-          </select>
+      <div className={filterActionsClass}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className={filterCardClass}>
+            <div className={filterGroupClass}>
+              <label className={filterLabelClass} htmlFor="spc-date-from">From</label>
+              <input
+                id="spc-date-from"
+                type="date"
+                className={dateInputClass}
+                value={state.dateFrom}
+                onChange={event => dispatch({ type: 'SET_DATE_FROM', payload: event.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className={filterCardClass}>
+            <div className={filterGroupClass}>
+              <label className={filterLabelClass} htmlFor="spc-date-to">To</label>
+              <input
+                id="spc-date-to"
+                type="date"
+                className={dateInputClass}
+                value={state.dateTo}
+                onChange={event => dispatch({ type: 'SET_DATE_TO', payload: event.target.value })}
+              />
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className={filterGroupClass}>
-        <label className={filterLabelClass} htmlFor="spc-mic">Characteristic (MIC)</label>
-        <select
-          id="spc-mic"
-          className={selectClass}
-          value={state.selectedMIC ? `${state.selectedMIC.mic_id}|${state.selectedMIC.mic_name}` : ''}
-          onChange={handleMICChange}
-          disabled={!state.selectedMaterial || charsLoading}
-        >
-          <option value="">
-            {!state.selectedMaterial
-              ? '— Select material first —'
-              : charsLoading
-                ? 'Loading…'
-                : allCharacteristics.length === 0
-                  ? 'No characteristics found'
-                  : '— Select a characteristic —'}
-          </option>
-          {allCharacteristics.map(characteristic => (
-            <option
-              key={`${characteristic.mic_id}|${characteristic.mic_name}`}
-              value={`${characteristic.mic_id}|${characteristic.mic_name}`}
-              title={characteristic.inspection_method || undefined}
-            >
-              {characteristic.chart_type === 'p_chart' ? '[Attribute] ' : ''}
-              {characteristic.mic_name || characteristic.mic_id}
-              {characteristic.batch_count ? ` (${characteristic.batch_count} batches)` : ''}
-            </option>
-          ))}
-        </select>
+        {state.selectedMaterial && (
+          <div className={`${filterCardClass} flex flex-col justify-between gap-3`}>
+            <div>
+              <div className={filterLabelClass}>Analysis posture</div>
+              <div className="mt-2 text-sm text-[var(--c-text-muted)]" aria-live="polite">
+                Choose the scope first, then interpret capability and rule signals in the chart workspace.
+              </div>
+            </div>
+            <div className={filterMetaClass}>
+              {state.selectedMIC && (
+                <span className={`${state.selectedMIC.chart_type === 'p_chart' ? badgeAmberClass : badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
+                  {state.selectedMIC.chart_type === 'xbar_r'
+                    ? 'X̄-R chart'
+                    : state.selectedMIC.chart_type === 'p_chart'
+                      ? 'Attribute chart'
+                      : 'I-MR chart'}
+                </span>
+              )}
+              {state.stratifyBy && (
+                <span className={`${badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
+                  Stratified by {stratifyOptions.find(option => option.value === state.stratifyBy)?.label ?? state.stratifyBy}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-
-      <div className={filterGroupClass}>
-        <label className={filterLabelClass} htmlFor="spc-date-from">From</label>
-        <input
-          id="spc-date-from"
-          type="date"
-          className={dateInputClass}
-          value={state.dateFrom}
-          onChange={event => dispatch({ type: 'SET_DATE_FROM', payload: event.target.value })}
-        />
-      </div>
-
-      <div className={filterGroupClass}>
-        <label className={filterLabelClass} htmlFor="spc-date-to">To</label>
-        <input
-          id="spc-date-to"
-          type="date"
-          className={dateInputClass}
-          value={state.dateTo}
-          onChange={event => dispatch({ type: 'SET_DATE_TO', payload: event.target.value })}
-        />
-      </div>
-
-      {state.selectedMaterial && (
-        <div className={filterGroupClass}>
-          <label className={filterLabelClass} htmlFor="spc-stratify-by">Stratify By</label>
-          <select
-            id="spc-stratify-by"
-            className={selectClass}
-            value={state.stratifyBy ?? ''}
-            onChange={handleStratifyChange}
-          >
-            <option value="">— None —</option>
-            {stratifyOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {state.selectedMaterial && (
-        <div className={filterMetaClass}>
-          {state.selectedMIC && (
-            <span className={`${state.selectedMIC.chart_type === 'p_chart' ? badgeAmberClass : badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
-              {state.selectedMIC.chart_type === 'xbar_r'
-                ? 'X̄-R chart'
-                : state.selectedMIC.chart_type === 'p_chart'
-                  ? 'Attribute chart'
-                  : 'I-MR chart'}
-            </span>
-          )}
-          {state.stratifyBy && (
-            <span className={`${badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
-              Stratified by {stratifyOptions.find(option => option.value === state.stratifyBy)?.label ?? state.stratifyBy}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   )
 }
