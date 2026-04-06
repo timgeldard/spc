@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSPC } from '../SPCContext'
-import { computeGRR, computeGRR_ANOVA } from './msaCalculations.js'
+import { computeGRR, computeGRR_ANOVA } from './msaCalculations'
 import type { MSAResult } from '../types'
 import {
   buttonBaseClass,
@@ -20,7 +20,7 @@ import {
   msaVerdictClass,
   msaViewClass,
   sectionTitleClass,
-} from '../uiClasses.js'
+} from '../uiClasses'
 
 type MSADataCube = Array<Array<Array<number | null>>>
 

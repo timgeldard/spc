@@ -9,8 +9,8 @@ import { usePChartData } from '../hooks/usePChartData'
 import { useCountChartData } from '../hooks/useCountChartData'
 import { useLockedLimits } from '../hooks/useLockedLimits'
 import { useExport } from '../hooks/useExport'
-import { autoCleanPhaseI, computeRollingCapability } from '../calculations'
-import { getLimitsSnapshot, mapExcludedPointsToIndices, recomputeForExcludedSet, toExcludedPoints } from '../exclusions.js'
+import { autoCleanPhaseI, computeAll, computeRollingCapability } from '../calculations'
+import { getLimitsSnapshot, mapExcludedPointsToIndices, recomputeForExcludedSet, toExcludedPoints } from '../exclusions'
 import type {
   AttributeChartPoint,
   ChartDataPoint,
@@ -19,16 +19,16 @@ import type {
   LockedLimits,
   SPCComputationResult,
 } from '../types'
-const IMRChart = lazy(() => import('./IMRChart.jsx'))
-const XbarRChart = lazy(() => import('./XbarRChart.jsx'))
-const PChart = lazy(() => import('./PChart.jsx'))
-const CChart = lazy(() => import('./CChart.jsx'))
-const UChart = lazy(() => import('./UChart.jsx'))
-const NPChart = lazy(() => import('./NPChart.jsx'))
+const IMRChart = lazy(() => import('./IMRChart'))
+const XbarRChart = lazy(() => import('./XbarRChart'))
+const PChart = lazy(() => import('./PChart'))
+const CChart = lazy(() => import('./CChart'))
+const UChart = lazy(() => import('./UChart'))
+const NPChart = lazy(() => import('./NPChart'))
 const CapabilityPanel = lazy(() => import('./CapabilityPanel'))
-const CapabilityTrendChart = lazy(() => import('./CapabilityTrendChart.jsx'))
+const CapabilityTrendChart = lazy(() => import('./CapabilityTrendChart'))
 const ExcludedPointsPanel = lazy(() => import('./ExcludedPointsPanel'))
-const ExclusionJustificationModal = lazy(() => import('./ExclusionJustificationModal.jsx'))
+const ExclusionJustificationModal = lazy(() => import('./ExclusionJustificationModal'))
 const SignalsPanel = lazy(() => import('./SignalsPanel'))
 import {
   autoCleanHeaderClass,
@@ -62,13 +62,17 @@ import {
   rollingWindowLabelClass,
   sideStackClass,
   spinnerClass,
+  strataSectionClass,
+  strataSectionHeaderClass,
+  strataSectionMetaClass,
+  strataSectionTitleClass,
   toggleAutoClass,
   toggleButtonActiveClass,
   toggleButtonBaseClass,
   toggleButtonResetClass,
   toggleGroupClass,
   toggleLabelClass,
-} from '../uiClasses.js'
+} from '../uiClasses'
 
 type AttributeChartType = 'p_chart' | 'np_chart' | 'c_chart' | 'u_chart'
 type QuantChartType = 'imr' | 'xbar_r'
@@ -174,6 +178,12 @@ interface AutoCleanLog {
   }>
 }
 
+interface StratumSection {
+  label: string
+  points: ChartDataPoint[]
+  spc: SPCComputationResult | null
+}
+
 function isQuantChartType(value: string | null | undefined): value is QuantChartType {
   return value === 'imr' || value === 'xbar_r'
 }
@@ -228,7 +238,7 @@ export default function ControlChartsView() {
     ? (chartTypeOverride ?? baseChartType)
     : null
 
-  const { stratifyAll, limitsMode } = state
+  const { stratifyBy, limitsMode } = state
 
   const {
     points: quantPoints,
@@ -243,7 +253,7 @@ export default function ControlChartsView() {
     dateFrom,
     dateTo,
     selectedPlant?.plant_id,
-    stratifyAll,
+    stratifyBy,
   )
 
   const {
@@ -257,7 +267,8 @@ export default function ControlChartsView() {
     micId: isQuantitative ? selectedMIC?.mic_id : null,
     chartType: effectiveChartType,
     plantId: selectedPlant?.plant_id ?? null,
-    stratifyAll,
+    stratifyAll: Boolean(stratifyBy),
+    stratifyBy,
     dateFrom: dateFrom || null,
     dateTo: dateTo || null,
   })
@@ -309,6 +320,44 @@ export default function ControlChartsView() {
     [spc, rollingWindowSize],
   )
 
+  const stratumSections = useMemo<StratumSection[]>(() => {
+    if (!stratifyBy || !isQuantitative || !effectiveChartType || !quantPoints.length) return []
+
+    const effectiveExclusions = new Set<number>(excludedIndices)
+    if (excludeOutliers) {
+      quantPoints.forEach((point, index) => {
+        if (point.is_outlier) effectiveExclusions.add(index)
+      })
+    }
+
+    const grouped = new Map<string, ChartDataPoint[]>()
+    quantPoints.forEach((point, index) => {
+      if (effectiveExclusions.has(index)) return
+      const key = point.stratify_value ?? 'Unassigned'
+      const next = grouped.get(key) ?? []
+      next.push(point)
+      grouped.set(key, next)
+    })
+
+    return [...grouped.entries()]
+      .map(([label, points]) => ({
+        label,
+        points,
+        spc: points.length > 0 ? computeAll(points, effectiveChartType, ruleSet, { normality: quantNormality }) : null,
+      }))
+      .filter(section => (section.spc?.values?.length ?? 0) > 0)
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [
+    stratifyBy,
+    isQuantitative,
+    effectiveChartType,
+    quantPoints,
+    excludedIndices,
+    excludeOutliers,
+    ruleSet,
+    quantNormality,
+  ])
+
   const currentExcludedPoints = useMemo(
     () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
     [isQuantitative, quantPoints, excludedIndices],
@@ -350,7 +399,8 @@ export default function ControlChartsView() {
       mic_id: selectedMIC.mic_id,
       mic_name: selectedMIC.mic_name ?? null,
       plant_id: selectedPlant?.plant_id ?? null,
-      stratify_all: stratifyAll,
+      stratify_all: Boolean(stratifyBy),
+      stratify_by: stratifyBy,
       chart_type: effectiveChartType,
       date_from: dateFrom || null,
       date_to: dateTo || null,
@@ -504,6 +554,7 @@ export default function ControlChartsView() {
       )}
     </div>
   )
+  const stratifyLabel = stratifyBy ? stratifyBy.replace(/_/g, ' ') : null
 
   if (isAttributeChart) {
     return (
@@ -540,14 +591,13 @@ export default function ControlChartsView() {
             override={chartTypeOverride}
             onOverride={v => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: v })}
           />
-          {!selectedPlant && (
-            <button
-              className={`${buttonBaseClass} ${buttonSmClass} ${stratifyAll ? buttonPrimaryClass : buttonSecondaryClass}`}
-              onClick={() => dispatch({ type: 'TOGGLE_STRATIFY_ALL' })}
-              title="Show all plants as separate coloured series"
+          {stratifyBy && (
+            <span
+              className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+              title={`Stratified by ${stratifyLabel}`}
             >
-              {stratifyAll ? 'Stratified' : 'Stratify by Plant'}
-            </button>
+              Stratified by {stratifyLabel}
+            </span>
           )}
           {lockedLimits && (
             <button
@@ -717,6 +767,63 @@ export default function ControlChartsView() {
           </Suspense>
         </div>
       </div>
+
+      {stratumSections.length > 1 && (
+        <div className="flex flex-col gap-5">
+          {stratumSections.map(section => (
+            <section key={section.label} className={strataSectionClass}>
+              <div className={strataSectionHeaderClass}>
+                <div>
+                  <div className={strataSectionTitleClass}>
+                    {selectedMIC?.mic_name || selectedMIC?.mic_id} · {section.label}
+                  </div>
+                  <div className={strataSectionMetaClass}>
+                    Stratified by {stratifyBy?.replace(/_/g, ' ')} · {section.points.length} point{section.points.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className={chartsMainClass}>
+                <Suspense fallback={<ChartLoadingState />}>
+                  {section.spc?.chartType === 'imr' ? (
+                    <IMRChart
+                      spc={section.spc}
+                      indexedPoints={section.spc.indexedPoints}
+                      signals={section.spc.signals}
+                      mrSignals={section.spc.mrSignals}
+                      excludedIndices={new Set<number>()}
+                      externalLimits={null}
+                    />
+                  ) : (
+                    <XbarRChart
+                      spc={section.spc}
+                      signals={section.spc?.signals}
+                      mrSignals={section.spc?.mrSignals}
+                      externalLimits={null}
+                    />
+                  )}
+                </Suspense>
+              </div>
+
+              <div className="mt-5 grid items-start gap-5 lg:grid-cols-[1fr_1.6fr]">
+                <Suspense fallback={<PanelLoadingState />}>
+                  <SignalsPanel
+                    signals={section.spc?.signals}
+                    mrSignals={section.spc?.mrSignals}
+                    indexedPoints={section.spc?.indexedPoints}
+                    ruleSet={ruleSet}
+                  />
+                </Suspense>
+                <div className={sideStackClass}>
+                  <Suspense fallback={<PanelLoadingState />}>
+                    <CapabilityPanel spc={section.spc} />
+                  </Suspense>
+                </div>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
       {autoCleanLog && (
         <div className={autoCleanLogClass}>

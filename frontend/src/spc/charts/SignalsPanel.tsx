@@ -1,6 +1,6 @@
 import { useSPC } from '../SPCContext'
 import type { IndexedChartPoint, SPCSignal } from '../types'
-import { buttonBaseClass, buttonSecondaryClass, buttonSmClass, surfacePanelClass } from '../uiClasses.js'
+import { buttonBaseClass, buttonSecondaryClass, buttonSmClass, surfacePanelClass } from '../uiClasses'
 
 const WECO_RULES = {
   desc: {
@@ -142,4 +142,3 @@ export default function SignalsPanel({
     </div>
   )
 }
-

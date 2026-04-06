@@ -15,7 +15,7 @@ export const initialState: SPCState = {
   ruleSet: 'weco',
   excludeOutliers: false,
   limitsMode: 'live',
-  stratifyAll: false,
+  stratifyBy: null,
   exclusionAudit: null,
   exclusionDialog: null,
 }
@@ -97,10 +97,10 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
       return { ...state, excludedIndices: new Set<number>(action.payload) }
     case 'SET_LIMITS_MODE':
       return { ...state, limitsMode: action.payload }
-    case 'TOGGLE_STRATIFY_ALL':
+    case 'SET_STRATIFY_BY':
       return {
         ...state,
-        stratifyAll: !state.stratifyAll,
+        stratifyBy: action.payload,
         excludedIndices: new Set<number>(),
         exclusionAudit: null,
         exclusionDialog: null,
@@ -134,4 +134,3 @@ export function useSPC(): SPCContextValue {
   if (!ctx) throw new Error('useSPC must be used within SPCProvider')
   return ctx
 }
-

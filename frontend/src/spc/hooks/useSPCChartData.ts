@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ChartDataPoint, NormalityResult, UseSPCChartDataResult } from '../types'
+import type { ChartDataPoint, NormalityResult, StratifyByKey, UseSPCChartDataResult } from '../types'
 
 interface PaginatedChartResponse {
   data?: ChartDataPoint[]
@@ -35,7 +35,7 @@ export function useSPCChartData(
   dateFrom: string | null | undefined,
   dateTo: string | null | undefined,
   plantId: string | null | undefined,
-  stratifyAll = false,
+  stratifyBy: StratifyByKey | null = null,
 ): UseSPCChartDataResult {
   const [points, setPoints] = useState<ChartDataPoint[]>([])
   const [normality, setNormality] = useState<NormalityResult | null>(null)
@@ -64,7 +64,7 @@ export function useSPCChartData(
       date_from: dateFrom || null,
       date_to: dateTo || null,
       plant_id: plantId ?? null,
-      stratify_all: stratifyAll,
+      stratify_by: stratifyBy,
     }
 
     const fetchAllPages = async () => {
@@ -122,7 +122,7 @@ export function useSPCChartData(
       cancelled = true
       controller.abort()
     }
-  }, [materialId, micId, micName, dateFrom, dateTo, plantId, stratifyAll])
+  }, [materialId, micId, micName, dateFrom, dateTo, plantId, stratifyBy])
 
   return { points, normality, dataTruncated, loading, error }
 }

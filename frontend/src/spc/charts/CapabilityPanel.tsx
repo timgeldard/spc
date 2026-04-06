@@ -1,6 +1,6 @@
-import CapabilityHistogram from './CapabilityHistogram.jsx'
+import CapabilityHistogram from './CapabilityHistogram'
 import type { SPCComputationResult } from '../types'
-import { surfacePanelClass } from '../uiClasses.js'
+import { surfacePanelClass } from '../uiClasses'
 
 interface StabilityWarningProps {
   signals?: SPCComputationResult['signals']
@@ -73,9 +73,26 @@ interface CapabilityPanelProps {
 export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
   if (!spc?.capability) return null
 
-  const { cp, cpk, pp, ppk, cpkLower95, cpkUpper95, zScore, dpmo, spec_type, normality, normalityWarning } = spc.capability
+  const {
+    cp,
+    cpk,
+    pp,
+    ppk,
+    cpkLower95,
+    cpkUpper95,
+    zScore,
+    dpmo,
+    spec_type,
+    normality,
+    normalityWarning,
+    capabilityMethod,
+    empiricalP00135,
+    empiricalP50,
+    empiricalP99865,
+  } = spc.capability
   const isUnilateral = spec_type === 'unilateral_upper' || spec_type === 'unilateral_lower'
   const cpkTier = getTier(cpk)
+  const usesNonParametricCapability = capabilityMethod === 'non_parametric'
 
   return (
     <div className={surfacePanelClass}>
@@ -83,9 +100,12 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
       {normality?.is_normal === false && (
         <p className="mb-2 text-xs text-red-700">
-          {normalityWarning}
+          Distribution is non-normal. Non-parametric capability calculations (P50, P99.8, P0.1) applied.
           {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
         </p>
+      )}
+      {normalityWarning && normality?.is_normal !== false && (
+        <p className="mb-2 text-xs text-red-700">{normalityWarning}</p>
       )}
       {normality?.warning && normality?.is_normal == null && (
         <p className="mb-2 text-xs text-amber-700">{normality.warning}</p>
@@ -126,7 +146,15 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p className="mb-2 text-xs text-amber-700">{spc.capability.specWarning}</p>
       )}
 
-      <CapabilityHistogram spc={spc} />
+      {usesNonParametricCapability ? (
+        <div className="mb-3 grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+          <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
+          <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
+          <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
+        </div>
+      ) : (
+        <CapabilityHistogram spc={spc} />
+      )}
 
       <div className="flex flex-wrap gap-2 text-xs">
         {TIERS.map((t, i) => (
