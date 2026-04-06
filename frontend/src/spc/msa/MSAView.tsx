@@ -7,7 +7,10 @@ import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonSmClass,
+  cardSubClass,
+  cardTitleClass,
   chartHintClass,
+  heroCardDenseClass,
   inputBaseClass,
   inputSmClass,
   msaDataClass,
@@ -19,7 +22,9 @@ import {
   msaTextareaClass,
   msaVerdictClass,
   msaViewClass,
-  sectionTitleClass,
+  moduleEyebrowClass,
+  moduleHeaderCardClass,
+  splitPanelClass,
 } from '../uiClasses'
 
 type MSADataCube = Array<Array<Array<number | null>>>
@@ -195,80 +200,99 @@ export default function MSAView() {
 
   return (
     <div className={msaViewClass}>
-      <h3 className={sectionTitleClass}>Gauge R&amp;R</h3>
+      <div className={moduleHeaderCardClass}>
+        <div className={moduleEyebrowClass}>Measurement system validation</div>
+        <h3 className={cardTitleClass}>Gauge R&amp;R</h3>
+        <p className={cardSubClass}>
+          Use Average &amp; Range or ANOVA Gauge R&amp;R to assess whether the measurement system can reliably distinguish part variation from gauge variation.
+        </p>
+      </div>
       {!state.selectedMIC && (
         <div className="banner banner--warning">
           Select a characteristic in the Charts tab first to associate this study with a specific MIC.
         </div>
       )}
 
-      <div className={msaSetupClass}>
-        <div className={msaSetupRowClass}>
-          <label>Method:</label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              className={`${buttonBaseClass} ${buttonSmClass} ${method === 'average_range' ? buttonPrimaryClass : buttonSecondaryClass}`}
-              onClick={() => setMethod('average_range')}
-            >
-              Average &amp; Range
-            </button>
-            <button
-              type="button"
-              className={`${buttonBaseClass} ${buttonSmClass} ${method === 'anova' ? buttonPrimaryClass : buttonSecondaryClass}`}
-              onClick={() => setMethod('anova')}
-            >
-              ANOVA
-            </button>
+      <div className={splitPanelClass}>
+        <div className="flex flex-col gap-4">
+          <div className={msaSetupClass}>
+            <div className={msaSetupRowClass}>
+              <label>Method:</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className={`${buttonBaseClass} ${buttonSmClass} ${method === 'average_range' ? buttonPrimaryClass : buttonSecondaryClass}`}
+                  onClick={() => setMethod('average_range')}
+                >
+                  Average &amp; Range
+                </button>
+                <button
+                  type="button"
+                  className={`${buttonBaseClass} ${buttonSmClass} ${method === 'anova' ? buttonPrimaryClass : buttonSecondaryClass}`}
+                  onClick={() => setMethod('anova')}
+                >
+                  ANOVA
+                </button>
+              </div>
+            </div>
+            <div className={msaSetupRowClass}>
+              <label>Operators:</label>
+              <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={5} value={nOperators}
+                onChange={e => setNOperators(Math.max(2, Math.min(5, Number(e.target.value))))} />
+            </div>
+            <div className={msaSetupRowClass}>
+              <label>Parts:</label>
+              <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={10} value={nParts}
+                onChange={e => setNParts(Math.max(2, Math.min(10, Number(e.target.value))))} />
+            </div>
+            <div className={msaSetupRowClass}>
+              <label>Replicates:</label>
+              <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={5} value={nReplicates}
+                onChange={e => setNReplicates(Math.max(2, Math.min(5, Number(e.target.value))))} />
+            </div>
+            <div className={msaSetupRowClass}>
+              <label>Tolerance (USL−LSL):</label>
+              <input type="number" className={`${inputBaseClass} ${inputSmClass} w-32`} step="any" value={tolerance}
+                onChange={e => setTolerance(e.target.value)} placeholder="Optional" />
+            </div>
           </div>
-        </div>
-        <div className={msaSetupRowClass}>
-          <label>Operators:</label>
-          <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={5} value={nOperators}
-            onChange={e => setNOperators(Math.max(2, Math.min(5, Number(e.target.value))))} />
-        </div>
-        <div className={msaSetupRowClass}>
-          <label>Parts:</label>
-          <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={10} value={nParts}
-            onChange={e => setNParts(Math.max(2, Math.min(10, Number(e.target.value))))} />
-        </div>
-        <div className={msaSetupRowClass}>
-          <label>Replicates:</label>
-          <input type="number" className={`${inputBaseClass} ${inputSmClass} w-24`} min={2} max={5} value={nReplicates}
-            onChange={e => setNReplicates(Math.max(2, Math.min(5, Number(e.target.value))))} />
-        </div>
-        <div className={msaSetupRowClass}>
-          <label>Tolerance (USL−LSL):</label>
-          <input type="number" className={`${inputBaseClass} ${inputSmClass} w-32`} step="any" value={tolerance}
-            onChange={e => setTolerance(e.target.value)} placeholder="Optional" />
-        </div>
-      </div>
 
-      <div className={msaDataClass}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '0.25rem' }}>
-          <label className="text-sm font-medium text-[var(--c-text)]" style={{ margin: 0 }}>
-            Measurement data (CSV / TSV: operator, part, replicate, value)
-          </label>
-          <button
-            className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-            type="button"
-            onClick={() => setCsvText(generateSampleData(nOperators, nParts, nReplicates))}
-          >
-            Fill sample data
+          <div className={msaDataClass}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '0.25rem' }}>
+              <label className="text-sm font-medium text-[var(--c-text)]" style={{ margin: 0 }}>
+                Measurement data (CSV / TSV: operator, part, replicate, value)
+              </label>
+              <button
+                className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+                type="button"
+                onClick={() => setCsvText(generateSampleData(nOperators, nParts, nReplicates))}
+              >
+                Fill sample data
+              </button>
+            </div>
+            <textarea
+              className={msaTextareaClass}
+              rows={10}
+              value={csvText}
+              onChange={e => setCsvText(e.target.value)}
+              placeholder={'1,1,1,10.2\n1,1,2,10.3\n1,2,1,10.5\n…'}
+            />
+          </div>
+
+          <button className={`${buttonBaseClass} ${buttonPrimaryClass} w-fit`} onClick={handleCalculate}>
+            Calculate GRR
           </button>
         </div>
-        <textarea
-          className={msaTextareaClass}
-          rows={10}
-          value={csvText}
-          onChange={e => setCsvText(e.target.value)}
-          placeholder={'1,1,1,10.2\n1,1,2,10.3\n1,2,1,10.5\n…'}
-        />
+        <aside className={`${heroCardDenseClass} space-y-3`}>
+          <div className={moduleEyebrowClass}>Interpretation guide</div>
+          <p className="text-sm text-[var(--c-text-muted)]">Use this study to determine whether the gauge can separate part-to-part variation from repeatability and reproducibility noise.</p>
+          <div className="space-y-2 text-sm text-[var(--c-text-muted)]">
+            <p>&lt; 10% GRR is usually acceptable.</p>
+            <p>10–30% may be conditionally acceptable depending on risk and use case.</p>
+            <p>NDC &lt; 5 means the system cannot reliably discriminate parts.</p>
+          </div>
+        </aside>
       </div>
-
-      <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} onClick={handleCalculate}>
-        Calculate GRR
-      </button>
 
       {saveError && <div className="banner banner--error">{saveError}</div>}
       <GRRResult result={result} onSave={handleSave} saving={saving} />

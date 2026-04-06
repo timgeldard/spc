@@ -17,15 +17,21 @@ import { layoutFlowGraph } from './layoutFlowGraph'
 import ProcessNode from './ProcessNode'
 import type { ProcessFlowEdgeData, ProcessFlowNodeData, ProcessFlowNodeRecord } from '../types'
 import {
+  cardSubClass,
+  cardTitleClass,
   emptyIconClass,
   emptyStateClass,
   emptySubClass,
   flowCanvasClass,
   flowLegendClass,
+  heroCardDenseClass,
   legendDotClass,
   legendHintClass,
   legendItemClass,
   loadingClass,
+  moduleEyebrowClass,
+  moduleHeaderCardClass,
+  splitPanelClass,
   spinnerClass,
 } from '../uiClasses'
 
@@ -162,41 +168,62 @@ export default function ProcessFlowView() {
   }
 
   return (
-    <div className={flowCanvasClass}>
-      <div className={flowLegendClass}>
-        {Object.entries(STATUS_COLOR).map(([status, color]) => (
-          <span key={status} className={legendItemClass}>
-            <span className={legendDotClass} style={{ background: color }} />
-            {status === 'green' ? 'Rejection rate < 2%' :
-             status === 'amber' ? '2% ≤ Rejection rate < 10%' :
-             status === 'red'   ? 'Rejection rate ≥ 10%' : 'Insufficient data (< 5 batches)'}
-          </span>
-        ))}
-        <span className={legendHintClass}>Click a node to open control charts</span>
+    <div className="flex flex-col gap-4">
+      <div className={moduleHeaderCardClass}>
+        <div className={moduleEyebrowClass}>Material lineage review</div>
+        <h3 className={cardTitleClass}>Process Flow</h3>
+        <p className={cardSubClass}>
+          Review upstream and downstream lineage around {state.selectedMaterial.material_name}. Use this to trace where quality risk may propagate across the network.
+        </p>
       </div>
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.25 }}
-        minZoom={0.2}
-        maxZoom={2.5}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background variant={'dots' as BackgroundVariant} gap={24} color="#e2e8f0" />
-        <Controls showInteractive={false} />
-        <MiniMap
-          nodeColor={n => STATUS_COLOR[(n.data?.status ?? 'grey') as keyof typeof STATUS_COLOR] ?? '#9ca3af'}
-          maskColor="rgba(248,250,252,0.85)"
-          pannable
-          zoomable
-        />
-      </ReactFlow>
+      <div className={splitPanelClass}>
+        <div className={flowCanvasClass}>
+          <div className={flowLegendClass}>
+            {Object.entries(STATUS_COLOR).map(([status, color]) => (
+              <span key={status} className={legendItemClass}>
+                <span className={legendDotClass} style={{ background: color }} />
+                {status === 'green' ? 'Rejection rate < 2%' :
+                 status === 'amber' ? '2% ≤ Rejection rate < 10%' :
+                 status === 'red'   ? 'Rejection rate ≥ 10%' : 'Insufficient data (< 5 batches)'}
+              </span>
+            ))}
+            <span className={legendHintClass}>Click a node to open control charts</span>
+          </div>
+
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.25 }}
+            minZoom={0.2}
+            maxZoom={2.5}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background variant={'dots' as BackgroundVariant} gap={24} color="#e2e8f0" />
+            <Controls showInteractive={false} />
+            <MiniMap
+              nodeColor={n => STATUS_COLOR[(n.data?.status ?? 'grey') as keyof typeof STATUS_COLOR] ?? '#9ca3af'}
+              maskColor="rgba(248,250,252,0.85)"
+              pannable
+              zoomable
+            />
+          </ReactFlow>
+        </div>
+        <aside className={`${heroCardDenseClass} space-y-3`}>
+          <div className={moduleEyebrowClass}>How to read this map</div>
+          <p className="text-sm text-[var(--c-text-muted)]">Nodes inherit a quality health colour based on rejection rate, not capability. This helps surface where process risk may be entering or leaving the selected material.</p>
+          <div className="space-y-2 text-sm text-[var(--c-text-muted)]">
+            <p>Green nodes are relatively healthy.</p>
+            <p>Amber nodes deserve monitoring.</p>
+            <p>Red nodes are likely risk hotspots and are the best places to drill in next.</p>
+          </div>
+        </aside>
+      </div>
     </div>
   )
 }

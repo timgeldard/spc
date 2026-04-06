@@ -1,0 +1,1 @@
+import{j as r}from"./process-flow--vul17y6.js";import{_ as i,m as o}from"./echarts-DK-3opR5.js";import"./echartsCore-Dr4p7smk.js";function l({ariaLabel:t,...a}){return r.jsx("div",{role:"img","aria-label":t,children:r.jsx(i,{echarts:o,...a})})}export{l as E};
