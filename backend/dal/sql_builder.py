@@ -48,7 +48,9 @@ class SqlSelectBuilder:
 
     def build(self) -> str:
         if not self.select_columns or not self.from_clause:
-            raise ValueError("SELECT queries require at least one column and a FROM clause")
+            raise ValueError(
+                "SqlSelectBuilder.build() requires at least one selected column and a FROM clause"
+            )
 
         parts = [
             "SELECT",

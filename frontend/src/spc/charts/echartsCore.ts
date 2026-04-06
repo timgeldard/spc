@@ -3,7 +3,9 @@ import { BarChart, HeatmapChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
+  TitleComponent,
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components'
@@ -17,7 +19,9 @@ echarts.use([
   ScatterChart,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
+  TitleComponent,
   TooltipComponent,
   VisualMapComponent,
   CanvasRenderer,

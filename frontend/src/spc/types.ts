@@ -7,7 +7,7 @@ export type SpecType =
   | 'bilateral_asymmetric'
   | 'unilateral_upper'
   | 'unilateral_lower'
-  | string
+  | (string & {})
 
 export interface MaterialRef {
   material_id: string
@@ -160,7 +160,7 @@ export interface SPCSignal {
   chart?: string
 }
 
-export interface AutoCleanPhaseIIteration {
+export interface AutoCleanPhaseIIterationLog {
   iteration: number
   removedCount: number
   removedOriginalIndices: number[]
@@ -172,7 +172,7 @@ export interface AutoCleanPhaseIIteration {
 export interface AutoCleanPhaseIResult {
   stable: boolean
   cleanedIndices: Set<number>
-  iterationLog: AutoCleanPhaseIIteration[]
+  iterationLog: AutoCleanPhaseIIterationLog[]
 }
 
 export interface RollingCapabilityPoint {

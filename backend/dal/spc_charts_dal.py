@@ -12,7 +12,15 @@ _FULL_CHART_MAX_ROWS = 10000
 
 def _format_chart_row_error(field: str, raw_value: object, row: dict) -> str:
     batch_id = row.get("batch_id")
-    sample_id = row.get("SAMPLE_ID") or row.get("cursor_sample_id") or row.get("sample_seq")
+    sample_id = (
+        row.get("SAMPLE_ID")
+        if row.get("SAMPLE_ID") is not None
+        else (
+            row.get("cursor_sample_id")
+            if row.get("cursor_sample_id") is not None
+            else row.get("sample_seq")
+        )
+    )
     return (
         f"Invalid chart row value for field '{field}' in batch_id={batch_id!r}, "
         f"sample_id={sample_id!r}: {raw_value!r}; row={row!r}"
@@ -60,25 +68,56 @@ def _apply_chart_row_formatting(rows: list[dict]) -> list[dict]:
             row["plant_id"] = None
         row.pop("cursor_batch_date_epoch", None)
         row.pop("cursor_sample_id", None)
+        row.pop("cursor_inspection_lot_id", None)
+        row.pop("cursor_operation_id", None)
     return rows
 
 
-def encode_chart_cursor(batch_date_epoch: int, batch_id: str, sample_id: str) -> str:
-    return f"{batch_date_epoch}:{quote(batch_id, safe='')}:{quote(sample_id, safe='')}"
+def encode_chart_cursor(
+    batch_date_epoch: int,
+    batch_id: str,
+    sample_id: str,
+    inspection_lot_id: str,
+    operation_id: str,
+) -> str:
+    return ":".join(
+        [
+            str(batch_date_epoch),
+            quote(batch_id, safe=""),
+            quote(sample_id, safe=""),
+            quote(inspection_lot_id, safe=""),
+            quote(operation_id, safe=""),
+        ]
+    )
 
 
-def decode_chart_cursor(cursor: str) -> tuple[int, str, str]:
+def decode_chart_cursor(cursor: str) -> tuple[int, str, str, str, str]:
     try:
-        batch_date_epoch_str, batch_id_raw, sample_id_raw = cursor.split(":", 2)
+        (
+            batch_date_epoch_str,
+            batch_id_raw,
+            sample_id_raw,
+            inspection_lot_id_raw,
+            operation_id_raw,
+        ) = cursor.split(":", 4)
         batch_date_epoch = int(batch_date_epoch_str)
     except (AttributeError, TypeError, ValueError) as exc:
-        raise ValueError("cursor must be formatted as 'batch_date(epoch):batch_id:sample_id'") from exc
+        raise ValueError(
+            "cursor must be formatted as "
+            "'batch_date(epoch):batch_id:sample_id:inspection_lot_id:operation_id'"
+        ) from exc
 
     batch_id = unquote(batch_id_raw)
     sample_id = unquote(sample_id_raw)
     if not batch_id:
         raise ValueError("cursor batch_id must not be empty")
-    return batch_date_epoch, batch_id, sample_id
+    return (
+        batch_date_epoch,
+        batch_id,
+        sample_id,
+        unquote(inspection_lot_id_raw),
+        unquote(operation_id_raw),
+    )
 
 
 def _assign_batch_sequence(rows: list[dict]) -> list[dict]:
@@ -100,6 +139,12 @@ class ChartFilterSpec:
     quality_conditions: list[str] = field(default_factory=list)
     final_where_conditions: list[str] = field(default_factory=list)
     select_extra_columns: list[str] = field(default_factory=list)
+
+
+def _apply_conditions(builder: SqlSelectBuilder, conditions: list[str]) -> SqlSelectBuilder:
+    for condition in conditions:
+        builder.where(condition)
+    return builder
 
 
 def _build_chart_filters(
@@ -152,7 +197,7 @@ def _build_chart_filters(
 
 
 def _build_batch_dates_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
-    return (
+    builder = (
         SqlSelectBuilder()
         .select(
             "MATERIAL_ID",
@@ -161,16 +206,13 @@ def _build_batch_dates_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
             "MAX(PLANT_ID) AS plant_id",
         )
         .from_(tbl("gold_batch_mass_balance_v"))
-        .where(filters.batch_date_conditions[0])
-        .where(filters.batch_date_conditions[1])
-        .where(filters.batch_date_conditions[2] if len(filters.batch_date_conditions) > 2 else None)
-        .where(filters.batch_date_conditions[3] if len(filters.batch_date_conditions) > 3 else None)
         .group_by("MATERIAL_ID", "BATCH_ID")
     )
+    return _apply_conditions(builder, filters.batch_date_conditions)
 
 
 def _build_quality_data_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
-    return (
+    builder = (
         SqlSelectBuilder()
         .select(
             "r.BATCH_ID AS batch_id",
@@ -190,6 +232,8 @@ def _build_quality_data_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
             "bd.plant_id",
             "COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400) AS cursor_batch_date_epoch",
             "COALESCE(CAST(r.SAMPLE_ID AS STRING), '') AS cursor_sample_id",
+            "COALESCE(CAST(r.INSPECTION_LOT_ID AS STRING), '') AS cursor_inspection_lot_id",
+            "COALESCE(CAST(r.OPERATION_ID AS STRING), '') AS cursor_operation_id",
             "ROW_NUMBER() OVER (PARTITION BY r.BATCH_ID "
             "ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID) AS sample_seq",
         )
@@ -199,24 +243,27 @@ def _build_quality_data_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
             "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
             "   AND bd.BATCH_ID = r.BATCH_ID"
         )
-        .where(filters.quality_conditions[0])
-        .where(filters.quality_conditions[1])
-        .where(filters.quality_conditions[2] if len(filters.quality_conditions) > 2 else None)
-        .where(filters.quality_conditions[3] if len(filters.quality_conditions) > 3 else None)
-        .where(filters.quality_conditions[4] if len(filters.quality_conditions) > 4 else None)
-        .where(filters.quality_conditions[5] if len(filters.quality_conditions) > 5 else None)
     )
+    return _apply_conditions(builder, filters.quality_conditions)
 
 
 def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], limit: int) -> tuple[str, list[dict]]:
     params = list(filters.params)
     if cursor:
-        cursor_batch_date_epoch, cursor_batch_id, cursor_sample_id = decode_chart_cursor(cursor)
+        (
+            cursor_batch_date_epoch,
+            cursor_batch_id,
+            cursor_sample_id,
+            cursor_inspection_lot_id,
+            cursor_operation_id,
+        ) = decode_chart_cursor(cursor)
         params.extend(
             [
                 sql_param("cursor_batch_date_epoch", cursor_batch_date_epoch),
                 sql_param("cursor_batch_id", cursor_batch_id),
                 sql_param("cursor_sample_id", cursor_sample_id),
+                sql_param("cursor_inspection_lot_id", cursor_inspection_lot_id),
+                sql_param("cursor_operation_id", cursor_operation_id),
             ]
         )
         filters.final_where_conditions.extend(
@@ -225,7 +272,14 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
                 "cursor_batch_date_epoch > :cursor_batch_date_epoch "
                 "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id > :cursor_batch_id) "
                 "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id = :cursor_batch_id "
-                "AND cursor_sample_id > :cursor_sample_id)"
+                "AND cursor_sample_id > :cursor_sample_id) "
+                "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id = :cursor_batch_id "
+                "AND cursor_sample_id = :cursor_sample_id "
+                "AND cursor_inspection_lot_id > :cursor_inspection_lot_id) "
+                "OR (cursor_batch_date_epoch = :cursor_batch_date_epoch AND batch_id = :cursor_batch_id "
+                "AND cursor_sample_id = :cursor_sample_id "
+                "AND cursor_inspection_lot_id = :cursor_inspection_lot_id "
+                "AND cursor_operation_id > :cursor_operation_id)"
                 ")"
             ]
         )
@@ -245,6 +299,8 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
             "valuation",
             "cursor_batch_date_epoch",
             "cursor_sample_id",
+            "cursor_inspection_lot_id",
+            "cursor_operation_id",
             *filters.select_extra_columns,
         )
         .from_("quality_data")
@@ -269,7 +325,7 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
 
 
 def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tuple[str, list[dict]]:
-    final_query = (
+    final_query = _apply_conditions(
         SqlSelectBuilder()
         .select("CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value")
         .from_(f"{tbl('gold_batch_quality_result_v')} r")
@@ -278,14 +334,9 @@ def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tupl
             "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
             "   AND bd.BATCH_ID = r.BATCH_ID"
         )
-        .where(filters.quality_conditions[0])
-        .where(filters.quality_conditions[1])
-        .where(filters.quality_conditions[2] if len(filters.quality_conditions) > 2 else None)
-        .where(filters.quality_conditions[3] if len(filters.quality_conditions) > 3 else None)
-        .where(filters.quality_conditions[4] if len(filters.quality_conditions) > 4 else None)
-        .where(filters.quality_conditions[5] if len(filters.quality_conditions) > 5 else None)
         .order_by("COALESCE(bd.batch_date, '9999-12-31')", "r.BATCH_ID", "r.SAMPLE_ID", "r.INSPECTION_LOT_ID")
-        .limit(max_points)
+        .limit(max_points),
+        filters.quality_conditions,
     )
     query = (
         SqlWithQueryBuilder()
@@ -321,7 +372,6 @@ async def fetch_chart_data_page(
     rows = await run_sql_async(token, query, params)
     has_more = len(rows) > limit
     raw_page_rows = rows[:limit]
-    page_rows = _apply_chart_row_formatting(raw_page_rows)
     next_cursor = None
     if has_more and raw_page_rows:
         last_row = raw_page_rows[-1]
@@ -329,7 +379,10 @@ async def fetch_chart_data_page(
             int(last_row["cursor_batch_date_epoch"]),
             str(last_row["batch_id"]),
             str(last_row.get("cursor_sample_id") or ""),
+            str(last_row.get("cursor_inspection_lot_id") or ""),
+            str(last_row.get("cursor_operation_id") or ""),
         )
+    page_rows = _apply_chart_row_formatting(raw_page_rows)
     return {
         "data": page_rows,
         "next_cursor": next_cursor,
