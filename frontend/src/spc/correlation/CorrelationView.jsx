@@ -1,9 +1,23 @@
 import { useState } from 'react'
+import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext.jsx'
 import { useCorrelation } from '../hooks/useCorrelation.js'
 import CorrelationMatrix from '../charts/CorrelationMatrix.jsx'
 import CorrelationScatter from '../charts/CorrelationScatter.jsx'
 import { useCorrelationScatter } from '../hooks/useCorrelationScatter.js'
+import {
+  buttonBaseClass,
+  buttonPrimaryClass,
+  controlsRowClass,
+  correlationMetaClass,
+  correlationViewClass,
+  emptyStateClass,
+  inputBaseClass,
+  inputSmClass,
+  inlineLabelClass,
+  sectionSubClass,
+  sectionTitleClass,
+} from '../uiClasses.js'
 
 export default function CorrelationView() {
   const { state } = useSPC()
@@ -38,33 +52,33 @@ export default function CorrelationView() {
 
   if (!state.selectedMaterial) {
     return (
-      <div className="spc-empty-state">
+      <div className={emptyStateClass}>
         <p>Select a material above, then run the correlation analysis.</p>
       </div>
     )
   }
 
   return (
-    <div className="spc-correlation-view">
-      <h3 className="spc-section-title">Correlation Explorer</h3>
-      <p className="spc-section-sub">
+    <div className={correlationViewClass}>
+      <h3 className={sectionTitleClass}>Correlation Explorer</h3>
+      <p className={sectionSubClass}>
         Pairwise Pearson correlation between all characteristics for {state.selectedMaterial.material_name}.
         Click a cell to see the scatter plot.
       </p>
 
-      <div className="spc-correlation-controls">
-        <label className="spc-inline-label">
+      <div className={controlsRowClass}>
+        <label className={inlineLabelClass}>
           Min batches:
           <input
             type="number"
-            className="spc-input spc-input--sm"
+            className={`${inputBaseClass} ${inputSmClass} w-20`}
             min={5}
             max={100}
             value={minBatches}
             onChange={e => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value))))}
           />
         </label>
-        <button className="spc-btn spc-btn--primary" onClick={handleRun} disabled={loading}>
+        <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} onClick={handleRun} disabled={loading}>
           {loading ? 'Computing…' : 'Run Correlation'}
         </button>
       </div>
@@ -73,7 +87,7 @@ export default function CorrelationView() {
 
       {result && (
         <>
-          <p className="spc-correlation-meta">
+          <p className={correlationMetaClass}>
             {result.pair_count} pairs · {result.mics.length} characteristics
             {result.pair_count >= 500 && ' (showing top 500 by |r|)'}
           </p>

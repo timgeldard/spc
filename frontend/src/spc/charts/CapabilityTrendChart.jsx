@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { emptyCardClass } from '../uiClasses.js'
 
 /**
  * Rolling capability trend line chart.
@@ -79,7 +80,7 @@ export default function CapabilityTrendChart({ trendData, windowSize }) {
 
   if (!option) {
     return (
-      <div className="spc-empty-state" style={{ height: 180 }}>
+      <div className={emptyCardClass} style={{ minHeight: 180 }}>
         <p>Not enough data for rolling window of {windowSize}.</p>
       </div>
     )

@@ -60,7 +60,7 @@ export default function CapabilityGauge({ label, value, maxValue = 2.0, lower95 
     : undefined
 
   return (
-    <div className="spc-gauge" title={ciTitle}>
+    <div className="flex flex-col items-center gap-1 text-center" title={ciTitle}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         {/* Background track */}
         <path d={arc(-180, 0, R, STROKE)} fill="none" stroke="#e5e7eb" strokeWidth={STROKE} strokeLinecap="butt" />
@@ -99,7 +99,7 @@ export default function CapabilityGauge({ label, value, maxValue = 2.0, lower95 
         <text x={CX} y={CY - 2} textAnchor="middle" fontSize="10" fill="#6b7280">{label}</text>
       </svg>
       {lower95 != null && upper95 != null && (
-        <div className="spc-gauge-ci">[{lower95.toFixed(2)}, {upper95.toFixed(2)}]</div>
+        <div className="text-[0.7rem] text-[var(--c-text-muted)]">[{lower95.toFixed(2)}, {upper95.toFixed(2)}]</div>
       )}
     </div>
   )

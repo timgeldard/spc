@@ -24,11 +24,9 @@ from backend.utils.db import (
     resolve_token,
 )
 from backend.utils.rate_limit import limiter
-from backend.routers.spc import (
-    _chart_data_rows,
-    _handle_sql_error,
-    _scorecard_rows,
-)
+from backend.dal.spc_analysis_dal import fetch_scorecard
+from backend.dal.spc_charts_dal import fetch_chart_data
+from backend.routers.spc_common import handle_sql_error
 import re
 
 router = APIRouter()
@@ -120,18 +118,17 @@ def _auto_width(ws):
 
 
 # ---------------------------------------------------------------------------
-# Data fetchers (reuse SQL logic from spc.py without coupling directly)
+# Data fetchers (reuse DAL logic so export and API stay aligned)
 # ---------------------------------------------------------------------------
 
 async def _fetch_scorecard(token: str, body: ExportRequest) -> list[dict]:
-    """Delegate to the shared _scorecard_rows helper so export and API are always in sync."""
-    return await _scorecard_rows(token, body.material_id, body.plant_id, body.date_from, body.date_to)
+    return await fetch_scorecard(token, body.material_id, body.plant_id, body.date_from, body.date_to)
 
 
 async def _fetch_chart_data(token: str, body: ExportRequest) -> list[dict]:
     if not body.mic_id:
         return []
-    return await _chart_data_rows(
+    return await fetch_chart_data(
         token,
         body.material_id,
         body.mic_id,
@@ -311,7 +308,7 @@ async def spc_export(
         try:
             rows = await _fetch_scorecard(token, body)
         except Exception as exc:
-            _handle_sql_error(exc)
+            handle_sql_error(exc)
 
         if fmt == "excel":
             buf = _build_scorecard_excel(rows, body.material_id)
@@ -342,7 +339,7 @@ async def spc_export(
         try:
             rows = await _fetch_chart_data(token, body)
         except Exception as exc:
-            _handle_sql_error(exc)
+            handle_sql_error(exc)
 
         if fmt == "excel":
             buf = _build_chart_data_excel(rows, body.material_id, body.mic_name)

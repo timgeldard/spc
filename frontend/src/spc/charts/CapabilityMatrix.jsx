@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useSPC } from '../SPCContext.jsx'
+import { chartHintClass, emptyStateClass, surfacePanelClass } from '../uiClasses.js'
 
 /**
  * Bubble chart: X = Ppk, Y = stability (1 - ooc_rate), size = batch_count.
@@ -122,13 +123,13 @@ export default function CapabilityMatrix({ rows }) {
   }), [dispatch])
 
   if (!data.length || !option) {
-    return <div className="spc-empty-state"><p>No capability data available for matrix view.</p></div>
+    return <div className={emptyStateClass}><p>No capability data available for matrix view.</p></div>
   }
 
   return (
-    <div className="spc-capability-matrix">
+    <div className={surfacePanelClass}>
       <ReactECharts option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge />
-      <p className="spc-chart-hint">
+      <p className={chartHintClass}>
         Bubble size = batch count · Click a bubble to open the control chart · Green = Capable &amp; Stable
       </p>
     </div>

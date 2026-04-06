@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { computeCChart } from '../calculations.js'
+import { chartHintClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
 export default function CChart({ points }) {
   const chart = useMemo(() => computeCChart(points), [points])
@@ -79,15 +80,15 @@ export default function CChart({ points }) {
   const oocCount = chart.signals?.length ?? 0
 
   return (
-    <div className="spc-chart-pane">
-      <div className="spc-chart-pane-title">
+    <div className={chartPaneClass}>
+      <div className={chartPaneTitleClass}>
         C Chart (Defects per Unit)
         {oocCount > 0 && (
-          <span className="spc-chart-ooc">⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
+          <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
       <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
-      <p className="spc-chart-hint">
+      <p className={chartHintClass}>
         c̄ = {chart.cBar.toFixed(3)} · UCL = {chart.ucl.toFixed(3)} · LCL = {Math.max(0, chart.lcl).toFixed(3)}
       </p>
     </div>

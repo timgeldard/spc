@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { computeHistogram } from '../calculations.js'
+import { chartHintClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
 export default function CapabilityHistogram({ spc }) {
   const option = useMemo(() => {
@@ -122,10 +123,10 @@ export default function CapabilityHistogram({ spc }) {
   if (!option) return null
 
   return (
-    <div className="spc-chart-pane">
-      <div className="spc-chart-pane-title">Capability Histogram</div>
+    <div className={chartPaneClass}>
+      <div className={chartPaneTitleClass}>Capability Histogram</div>
       <ReactECharts option={option} style={{ height: 220 }} theme="spc" notMerge />
-      <p className="spc-chart-hint">Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
+      <p className={chartHintClass}>Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
     </div>
   )
 }

@@ -1,7 +1,26 @@
 import { useState, useMemo } from 'react'
+import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext.jsx'
 import { useCompareScorecard } from '../hooks/useCompareScorecard.js'
 import GroupedBarChart from './GroupedBarChart.jsx'
+import {
+  buttonBaseClass,
+  buttonGhostClass,
+  buttonSecondaryClass,
+  buttonSmClass,
+  compareBadgeClass,
+  compareBadgeCommonClass,
+  compareInputLabelClass,
+  compareInputRowClass,
+  compareInputsClass,
+  compareSummaryClass,
+  compareViewClass,
+  inputBaseClass,
+  loadingClass,
+  spinnerClass,
+  sectionSubClass,
+  sectionTitleClass,
+} from '../uiClasses.js'
 
 export default function CompareView() {
   const { state } = useSPC()
@@ -32,34 +51,36 @@ export default function CompareView() {
   }
 
   return (
-    <div className="spc-compare-view">
-      <h3 className="spc-section-title">Multi-Material Capability Comparison</h3>
-      <p className="spc-section-sub">Compare Cpk across common characteristics for 2–3 materials.</p>
+    <div className={compareViewClass}>
+      <h3 className={sectionTitleClass}>Multi-Material Capability Comparison</h3>
+      <p className={sectionSubClass}>Compare Cpk across common characteristics for 2–3 materials.</p>
 
-      <div className="spc-compare-inputs">
+      <div className={compareInputsClass}>
         {materialInputs.map((val, i) => (
-          <div key={i} className="spc-compare-input-row">
-            <label className="spc-compare-input-label">Material {i + 1}</label>
-            <input
-              className="spc-input"
-              type="text"
-              placeholder="Material ID"
-              value={val}
-              onChange={e => updateMaterial(i, e.target.value)}
-            />
+          <div key={i} className={compareInputRowClass}>
+            <div className="flex-1">
+              <label className={compareInputLabelClass}>Material {i + 1}</label>
+              <input
+                className={inputBaseClass}
+                type="text"
+                placeholder="Material ID"
+                value={val}
+                onChange={e => updateMaterial(i, e.target.value)}
+              />
+            </div>
             {materialInputs.length > 2 && (
-              <button className="spc-btn spc-btn--sm spc-btn--ghost" onClick={() => removeMaterial(i)}>✕</button>
+              <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonGhostClass}`} onClick={() => removeMaterial(i)}>✕</button>
             )}
           </div>
         ))}
         {materialInputs.length < 3 && (
-          <button className="spc-btn spc-btn--sm spc-btn--secondary" onClick={addMaterial}>+ Add material</button>
+          <button className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`} onClick={addMaterial}>+ Add material</button>
         )}
       </div>
 
       {validIds.length >= 2 && loading && (
-        <div className="spc-loading">
-          <div className="spc-spinner" />
+        <div className={loadingClass}>
+          <div className={spinnerClass} />
           <p>Loading comparison data (may take a few seconds)…</p>
         </div>
       )}
@@ -68,13 +89,13 @@ export default function CompareView() {
 
       {result && (
         <>
-          <div className="spc-compare-summary">
+          <div className={compareSummaryClass}>
             {result.materials.map(m => (
-              <span key={m.material_id} className="spc-compare-badge">
+              <span key={m.material_id} className={compareBadgeClass}>
                 {m.material_name ?? m.material_id}: {m.scorecard.length} characteristics
               </span>
             ))}
-            <span className="spc-compare-badge spc-compare-badge--common">
+            <span className={`${compareBadgeClass} ${compareBadgeCommonClass}`}>
               {result.common_mics.length} common
             </span>
           </div>
