@@ -186,6 +186,18 @@ body {
   border: 1px solid var(--c-error-border);
 }
 
+.banner--warning {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.banner--info {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
 .result-info {
   font-size: .875rem;
   color: var(--c-text-muted);

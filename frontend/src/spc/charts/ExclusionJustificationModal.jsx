@@ -1,4 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  buttonBaseClass,
+  buttonGhostClass,
+  buttonPrimaryClass,
+  buttonSecondaryClass,
+  filterGroupClass,
+  filterLabelClass,
+  exclusionTargetClass,
+  exclusionTargetLabelClass,
+  modalActionsClass,
+  modalBackdropClass,
+  modalClass,
+  modalFormClass,
+  modalHeaderClass,
+  selectClass,
+  modalSubtitleClass,
+  modalTextareaClass,
+  modalTitleClass,
+} from '../uiClasses.js'
 
 const REASONS = [
   'Special-cause investigation',
@@ -97,9 +116,9 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
   }
 
   return (
-    <div className="spc-modal-backdrop" role="presentation" onClick={saving ? undefined : onCancel}>
+    <div className={modalBackdropClass} role="presentation" onClick={saving ? undefined : onCancel}>
       <div
-        className="spc-modal"
+        className={modalClass}
         role="dialog"
         aria-modal="true"
         aria-labelledby="spc-exclusion-dialog-title"
@@ -108,28 +127,28 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
         onKeyDown={handleKeyDown}
         ref={dialogRef}
       >
-        <div className="spc-modal-header">
+        <div className={modalHeaderClass}>
           <div>
-            <h3 id="spc-exclusion-dialog-title" className="spc-modal-title">{title}</h3>
-            <p id="spc-exclusion-dialog-description" className="spc-modal-subtitle">{description}</p>
+            <h3 id="spc-exclusion-dialog-title" className={modalTitleClass}>{title}</h3>
+            <p id="spc-exclusion-dialog-description" className={modalSubtitleClass}>{description}</p>
           </div>
-          <button className="spc-btn spc-btn--sm spc-btn--ghost" type="button" onClick={onCancel} disabled={saving}>
+          <button className={`${buttonBaseClass} ${buttonGhostClass}`} type="button" onClick={onCancel} disabled={saving}>
             Close
           </button>
         </div>
 
-        <div className="spc-exclusion-target">
-          <span className="spc-exclusion-target-label">Target</span>
+        <div className={exclusionTargetClass}>
+          <span className={exclusionTargetLabelClass}>Target</span>
           <strong>{targetLabel}</strong>
           {dialog.point?.value != null && <span>Value {Number(dialog.point.value).toFixed(4)}</span>}
           {dialog.point?.batch_date && <span>{String(dialog.point.batch_date).slice(0, 10)}</span>}
         </div>
 
-        <form className="spc-modal-form" onSubmit={handleSubmit}>
-          <label className="spc-filter-group">
-            <span className="spc-filter-label">Reason</span>
+        <form className={modalFormClass} onSubmit={handleSubmit}>
+          <label className={filterGroupClass}>
+            <span className={filterLabelClass}>Reason</span>
             <select
-              className="spc-select"
+              className={selectClass}
               value={reason}
               onChange={event => setReason(event.target.value)}
               disabled={saving}
@@ -141,10 +160,10 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
             </select>
           </label>
 
-          <label className="spc-filter-group">
-            <span className="spc-filter-label">Comment</span>
+          <label className={filterGroupClass}>
+            <span className={filterLabelClass}>Comment</span>
             <textarea
-              className="spc-modal-textarea"
+              className={modalTextareaClass}
               rows={4}
               placeholder="Optional context for the audit trail"
               value={comment}
@@ -153,11 +172,11 @@ export default function ExclusionJustificationModal({ dialog, saving, onCancel, 
             />
           </label>
 
-          <div className="spc-modal-actions">
-            <button className="spc-btn spc-btn--secondary" type="button" onClick={onCancel} disabled={saving}>
+          <div className={modalActionsClass}>
+            <button className={`${buttonBaseClass} ${buttonSecondaryClass}`} type="button" onClick={onCancel} disabled={saving}>
               Cancel
             </button>
-            <button className="spc-btn spc-btn--primary" type="submit" disabled={saving}>
+            <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} type="submit" disabled={saving}>
               {saving ? 'Saving…' : 'Confirm'}
             </button>
           </div>

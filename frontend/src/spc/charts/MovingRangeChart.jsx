@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
 export default function MovingRangeChart({ spc, indexedPoints, mrSignals, externalUclMr }) {
   const imr = spc?.imr
@@ -89,8 +90,8 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
   if (!imr || !indexedPoints || !option) return null
 
   return (
-    <div className="spc-chart-pane">
-      <div className="spc-chart-pane-title">Moving Range Chart (MR)</div>
+    <div className={chartPaneClass}>
+      <div className={chartPaneTitleClass}>Moving Range Chart (MR)</div>
       <ReactECharts option={option} style={{ height: 180 }} theme="spc" notMerge />
     </div>
   )

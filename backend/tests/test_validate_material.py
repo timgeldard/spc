@@ -2,7 +2,8 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import backend.main as main_module
-import backend.routers.spc as spc_module
+import backend.routers.spc_common as spc_common
+import backend.routers.spc_metadata as spc_module
 
 
 client = TestClient(main_module.app)
@@ -12,8 +13,8 @@ def test_validate_material_returns_valid_when_freshness_temporarily_unavailable(
     monkeypatch.setattr(spc_module, "resolve_token", lambda *_args, **_kwargs: "token")
     monkeypatch.setattr(spc_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
 
-    async def fake_run_sql_async(_token, _query, _params):
-        return [{"material_id": "MAT-1", "material_name": "Material 1"}]
+    async def fake_validate_material(_token, _material_id):
+        return {"material_id": "MAT-1", "material_name": "Material 1"}
 
     async def failing_attach(_payload, _token, _source_views, *, request_path=None):
         raise HTTPException(
@@ -21,8 +22,8 @@ def test_validate_material_returns_valid_when_freshness_temporarily_unavailable(
             detail={"message": "Data freshness lookup failed", "error_id": "fresh-123"},
         )
 
-    monkeypatch.setattr(spc_module, "run_sql_async", fake_run_sql_async)
-    monkeypatch.setattr(spc_module, "attach_data_freshness", failing_attach)
+    monkeypatch.setattr(spc_module, "validate_material", fake_validate_material)
+    monkeypatch.setattr(spc_common, "attach_data_freshness", failing_attach)
 
     response = client.post(
         "/api/spc/validate-material",

@@ -69,10 +69,14 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-from backend.routers.spc import router as spc_router  # noqa: E402
+from backend.routers.spc_metadata import router as spc_metadata_router  # noqa: E402
+from backend.routers.spc_charts import router as spc_charts_router  # noqa: E402
+from backend.routers.spc_analysis import router as spc_analysis_router  # noqa: E402
 from backend.routers.export import router as export_router  # noqa: E402
 from backend.routers.exclusions import router as exclusions_router  # noqa: E402
-app.include_router(spc_router, prefix="/api/spc", tags=["SPC"])
+app.include_router(spc_metadata_router, prefix="/api/spc", tags=["SPC"])
+app.include_router(spc_charts_router, prefix="/api/spc", tags=["SPC"])
+app.include_router(spc_analysis_router, prefix="/api/spc", tags=["SPC"])
 app.include_router(export_router, prefix="/api/spc", tags=["SPC Export"])
 app.include_router(exclusions_router, prefix="/api/spc", tags=["SPC Exclusions"])
 

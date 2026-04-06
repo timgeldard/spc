@@ -1,9 +1,10 @@
 import IndividualsChart from './IndividualsChart.jsx'
 import MovingRangeChart from './MovingRangeChart.jsx'
+import { chartPairClass } from '../uiClasses.js'
 
 export default function IMRChart({ spc, indexedPoints, signals, mrSignals, excludedIndices, onPointClick, externalLimits }) {
   return (
-    <div className="spc-chart-pair">
+    <div className={chartPairClass}>
       <IndividualsChart
         spc={spc}
         indexedPoints={indexedPoints}

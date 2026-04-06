@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { emptyCardClass } from '../uiClasses.js'
 
 const PALETTE = ['#1B3A4B', '#10b981', '#7c3aed']
 
@@ -88,7 +89,7 @@ export default function GroupedBarChart({ materials, commonMics }) {
     }
   }, [materials, commonMics])
 
-  if (!option) return <div className="spc-empty-state"><p>No common characteristics to compare.</p></div>
+  if (!option) return <div className={emptyCardClass}><p>No common characteristics to compare.</p></div>
 
   return <ReactECharts option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
 }

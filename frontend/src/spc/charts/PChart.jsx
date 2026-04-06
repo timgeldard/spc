@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { computePChart } from '../calculations.js'
+import { chartHintClass, chartNClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
 export default function PChart({ points }) {
   const pChart = useMemo(() => computePChart(points), [points])
@@ -104,16 +105,16 @@ export default function PChart({ points }) {
   const oocCount = pChart.signals.length
 
   return (
-    <div className="spc-chart-pane">
-      <div className="spc-chart-pane-title">
+    <div className={chartPaneClass}>
+      <div className={chartPaneTitleClass}>
         P Chart (Proportion Nonconforming)
-        <span className="spc-chart-n">n̄ = {Math.round(pChart.subgroupStats.reduce((s, g) => s + g.n, 0) / pChart.subgroupStats.length)}</span>
+        <span className={chartNClass}>n̄ = {Math.round(pChart.subgroupStats.reduce((s, g) => s + g.n, 0) / pChart.subgroupStats.length)}</span>
         {oocCount > 0 && (
-          <span className="spc-chart-ooc">⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
+          <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
       <ReactECharts option={option} style={{ height: 280 }} theme="spc" notMerge />
-      <p className="spc-chart-hint">
+      <p className={chartHintClass}>
         p̄ = {(pChart.pBar * 100).toFixed(2)}% overall nonconforming · Variable control limits shown per batch size
       </p>
     </div>

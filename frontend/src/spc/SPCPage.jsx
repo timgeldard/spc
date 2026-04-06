@@ -1,14 +1,16 @@
+import { Suspense, lazy } from 'react'
 import {
   GitBranch, Activity, BarChart2, Layers, Ruler, TrendingUp,
 } from 'lucide-react'
 import { SPCProvider, useSPC } from './SPCContext.jsx'
 import SPCFilterBar from './SPCFilterBar.jsx'
-import ProcessFlowView from './flow/ProcessFlowView.jsx'
-import ControlChartsView from './charts/ControlChartsView.jsx'
-import ScorecardView from './scorecard/ScorecardView.jsx'
-import CompareView from './compare/CompareView.jsx'
-import MSAView from './msa/MSAView.jsx'
-import CorrelationView from './correlation/CorrelationView.jsx'
+
+const ProcessFlowView = lazy(() => import('./flow/ProcessFlowView.jsx'))
+const ControlChartsView = lazy(() => import('./charts/ControlChartsView.jsx'))
+const ScorecardView = lazy(() => import('./scorecard/ScorecardView.jsx'))
+const CompareView = lazy(() => import('./compare/CompareView.jsx'))
+const MSAView = lazy(() => import('./msa/MSAView.jsx'))
+const CorrelationView = lazy(() => import('./correlation/CorrelationView.jsx'))
 
 const TABS = [
   { id: 'flow', label: 'Process Flow', Icon: GitBranch },
@@ -18,6 +20,23 @@ const TABS = [
   { id: 'msa', label: 'MSA', Icon: Ruler },
   { id: 'correlation', label: 'Correlation', Icon: TrendingUp },
 ]
+
+const TAB_COMPONENTS = {
+  flow: ProcessFlowView,
+  charts: ControlChartsView,
+  scorecard: ScorecardView,
+  compare: CompareView,
+  msa: MSAView,
+  correlation: CorrelationView,
+}
+
+function TabLoadingState() {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm">
+      Loading analysis view…
+    </div>
+  )
+}
 
 function Sidebar() {
   const { state, dispatch } = useSPC()
@@ -69,18 +88,16 @@ function Sidebar() {
 
 function SPCContent() {
   const { state } = useSPC()
+  const ActiveView = TAB_COMPONENTS[state.activeTab]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
       <SPCFilterBar />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar />
         <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem 2rem' }}>
-          {state.activeTab === 'flow'        && <ProcessFlowView />}
-          {state.activeTab === 'charts'      && <ControlChartsView />}
-          {state.activeTab === 'scorecard'   && <ScorecardView />}
-          {state.activeTab === 'compare'     && <CompareView />}
-          {state.activeTab === 'msa'         && <MSAView />}
-          {state.activeTab === 'correlation' && <CorrelationView />}
+          <Suspense fallback={<TabLoadingState />}>
+            <ActiveView />
+          </Suspense>
         </div>
       </div>
     </div>

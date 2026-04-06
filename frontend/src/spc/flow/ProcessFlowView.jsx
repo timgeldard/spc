@@ -11,6 +11,18 @@ import { useSPC } from '../SPCContext.jsx'
 import { useSPCFlow } from '../hooks/useSPCFlow.js'
 import { layoutFlowGraph } from './layoutFlowGraph.js'
 import ProcessNode from './ProcessNode.jsx'
+import {
+  emptyIconClass,
+  emptyStateClass,
+  emptySubClass,
+  flowCanvasClass,
+  flowLegendClass,
+  legendDotClass,
+  legendHintClass,
+  legendItemClass,
+  loadingClass,
+  spinnerClass,
+} from '../uiClasses.js'
 const nodeTypes = { processNode: ProcessNode }
 
 const STATUS_COLOR = {
@@ -103,18 +115,18 @@ export default function ProcessFlowView() {
 
   if (!state.selectedMaterial) {
     return (
-      <div className="spc-empty-state">
-        <div className="spc-empty-icon">⬡</div>
+      <div className={emptyStateClass}>
+        <div className={emptyIconClass}>⬡</div>
         <p>Select a material above to view its process flow map.</p>
-        <p className="spc-empty-sub">Each node shows SPC health status. Click a node to drill into control charts.</p>
+        <p className={emptySubClass}>Each node shows SPC health status. Click a node to drill into control charts.</p>
       </div>
     )
   }
 
   if (loading) {
     return (
-      <div className="spc-loading">
-        <div className="spc-spinner" />
+      <div className={loadingClass}>
+        <div className={spinnerClass} />
         <p>Loading process flow…</p>
       </div>
     )
@@ -130,26 +142,25 @@ export default function ProcessFlowView() {
 
   if (!nodes.length) {
     return (
-      <div className="spc-empty-state">
+      <div className={emptyStateClass}>
         <p>No process flow data found for <strong>{state.selectedMaterial.material_name}</strong>.</p>
-        <p className="spc-empty-sub">This material may not have lineage data in the selected date range.</p>
+        <p className={emptySubClass}>This material may not have lineage data in the selected date range.</p>
       </div>
     )
   }
 
   return (
-    <div className="spc-flow-canvas">
-      {/* Legend */}
-      <div className="spc-flow-legend">
+    <div className={flowCanvasClass}>
+      <div className={flowLegendClass}>
         {Object.entries(STATUS_COLOR).map(([status, color]) => (
-          <span key={status} className="spc-legend-item">
-            <span className="spc-legend-dot" style={{ background: color }} />
+          <span key={status} className={legendItemClass}>
+            <span className={legendDotClass} style={{ background: color }} />
             {status === 'green' ? 'Rejection rate < 2%' :
              status === 'amber' ? '2% ≤ Rejection rate < 10%' :
              status === 'red'   ? 'Rejection rate ≥ 10%' : 'Insufficient data (< 5 batches)'}
           </span>
         ))}
-        <span className="spc-legend-hint">Click a node to open control charts</span>
+        <span className={legendHintClass}>Click a node to open control charts</span>
       </div>
 
       <ReactFlow
@@ -164,7 +175,6 @@ export default function ProcessFlowView() {
         minZoom={0.2}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
-        className="spc-react-flow"
       >
         <Background variant="dots" gap={24} color="#e2e8f0" />
         <Controls showInteractive={false} />

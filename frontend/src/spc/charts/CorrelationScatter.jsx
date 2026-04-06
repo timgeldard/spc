@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { loadingClass, spinnerClass, surfacePanelClass } from '../uiClasses.js'
 
 function linearRegression(points) {
   const n = points.length
@@ -95,8 +96,8 @@ export default function CorrelationScatter({ result, loading, error }) {
 
   if (loading) {
     return (
-      <div className="spc-loading" style={{ minHeight: 120 }}>
-        <div className="spc-spinner" />
+      <div className={`${loadingClass} min-h-[120px]`}>
+        <div className={spinnerClass} />
         <p>Loading scatter data…</p>
       </div>
     )
@@ -109,7 +110,7 @@ export default function CorrelationScatter({ result, loading, error }) {
   if (!option) return null
 
   return (
-    <div className="spc-correlation-scatter">
+    <div className={surfacePanelClass}>
       <ReactECharts option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
     </div>
   )

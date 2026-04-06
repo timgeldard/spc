@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
 
 export default function RangeChart({ spc, mrSignals }) {
   const xbarR = spc?.xbarR
@@ -94,8 +95,8 @@ export default function RangeChart({ spc, mrSignals }) {
   if (!xbarR || !option) return null
 
   return (
-    <div className="spc-chart-pane">
-      <div className="spc-chart-pane-title">R Chart (Subgroup Range)</div>
+    <div className={chartPaneClass}>
+      <div className={chartPaneTitleClass}>R Chart (Subgroup Range)</div>
       <ReactECharts option={option} style={{ height: 180 }} theme="spc" notMerge />
     </div>
   )

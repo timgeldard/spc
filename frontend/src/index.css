@@ -1,4 +1,4 @@
-/* Tailwind utilities layer only - no preflight reset, preserves existing App.css + spc.css */
+/* Tailwind utilities layer only - no preflight reset, preserves existing App.css */
 @import "tailwindcss/utilities";
 
 /* Tailwind theme tokens that map to existing design system */
