@@ -10,7 +10,7 @@ import {
   VisualMapComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { SPC_ECHARTS_THEME } from './echartsTheme.js'
+import { SPC_ECHARTS_THEME } from './echartsTheme'
 
 echarts.use([
   BarChart,

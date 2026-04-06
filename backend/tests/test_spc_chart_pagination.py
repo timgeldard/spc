@@ -48,7 +48,7 @@ def test_chart_data_returns_paginated_shape(monkeypatch):
             "date_from": None,
             "date_to": None,
             "plant_id": None,
-            "stratify_all": False,
+            "stratify_by": None,
         },
     )
 
@@ -76,7 +76,7 @@ def test_chart_data_rejects_invalid_cursor(monkeypatch):
             "date_from": None,
             "date_to": None,
             "plant_id": None,
-            "stratify_all": False,
+            "stratify_by": None,
         },
     )
 
@@ -115,7 +115,7 @@ def test_chart_data_skips_normality_fetch_on_non_initial_pages(monkeypatch):
             "date_from": None,
             "date_to": None,
             "plant_id": None,
-            "stratify_all": False,
+            "stratify_by": None,
         },
     )
 
@@ -183,7 +183,7 @@ def test_fetch_chart_data_page_builds_next_cursor_before_row_cleanup(monkeypatch
             None,
             None,
             None,
-            False,
+            None,
             cursor=None,
             limit=1,
         )
@@ -214,7 +214,7 @@ def test_fetch_chart_data_page_uses_full_cursor_tie_breakers(monkeypatch):
             None,
             None,
             None,
-            False,
+            None,
             cursor="1711929600:B1:S1:LOT-9:OP-4",
             limit=1000,
         )
@@ -226,3 +226,52 @@ def test_fetch_chart_data_page_uses_full_cursor_tie_breakers(monkeypatch):
     assert "cursor_operation_id > :cursor_operation_id" in query
     assert any(param["name"] == "cursor_inspection_lot_id" and param["value"] == "LOT-9" for param in params)
     assert any(param["name"] == "cursor_operation_id" and param["value"] == "OP-4" for param in params)
+
+
+def test_chart_data_rejects_invalid_stratify_key(monkeypatch):
+    monkeypatch.setattr(spc_charts_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(spc_charts_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    response = client.post(
+        "/api/spc/chart-data",
+        headers={"x-forwarded-access-token": "not-a-real-jwt"},
+        json={
+            "material_id": "MAT-1",
+            "mic_id": "MIC-1",
+            "mic_name": "Moisture",
+            "stratify_by": "bad_column",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "stratify_by" in str(response.json()["detail"])
+
+
+def test_fetch_chart_data_page_selects_stratify_value(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_run_sql_async(_token, query, params=None):
+        captured["query"] = query
+        captured["params"] = params or []
+        return []
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    asyncio.run(
+        spc_charts_dal.fetch_chart_data_page(
+            "token",
+            "MAT-1",
+            "MIC-1",
+            None,
+            None,
+            None,
+            None,
+            "operation_id",
+            cursor=None,
+            limit=1000,
+        )
+    )
+
+    query = str(captured["query"])
+    assert "stratify_value" in query
+    assert "CAST(r.OPERATION_ID AS STRING)" in query

@@ -57,7 +57,7 @@ async def spc_chart_data(
             body.plant_id,
             body.date_from,
             body.date_to,
-            body.stratify_all,
+            body.stratify_by,
             cursor=cursor,
             limit=limit,
         )
@@ -74,7 +74,7 @@ async def spc_chart_data(
                     body.plant_id,
                     body.date_from,
                     body.date_to,
-                    body.stratify_all,
+                    body.stratify_by,
                     max_points=_NORMALITY_MAX_POINTS,
                 )
             )
@@ -90,7 +90,8 @@ async def spc_chart_data(
             "has_more": page["has_more"],
             "count": len(page["data"]),
             "limit": limit,
-            "stratified": body.stratify_all,
+            "stratified": body.stratify_by is not None,
+            "stratify_by": body.stratify_by,
             "data_truncated": False,
             "normality": normality,
         },

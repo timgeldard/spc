@@ -2,12 +2,22 @@ from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import quote, unquote
 
+from pypika import Table, functions as fn
+from pypika.dialects import MySQLQuery
+from pypika.terms import Criterion, LiteralValue
+
 from backend.dal.spc_shared import infer_spec_type
-from backend.dal.sql_builder import SqlSelectBuilder, SqlWithQueryBuilder
 from backend.utils.db import run_sql_async, sql_param, tbl
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
+_MB_TABLE_PLACEHOLDER = "__spc_mass_balance__"
+_QR_TABLE_PLACEHOLDER = "__spc_quality_result__"
+_ALLOWED_STRATIFY_COLUMNS = {
+    "plant_id": "bd.plant_id",
+    "inspection_lot_id": "CAST(r.INSPECTION_LOT_ID AS STRING)",
+    "operation_id": "CAST(r.OPERATION_ID AS STRING)",
+}
 
 
 def _format_chart_row_error(field: str, raw_value: object, row: dict) -> str:
@@ -139,12 +149,35 @@ class ChartFilterSpec:
     quality_conditions: list[str] = field(default_factory=list)
     final_where_conditions: list[str] = field(default_factory=list)
     select_extra_columns: list[str] = field(default_factory=list)
+    stratify_by: Optional[str] = None
+    stratify_select_sql: Optional[str] = None
 
 
-def _apply_conditions(builder: SqlSelectBuilder, conditions: list[str]) -> SqlSelectBuilder:
+class _RawCriterion(Criterion):
+    def __init__(self, sql: str):
+        super().__init__()
+        self.sql = sql
+
+    def get_sql(self, **kwargs) -> str:  # pragma: no cover - exercised indirectly via Query.get_sql()
+        return self.sql
+
+
+def _sql_expr(sql: str) -> LiteralValue:
+    return LiteralValue(sql)
+
+
+def _render_query(query) -> str:
+    return (
+        query.get_sql()
+        .replace(f"`{_MB_TABLE_PLACEHOLDER}`", tbl("gold_batch_mass_balance_v"))
+        .replace(f"`{_QR_TABLE_PLACEHOLDER}`", tbl("gold_batch_quality_result_v"))
+    )
+
+
+def _apply_conditions(query, conditions: list[str]):
     for condition in conditions:
-        builder.where(condition)
-    return builder
+        query = query.where(_RawCriterion(condition))
+    return query
 
 
 def _build_chart_filters(
@@ -154,7 +187,7 @@ def _build_chart_filters(
     plant_id: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
-    stratify_all: bool = False,
+    stratify_by: Optional[str] = None,
 ) -> ChartFilterSpec:
     params = [
         sql_param("material_id", material_id),
@@ -182,69 +215,89 @@ def _build_chart_filters(
     if date_to:
         batch_date_conditions.append("POSTING_DATE <= :date_to")
         params.append(sql_param("date_to", date_to))
-    if plant_id and not stratify_all:
+    if plant_id:
         params.append(sql_param("plant_id", plant_id))
         quality_conditions.append("(bd.plant_id = :plant_id OR bd.plant_id IS NULL)")
-    if stratify_all:
-        select_extra_columns.append("plant_id")
+    stratify_select_sql = None
+    if stratify_by:
+        stratify_select_sql = _ALLOWED_STRATIFY_COLUMNS.get(stratify_by)
+        if stratify_select_sql is None:
+            raise ValueError(
+                f"stratify_by must be one of {sorted(_ALLOWED_STRATIFY_COLUMNS)}"
+            )
+        select_extra_columns.append("stratify_value")
     return ChartFilterSpec(
         params=params,
         batch_date_conditions=batch_date_conditions,
         quality_conditions=quality_conditions,
         final_where_conditions=final_where_conditions,
         select_extra_columns=select_extra_columns,
+        stratify_by=stratify_by,
+        stratify_select_sql=stratify_select_sql,
     )
 
 
-def _build_batch_dates_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
-    builder = (
-        SqlSelectBuilder()
+def _build_batch_dates_cte(filters: ChartFilterSpec):
+    mb = Table(_MB_TABLE_PLACEHOLDER).as_("mb")
+    query = (
+        MySQLQuery.from_(mb)
         .select(
-            "MATERIAL_ID",
-            "BATCH_ID",
-            "MIN(POSTING_DATE) AS batch_date",
-            "MAX(PLANT_ID) AS plant_id",
+            mb.MATERIAL_ID,
+            mb.BATCH_ID,
+            fn.Min(mb.POSTING_DATE).as_("batch_date"),
+            fn.Max(mb.PLANT_ID).as_("plant_id"),
         )
-        .from_(tbl("gold_batch_mass_balance_v"))
-        .group_by("MATERIAL_ID", "BATCH_ID")
+        .groupby(mb.MATERIAL_ID, mb.BATCH_ID)
     )
-    return _apply_conditions(builder, filters.batch_date_conditions)
+    return _apply_conditions(query, filters.batch_date_conditions)
 
 
-def _build_quality_data_cte(filters: ChartFilterSpec) -> SqlSelectBuilder:
-    builder = (
-        SqlSelectBuilder()
-        .select(
-            "r.BATCH_ID AS batch_id",
-            "r.INSPECTION_LOT_ID",
-            "r.OPERATION_ID",
-            "r.SAMPLE_ID",
-            "r.attribute AS attribut",
-            "CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value",
-            "TRY_CAST(r.TARGET_VALUE AS DOUBLE) AS nominal",
+def _build_quality_data_cte(filters: ChartFilterSpec):
+    r = Table(_QR_TABLE_PLACEHOLDER).as_("r")
+    bd = Table("batch_dates").as_("bd")
+    select_terms = [
+        r.BATCH_ID.as_("batch_id"),
+        r.INSPECTION_LOT_ID,
+        r.OPERATION_ID,
+        r.SAMPLE_ID,
+        r.attribute.as_("attribut"),
+        _sql_expr("CAST(r.QUANTITATIVE_RESULT AS DOUBLE)").as_("value"),
+        _sql_expr("TRY_CAST(r.TARGET_VALUE AS DOUBLE)").as_("nominal"),
+        _sql_expr(
             "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
-            "THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1) END AS DOUBLE) AS lsl",
+            "THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1) END AS DOUBLE)"
+        ).as_("lsl"),
+        _sql_expr(
             "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
-            "THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3) END AS DOUBLE) AS usl",
-            "CASE WHEN LOCATE('...', r.TOLERANCE) = 0 THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END AS tolerance",
-            "r.INSPECTION_RESULT_VALUATION AS valuation",
-            "bd.batch_date",
-            "bd.plant_id",
-            "COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400) AS cursor_batch_date_epoch",
-            "COALESCE(CAST(r.SAMPLE_ID AS STRING), '') AS cursor_sample_id",
-            "COALESCE(CAST(r.INSPECTION_LOT_ID AS STRING), '') AS cursor_inspection_lot_id",
-            "COALESCE(CAST(r.OPERATION_ID AS STRING), '') AS cursor_operation_id",
+            "THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3) END AS DOUBLE)"
+        ).as_("usl"),
+        _sql_expr(
+            "CASE WHEN LOCATE('...', r.TOLERANCE) = 0 THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END"
+        ).as_("tolerance"),
+        r.INSPECTION_RESULT_VALUATION.as_("valuation"),
+        bd.batch_date,
+        bd.plant_id,
+        _sql_expr(
+            "COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400)"
+        ).as_("cursor_batch_date_epoch"),
+        _sql_expr("COALESCE(CAST(r.SAMPLE_ID AS STRING), '')").as_("cursor_sample_id"),
+        _sql_expr("COALESCE(CAST(r.INSPECTION_LOT_ID AS STRING), '')").as_("cursor_inspection_lot_id"),
+        _sql_expr("COALESCE(CAST(r.OPERATION_ID AS STRING), '')").as_("cursor_operation_id"),
+        _sql_expr(
             "ROW_NUMBER() OVER (PARTITION BY r.BATCH_ID "
-            "ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID) AS sample_seq",
-        )
-        .from_(f"{tbl('gold_batch_quality_result_v')} r")
-        .join(
-            "LEFT JOIN batch_dates bd\n"
-            "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
-            "   AND bd.BATCH_ID = r.BATCH_ID"
-        )
+            "ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID)"
+        ).as_("sample_seq"),
+    ]
+    if filters.stratify_select_sql:
+        select_terms.append(_sql_expr(filters.stratify_select_sql).as_("stratify_value"))
+
+    query = (
+        MySQLQuery.from_(r)
+        .left_join(bd)
+        .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
+        .select(*select_terms)
     )
-    return _apply_conditions(builder, filters.quality_conditions)
+    return _apply_conditions(query, filters.quality_conditions)
 
 
 def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], limit: int) -> tuple[str, list[dict]]:
@@ -284,67 +337,60 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
             ]
         )
 
+    qd = Table("quality_data")
+    select_columns = [
+        qd.batch_id,
+        _sql_expr("CAST(batch_date AS STRING)").as_("batch_date"),
+        qd.sample_seq,
+        qd.attribut,
+        qd.value,
+        qd.nominal,
+        qd.tolerance,
+        qd.lsl,
+        qd.usl,
+        qd.valuation,
+        qd.plant_id,
+        qd.cursor_batch_date_epoch,
+        qd.cursor_sample_id,
+        qd.cursor_inspection_lot_id,
+        qd.cursor_operation_id,
+    ]
+    if "stratify_value" in filters.select_extra_columns:
+        select_columns.append(qd.stratify_value)
+
     final_query = (
-        SqlSelectBuilder()
-        .select(
-            "batch_id",
-            "CAST(batch_date AS STRING) AS batch_date",
-            "sample_seq",
-            "attribut",
-            "value",
-            "nominal",
-            "tolerance",
-            "lsl",
-            "usl",
-            "valuation",
-            "cursor_batch_date_epoch",
-            "cursor_sample_id",
-            "cursor_inspection_lot_id",
-            "cursor_operation_id",
-            *filters.select_extra_columns,
-        )
-        .from_("quality_data")
-        .where(filters.final_where_conditions[0] if filters.final_where_conditions else None)
-        .order_by(
-            "cursor_batch_date_epoch",
-            "batch_id",
-            "cursor_sample_id",
-            "INSPECTION_LOT_ID",
-            "OPERATION_ID",
-        )
+        MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
+        .with_(_build_quality_data_cte(filters), "quality_data")
+        .from_(qd)
+        .select(*select_columns)
+        .orderby(qd.cursor_batch_date_epoch)
+        .orderby(qd.batch_id)
+        .orderby(qd.cursor_sample_id)
+        .orderby(qd.INSPECTION_LOT_ID)
+        .orderby(qd.OPERATION_ID)
         .limit(limit + 1)
     )
-    query = (
-        SqlWithQueryBuilder()
-        .with_cte("batch_dates", _build_batch_dates_cte(filters))
-        .with_cte("quality_data", _build_quality_data_cte(filters))
-        .select(final_query)
-        .build()
-    )
-    return query, params
+    final_query = _apply_conditions(final_query, filters.final_where_conditions)
+    return _render_query(final_query), params
 
 
 def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tuple[str, list[dict]]:
-    final_query = _apply_conditions(
-        SqlSelectBuilder()
-        .select("CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value")
-        .from_(f"{tbl('gold_batch_quality_result_v')} r")
-        .join(
-            "LEFT JOIN batch_dates bd\n"
-            "    ON bd.MATERIAL_ID = r.MATERIAL_ID\n"
-            "   AND bd.BATCH_ID = r.BATCH_ID"
-        )
-        .order_by("COALESCE(bd.batch_date, '9999-12-31')", "r.BATCH_ID", "r.SAMPLE_ID", "r.INSPECTION_LOT_ID")
-        .limit(max_points),
-        filters.quality_conditions,
+    r = Table(_QR_TABLE_PLACEHOLDER).as_("r")
+    bd = Table("batch_dates").as_("bd")
+    final_query = (
+        MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
+        .from_(r)
+        .left_join(bd)
+        .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
+        .select(_sql_expr("CAST(r.QUANTITATIVE_RESULT AS DOUBLE)").as_("value"))
+        .orderby(_sql_expr("COALESCE(bd.batch_date, '9999-12-31')"))
+        .orderby(r.BATCH_ID)
+        .orderby(r.SAMPLE_ID)
+        .orderby(r.INSPECTION_LOT_ID)
+        .limit(max_points)
     )
-    query = (
-        SqlWithQueryBuilder()
-        .with_cte("batch_dates", _build_batch_dates_cte(filters))
-        .select(final_query)
-        .build()
-    )
-    return query, list(filters.params)
+    final_query = _apply_conditions(final_query, filters.quality_conditions)
+    return _render_query(final_query), list(filters.params)
 
 
 async def fetch_chart_data_page(
@@ -355,7 +401,7 @@ async def fetch_chart_data_page(
     plant_id: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
-    stratify_all: bool = False,
+    stratify_by: Optional[str] = None,
     cursor: Optional[str] = None,
     limit: int = 1000,
 ) -> dict:
@@ -366,7 +412,7 @@ async def fetch_chart_data_page(
         plant_id,
         date_from,
         date_to,
-        stratify_all,
+        stratify_by,
     )
     query, params = _build_chart_page_query(filters, cursor, limit)
     rows = await run_sql_async(token, query, params)
@@ -398,7 +444,7 @@ async def fetch_chart_data_values(
     plant_id: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
-    stratify_all: bool = False,
+    stratify_by: Optional[str] = None,
     max_points: int = _NORMALITY_MAX_POINTS,
 ) -> list[Optional[float]]:
     filters = _build_chart_filters(
@@ -408,7 +454,7 @@ async def fetch_chart_data_values(
         plant_id,
         date_from,
         date_to,
-        stratify_all,
+        stratify_by,
     )
     query, params = _build_chart_values_query(filters, max_points)
     rows = await run_sql_async(token, query, params)
@@ -430,7 +476,7 @@ async def fetch_chart_data(
     plant_id: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
-    stratify_all: bool = False,
+    stratify_by: Optional[str] = None,
     max_rows: int = _FULL_CHART_MAX_ROWS,
 ) -> list[dict]:
     all_rows: list[dict] = []
@@ -445,7 +491,7 @@ async def fetch_chart_data(
             plant_id,
             date_from,
             date_to,
-            stratify_all,
+            stratify_by,
             cursor=cursor,
             limit=min(1000, remaining),
         )

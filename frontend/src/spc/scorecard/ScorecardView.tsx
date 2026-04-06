@@ -19,10 +19,10 @@ import {
   scorecardTitleClass,
   scorecardToggleClass,
   stabilityNoteClass,
-} from '../uiClasses.js'
+} from '../uiClasses'
 
 const ScorecardTable = lazy(() => import('./ScorecardTable'))
-const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix.jsx'))
+const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix'))
 
 interface SummaryBarProps {
   rows: ScorecardRow[]

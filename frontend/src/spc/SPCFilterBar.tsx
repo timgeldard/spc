@@ -3,8 +3,8 @@ import { useSPC } from './SPCContext'
 import { useValidateMaterial } from './hooks/useMaterials'
 import { usePlants } from './hooks/usePlants'
 import { useCharacteristics } from './hooks/useCharacteristics'
-import { getRecentMaterials, addRecentMaterial } from './hooks/useRecentMaterials.js'
-import type { MaterialRef, MicRef, PlantRef } from './types'
+import { getRecentMaterials, addRecentMaterial } from './hooks/useRecentMaterials'
+import type { MaterialRef, MicRef, PlantRef, StratifyByKey } from './types'
 import {
   badgeAmberClass,
   badgeBlueClass,
@@ -16,7 +16,7 @@ import {
   filterLabelClass,
   filterMetaClass,
   selectClass,
-} from './uiClasses.js'
+} from './uiClasses'
 
 export default function SPCFilterBar() {
   const { state, dispatch } = useSPC()
@@ -38,6 +38,11 @@ export default function SPCFilterBar() {
   const [inputValue, setInputValue] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [recents] = useState<MaterialRef[]>(() => getRecentMaterials())
+  const stratifyOptions: Array<{ value: StratifyByKey; label: string }> = [
+    { value: 'plant_id', label: 'Plant' },
+    { value: 'inspection_lot_id', label: 'Inspection Lot' },
+    { value: 'operation_id', label: 'Operation' },
+  ]
 
   useEffect(() => {
     if (plantsLoading || !state.selectedPlant) return
@@ -87,6 +92,11 @@ export default function SPCFilterBar() {
     const [mic_id, mic_name] = event.target.value.split('|')
     const mic = allCharacteristics.find(c => c.mic_id === mic_id && c.mic_name === mic_name) ?? null
     dispatch({ type: 'SET_MIC', payload: mic as MicRef | null })
+  }
+
+  const handleStratifyChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value as StratifyByKey | ''
+    dispatch({ type: 'SET_STRATIFY_BY', payload: value || null })
   }
 
   const selectRecent = (material: MaterialRef) => {
@@ -222,6 +232,25 @@ export default function SPCFilterBar() {
       </div>
 
       {state.selectedMaterial && (
+        <div className={filterGroupClass}>
+          <label className={filterLabelClass} htmlFor="spc-stratify-by">Stratify By</label>
+          <select
+            id="spc-stratify-by"
+            className={selectClass}
+            value={state.stratifyBy ?? ''}
+            onChange={handleStratifyChange}
+          >
+            <option value="">— None —</option>
+            {stratifyOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {state.selectedMaterial && (
         <div className={filterMetaClass}>
           {state.selectedMIC && (
             <span className={`${state.selectedMIC.chart_type === 'p_chart' ? badgeAmberClass : badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
@@ -230,6 +259,11 @@ export default function SPCFilterBar() {
                 : state.selectedMIC.chart_type === 'p_chart'
                   ? 'Attribute chart'
                   : 'I-MR chart'}
+            </span>
+          )}
+          {state.stratifyBy && (
+            <span className={`${badgeBlueClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>
+              Stratified by {stratifyOptions.find(option => option.value === state.stratifyBy)?.label ?? state.stratifyBy}
             </span>
           )}
         </div>

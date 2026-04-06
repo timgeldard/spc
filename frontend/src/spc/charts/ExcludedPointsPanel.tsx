@@ -17,7 +17,7 @@ import {
   buttonGhostClass,
   buttonSecondaryClass,
   buttonSmClass,
-} from '../uiClasses.js'
+} from '../uiClasses'
 
 function formatLimit(value: number | null | undefined) {
   return value == null ? '—' : Number(value).toFixed(4)
@@ -90,7 +90,7 @@ export default function ExcludedPointsPanel({
       ) : (
         <div className={auditListClass}>
           {points.map((point, index) => {
-            const pointKey = `${point.batch_id}-${point.sample_seq}-${point.plant_id ?? ''}-${point.original_index ?? `saved-${index}`}`
+            const pointKey = `${point.batch_id}-${point.sample_seq}-${point.plant_id ?? ''}-${point.stratify_value ?? ''}-${point.original_index ?? `saved-${index}`}`
             return (
               <div key={pointKey} className={auditItemClass}>
                 <div className={auditItemMainClass}>
@@ -115,4 +115,3 @@ export default function ExcludedPointsPanel({
     </section>
   )
 }
-

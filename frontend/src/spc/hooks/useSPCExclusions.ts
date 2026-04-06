@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import type { ExclusionAuditSnapshot } from '../types'
+import type { ExclusionAuditSnapshot, StratifyByKey } from '../types'
 
 interface UseSPCExclusionsArgs {
   materialId: string | null | undefined
@@ -7,6 +7,7 @@ interface UseSPCExclusionsArgs {
   chartType: string | null | undefined
   plantId: string | null | undefined
   stratifyAll: boolean
+  stratifyBy: StratifyByKey | null
   dateFrom: string | null | undefined
   dateTo: string | null | undefined
 }
@@ -32,6 +33,7 @@ export function useSPCExclusions({
   chartType,
   plantId,
   stratifyAll,
+  stratifyBy,
   dateFrom,
   dateTo,
 }: UseSPCExclusionsArgs): UseSPCExclusionsResult {
@@ -60,6 +62,7 @@ export function useSPCExclusions({
       chart_type: chartType!,
       stratify_all: String(Boolean(stratifyAll)),
     })
+    if (stratifyBy) params.set('stratify_by', stratifyBy)
     if (plantId) params.set('plant_id', plantId)
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
@@ -84,7 +87,7 @@ export function useSPCExclusions({
       cancelled = true
       controller.abort()
     }
-  }, [scopeReady, materialId, micId, chartType, plantId, stratifyAll, dateFrom, dateTo])
+  }, [scopeReady, materialId, micId, chartType, plantId, stratifyAll, stratifyBy, dateFrom, dateTo])
 
   const saveSnapshot = useCallback(async (payload: Record<string, unknown>) => {
     setSaving(true)

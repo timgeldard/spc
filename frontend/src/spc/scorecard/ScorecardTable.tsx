@@ -22,7 +22,7 @@ import {
   scorecardTableHeaderClass,
   scorecardTableWrapClass,
   statusPillClass,
-} from '../uiClasses.js'
+} from '../uiClasses'
 
 ModuleRegistry.registerModules([ClientSideRowModelModule, CsvExportModule])
 

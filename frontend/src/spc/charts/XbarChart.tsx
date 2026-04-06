@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import type { LockedLimits, SPCComputationResult, SPCSignal } from '../types'
-import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses.js'
+import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 
 interface XbarChartProps {
   spc: SPCComputationResult | null | undefined

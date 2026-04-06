@@ -1,4 +1,4 @@
-import { cn } from '../../lib/utils.js'
+import { cn } from '../../lib/utils'
 
 const VARIANTS = {
   default: 'bg-gray-100 text-gray-800',

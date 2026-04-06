@@ -136,7 +136,7 @@ async def _fetch_chart_data(token: str, body: ExportRequest) -> list[dict]:
         body.plant_id,
         body.date_from,
         body.date_to,
-        False,
+        None,
     )
 
 

@@ -296,6 +296,19 @@ function buildNormalityWarning(normality?: NormalityResult | null): string | nul
     : null
 }
 
+function quantile(values: number[], probability: number): number | null {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  if (sorted.length === 1) return sorted[0]
+  const boundedP = Math.min(1, Math.max(0, probability))
+  const index = (sorted.length - 1) * boundedP
+  const lower = Math.floor(index)
+  const upper = Math.ceil(index)
+  if (lower === upper) return sorted[lower]
+  const weight = index - lower
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight
+}
+
 export function computeCapability(
   values: number[],
   specConfig: SpecConfig,
@@ -433,6 +446,10 @@ export function computeCapability(
   let cpk: number | null = null
   let pp: number | null = null
   let ppk: number | null = null
+  let capabilityMethod: CapabilityResult['capabilityMethod'] = 'parametric'
+  let empiricalP00135: number | null = null
+  let empiricalP50: number | null = null
+  let empiricalP99865: number | null = null
 
   const upperSpec = hasUsl ? usl : null
   const lowerSpec = hasLsl ? lsl : null
@@ -449,7 +466,52 @@ export function computeCapability(
     }
   }
 
-  if (sigmaOverall != null && sigmaOverall > 0) {
+  const useNonParametricCapability = normality?.is_normal === false
+  if (useNonParametricCapability) {
+    empiricalP00135 = quantile(values, 0.00135)
+    empiricalP50 = quantile(values, 0.5)
+    empiricalP99865 = quantile(values, 0.99865)
+    capabilityMethod = 'non_parametric'
+
+    if (empiricalP50 != null) {
+      if (
+        specWidth != null &&
+        empiricalP00135 != null &&
+        empiricalP99865 != null &&
+        empiricalP99865 > empiricalP00135
+      ) {
+        pp = round6(specWidth / (empiricalP99865 - empiricalP00135))
+      }
+
+      if (
+        upperSpec != null &&
+        lowerSpec != null &&
+        empiricalP00135 != null &&
+        empiricalP99865 != null &&
+        empiricalP99865 > empiricalP50 &&
+        empiricalP50 > empiricalP00135
+      ) {
+        ppk = round6(
+          Math.min(
+            (upperSpec - empiricalP50) / (empiricalP99865 - empiricalP50),
+            (empiricalP50 - lowerSpec) / (empiricalP50 - empiricalP00135),
+          ),
+        )
+      } else if (
+        upperSpec != null &&
+        empiricalP99865 != null &&
+        empiricalP99865 > empiricalP50
+      ) {
+        ppk = round6((upperSpec - empiricalP50) / (empiricalP99865 - empiricalP50))
+      } else if (
+        lowerSpec != null &&
+        empiricalP00135 != null &&
+        empiricalP50 > empiricalP00135
+      ) {
+        ppk = round6((empiricalP50 - lowerSpec) / (empiricalP50 - empiricalP00135))
+      }
+    }
+  } else if (sigmaOverall != null && sigmaOverall > 0) {
     if (specWidth != null) pp = round6(specWidth / (6 * sigmaOverall))
     if (upperSpec != null && lowerSpec != null) {
       ppk = round6(Math.min((upperSpec - xBar) / (3 * sigmaOverall), (xBar - lowerSpec) / (3 * sigmaOverall)))
@@ -468,8 +530,11 @@ export function computeCapability(
     cpkUpper95 = round6(cpk + 1.96 * se)
   }
 
-  const zScore = cpk !== null ? round6(cpk * 3) : null
-  const dpmo = zScore !== null ? Math.round(normalCDF(-(zScore - 1.5)) * 1_000_000) : null
+  const zScore = capabilityMethod === 'parametric' && cpk !== null ? round6(cpk * 3) : null
+  const dpmo =
+    capabilityMethod === 'parametric' && zScore !== null
+      ? Math.round(normalCDF(-(zScore - 1.5)) * 1_000_000)
+      : null
 
   return {
     usl,
@@ -478,6 +543,10 @@ export function computeCapability(
     cpk,
     pp,
     ppk,
+    capabilityMethod,
+    empiricalP00135,
+    empiricalP50,
+    empiricalP99865,
     sigmaOverall,
     xBar,
     cpkLower95,

@@ -2,6 +2,7 @@ import type { Dispatch, ReactNode } from 'react'
 
 export type RuleSet = 'weco' | 'nelson'
 export type QuantChartType = 'imr' | 'xbar_r'
+export type StratifyByKey = 'plant_id' | 'inspection_lot_id' | 'operation_id'
 export type SpecType =
   | 'bilateral_symmetric'
   | 'bilateral_asymmetric'
@@ -48,6 +49,15 @@ export interface AttributeChartPoint {
   [key: string]: unknown
 }
 
+export interface EventParamLike {
+  dataIndex: number
+  seriesIndex?: number
+  seriesName?: string
+  componentType?: string
+  value?: unknown
+  data?: Record<string, unknown>
+}
+
 export interface ChartDataPoint {
   batch_id?: string | null
   batch_date?: string | null
@@ -60,6 +70,7 @@ export interface ChartDataPoint {
   usl?: number | null
   valuation?: string | null
   plant_id?: string | null
+  stratify_value?: string | null
   is_outlier?: boolean
   spec_type?: string | null
   originalIndex?: number
@@ -103,6 +114,10 @@ export interface CapabilityMetrics {
   cpk?: number | null
   pp?: number | null
   ppk?: number | null
+  capabilityMethod?: 'parametric' | 'non_parametric'
+  empiricalP00135?: number | null
+  empiricalP50?: number | null
+  empiricalP99865?: number | null
   zScore?: number | null
   dpmo?: number | null
   spec_type?: SpecType | null
@@ -131,6 +146,7 @@ export interface ExclusionAuditSnapshot {
   event_ts?: string | null
   justification?: string | null
   event_id?: string | null
+  stratify_by?: StratifyByKey | null
   [key: string]: unknown
 }
 
@@ -149,6 +165,7 @@ export interface ExcludedPoint {
   batch_seq?: number | null
   batch_date?: string | null
   plant_id?: string | null
+  stratify_value?: string | null
   value?: number | null
   original_index?: number | null
 }
@@ -317,12 +334,16 @@ export interface CorrelationMic {
 }
 
 export interface CorrelationPair {
+  mic_a?: string
   mic_a_id: string
+  mic_b?: string
   mic_b_id: string
   mic_a_name?: string
   mic_b_name?: string
   r?: number | null
   n?: number | null
+  pearson_r?: number | null
+  shared_batches?: number | null
   [key: string]: unknown
 }
 
@@ -334,9 +355,146 @@ export interface CorrelationResult {
 }
 
 export interface CorrelationScatterResult {
-  points?: Array<Record<string, unknown>>
+  points?: CorrelationScatterPoint[]
   mic_a_name?: string
   mic_b_name?: string
+  pearson_r?: number | null
+  n?: number | null
+  [key: string]: unknown
+}
+
+export interface CorrelationScatterPoint {
+  x: number
+  y: number
+  batch_id?: string | null
+  batch_date?: string | null
+  [key: string]: unknown
+}
+
+export interface CompareScorecardMaterial {
+  material_id: string
+  material_name?: string | null
+  scorecard: ScorecardRow[]
+}
+
+export interface CompareScorecardResult {
+  materials: CompareScorecardMaterial[]
+  common_mics: Array<{
+    mic_id: string
+    mic_name: string
+  }>
+  [key: string]: unknown
+}
+
+export interface CapabilityMatrixDatum {
+  value: [number, number, number]
+  mic_id: string
+  mic_name: string
+  ppk: number
+  ooc_rate?: number | null
+  batch_count?: number | null
+}
+
+export interface AttributeChartStatsPoint extends AttributeChartPoint {
+  n_nonconforming?: number | null
+  n_inspected?: number | null
+  p?: number
+  u?: number
+  c?: number
+  np?: number
+  n?: number
+  ucl?: number
+  lcl?: number
+}
+
+export interface AttributeChartComputationResult {
+  pBar?: number
+  uBar?: number
+  cBar?: number
+  npBar?: number
+  ucl?: number
+  lcl?: number
+  signals?: SPCSignal[]
+  subgroupStats: AttributeChartStatsPoint[]
+}
+
+export interface ChartPaneProps {
+  points: AttributeChartPoint[]
+}
+
+export interface CapabilityGaugeProps {
+  label: string
+  value: number | null
+  maxValue?: number
+  lower95?: number | null
+  upper95?: number | null
+}
+
+export interface CapabilityTrendChartProps {
+  trendData: RollingCapabilityPoint[]
+  windowSize: number
+}
+
+export interface CorrelationMatrixProps {
+  pairs: CorrelationPair[]
+  mics: CorrelationMic[]
+  onCellClick?: (micAId: string, micBId: string, micAName: string, micBName: string) => void
+}
+
+export interface CorrelationScatterProps {
+  result: CorrelationScatterResult | null
+  loading: boolean
+  error: string | null
+}
+
+export interface CapabilityMatrixProps {
+  rows: ScorecardRow[]
+}
+
+export interface IMRChartProps {
+  spc: SPCComputationResult | null
+  indexedPoints?: IndexedChartPoint[]
+  signals?: SPCSignal[]
+  mrSignals?: SPCSignal[]
+  excludedIndices: Set<number>
+  onPointClick?: (index: number) => void
+  externalLimits?: LockedLimits | null
+}
+
+export interface XbarRChartProps {
+  spc: SPCComputationResult | null
+  signals?: SPCSignal[]
+  mrSignals?: SPCSignal[]
+  externalLimits?: LockedLimits | null
+}
+
+export interface ProcessFlowNodeData extends Record<string, unknown> {
+  material_id: string
+  material_name?: string | null
+  plant_name?: string | null
+  total_batches?: number | null
+  rejected_batches?: number | null
+  mic_count?: number | null
+  mean_value?: number | null
+  stddev_value?: number | null
+  estimated_cpk?: number | null
+  status?: 'green' | 'amber' | 'red' | 'grey' | string | null
+  is_root?: boolean
+  sparkline_values?: number[]
+}
+
+export interface ProcessFlowNodeRecord extends ProcessFlowNodeData {
+  id: string
+}
+
+export interface ProcessFlowEdgeData {
+  source: string
+  target: string
+}
+
+export interface ProcessFlowResult {
+  nodes: ProcessFlowNodeRecord[]
+  edges: ProcessFlowEdgeData[]
   [key: string]: unknown
 }
 
@@ -372,7 +530,7 @@ export interface SPCState {
   ruleSet: 'weco' | 'nelson'
   excludeOutliers: boolean
   limitsMode: 'live' | 'locked'
-  stratifyAll: boolean
+  stratifyBy: StratifyByKey | null
   exclusionAudit: ExclusionAuditSnapshot | null
   exclusionDialog: ExclusionDialogState | null
 }
@@ -395,7 +553,7 @@ export type SPCAction =
   | { type: 'TOGGLE_EXCLUDE_OUTLIERS' }
   | { type: 'SET_EXCLUSIONS'; payload: number[] }
   | { type: 'SET_LIMITS_MODE'; payload: SPCState['limitsMode'] }
-  | { type: 'TOGGLE_STRATIFY_ALL' }
+  | { type: 'SET_STRATIFY_BY'; payload: SPCState['stratifyBy'] }
   | { type: 'SELECT_MATERIAL_AND_CHARTS'; payload: MaterialRef | null }
 
 export interface SPCContextValue {

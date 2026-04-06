@@ -60,6 +60,13 @@ setup-locked-limits:
 
 setup-exclusions:
 	@$(MAKE) apply-migration NAME=spc_exclusions FILE=$(EXCLUSIONS_MIGRATION) PROFILE=$(PROFILE)
+	@export TRACE_CATALOG="$${TRACE_CATALOG:-$(TRACE_CATALOG_DEFAULT)}" && \
+	 export TRACE_SCHEMA="$${TRACE_SCHEMA:-$(TRACE_SCHEMA_DEFAULT)}" && \
+	 COLUMN_CHECK="$$(databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement \"SELECT column_name FROM system.information_schema.columns WHERE table_catalog = '$$TRACE_CATALOG' AND table_schema = '$$TRACE_SCHEMA' AND table_name = 'spc_exclusions' AND column_name = 'stratify_by'\")" && \
+	 if ! printf '%s\n' "$$COLUMN_CHECK" | grep -q "stratify_by"; then \
+	   echo "Adding missing stratify_by column to $$TRACE_CATALOG.$$TRACE_SCHEMA.spc_exclusions..."; \
+	   databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "ALTER TABLE \`$$TRACE_CATALOG\`.\`$$TRACE_SCHEMA\`.\`spc_exclusions\` ADD COLUMNS (stratify_by STRING)"; \
+	 fi
 
 setup-query-audit:
 	@$(MAKE) apply-migration NAME=spc_query_audit FILE=$(QUERY_AUDIT_MIGRATION) PROFILE=$(PROFILE)

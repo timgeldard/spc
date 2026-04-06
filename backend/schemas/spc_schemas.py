@@ -7,6 +7,7 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MATERIAL_ID_MAX_LEN = 40
 _MIC_ID_MAX_LEN = 40
 _CHART_TYPES = {"imr", "xbar_r", "p_chart"}
+_STRATIFY_KEYS = {"plant_id", "inspection_lot_id", "operation_id"}
 
 
 def _validate_date(v: Optional[str], field_name: str) -> Optional[str]:
@@ -64,13 +65,20 @@ class ChartDataRequest(_DateRangeMixin):
     mic_id: str
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
-    stratify_all: bool = False
+    stratify_by: Optional[str] = None
 
     @field_validator("material_id")
     @classmethod
     def check_material_id(cls, v: str) -> str:
         if len(v) > _MATERIAL_ID_MAX_LEN:
             raise ValueError(f"material_id must be at most {_MATERIAL_ID_MAX_LEN} characters")
+        return v
+
+    @field_validator("stratify_by")
+    @classmethod
+    def check_stratify_by(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _STRATIFY_KEYS:
+            raise ValueError(f"stratify_by must be one of {sorted(_STRATIFY_KEYS)}")
         return v
 
 
