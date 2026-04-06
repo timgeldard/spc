@@ -29,6 +29,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _CHART_TYPES = {"imr", "xbar_r", "p_chart"}
+_STRATIFY_KEYS = {"plant_id", "inspection_lot_id", "operation_id"}
 
 
 def _handle_sql_error(exc: Exception) -> None:
@@ -66,6 +67,7 @@ class ExcludedPoint(BaseModel):
     batch_seq: Optional[int] = None
     batch_date: Optional[str] = None
     plant_id: Optional[str] = None
+    stratify_value: Optional[str] = None
     value: Optional[float] = None
     original_index: Optional[int] = None
 
@@ -76,6 +78,7 @@ class SaveExclusionsRequest(BaseModel):
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
     stratify_all: bool = False
+    stratify_by: Optional[str] = None
     chart_type: str = "imr"
     date_from: Optional[str] = None
     date_to: Optional[str] = None
@@ -93,7 +96,14 @@ class SaveExclusionsRequest(BaseModel):
             raise ValueError(f"chart_type must be one of {sorted(_CHART_TYPES)}")
         return value
 
-    @field_validator("mic_name", "plant_id", "date_from", "date_to", "rule_set", mode="before")
+    @field_validator("stratify_by")
+    @classmethod
+    def validate_stratify_by(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in _STRATIFY_KEYS:
+            raise ValueError(f"stratify_by must be one of {sorted(_STRATIFY_KEYS)}")
+        return value
+
+    @field_validator("mic_name", "plant_id", "date_from", "date_to", "rule_set", "stratify_by", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -116,6 +126,7 @@ class GetExclusionsQuery(BaseModel):
     chart_type: str = "imr"
     plant_id: Optional[str] = None
     stratify_all: bool = False
+    stratify_by: Optional[str] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
 
@@ -124,7 +135,7 @@ class GetExclusionsQuery(BaseModel):
     def validate_chart_type(cls, value: str) -> str:
         return SaveExclusionsRequest.validate_chart_type(value)
 
-    @field_validator("plant_id", "date_from", "date_to", mode="before")
+    @field_validator("plant_id", "date_from", "date_to", "stratify_by", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         return SaveExclusionsRequest.normalize_optional_text(value)
@@ -149,6 +160,7 @@ async def save_exclusions(
         "mic_name": body.mic_name,
         "plant_id": body.plant_id,
         "stratify_all": body.stratify_all,
+        "stratify_by": body.stratify_by,
         "chart_type": body.chart_type,
         "date_from": body.date_from,
         "date_to": body.date_to,
@@ -201,6 +213,7 @@ async def get_exclusions(
         sql_param("mic_id", query.mic_id),
         sql_param("plant_id", query.plant_id),
         sql_param("stratify_all", query.stratify_all),
+        sql_param("stratify_by", query.stratify_by),
         sql_param("chart_type", query.chart_type),
         sql_param("date_from", query.date_from),
         sql_param("date_to", query.date_to),
@@ -214,6 +227,7 @@ async def get_exclusions(
             mic_name,
             plant_id,
             stratify_all,
+            stratify_by,
             chart_type,
             date_from,
             date_to,
@@ -232,6 +246,7 @@ async def get_exclusions(
           AND chart_type = :chart_type
           AND plant_id <=> :plant_id
           AND COALESCE(stratify_all, false) = CAST(:stratify_all AS BOOLEAN)
+          AND stratify_by <=> :stratify_by
           AND date_from <=> :date_from
           AND date_to <=> :date_to
         ORDER BY event_ts DESC

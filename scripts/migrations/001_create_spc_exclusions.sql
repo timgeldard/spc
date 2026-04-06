@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_exclusions`
   mic_name STRING,
   plant_id STRING,
   stratify_all BOOLEAN,
+  stratify_by STRING,
   chart_type STRING NOT NULL,
   date_from STRING,
   date_to STRING,
