@@ -1,1 +1,0 @@
-import{j as l}from"./process-flow--vul17y6.js";import{aU as o,aV as t}from"./index-DSkEk4xx.js";function f({id:s,error:a=!1,live:e=!1,children:i}){return l.jsx("span",{id:s,className:a?o:t,role:a?"alert":void 0,"aria-live":e?a?"assertive":"polite":void 0,children:i})}export{f as F};
