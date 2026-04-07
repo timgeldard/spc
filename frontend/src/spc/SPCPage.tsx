@@ -6,6 +6,8 @@ import { SPCProvider, useSPC } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
 import SPCFilterBar from './SPCFilterBar'
 import SPCPageHeader from './SPCPageHeader'
+import { useSPCUrlSync } from './hooks/useSPCUrlSync'
+import { useSPCPreferences } from './hooks/useSPCPreferences'
 import type { SPCState } from './types'
 import {
   pageShellClass,
@@ -105,6 +107,8 @@ function Sidebar() {
 
 function SPCContent() {
   const { state } = useSPC()
+  useSPCUrlSync()
+  useSPCPreferences()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
   return (
     <div className={pageShellClass}>

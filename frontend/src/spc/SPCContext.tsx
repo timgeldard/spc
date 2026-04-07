@@ -3,6 +3,87 @@ import type { SPCAction, SPCContextValue, SPCProviderProps, SPCState } from './t
 
 const SPCContext = createContext<SPCContextValue | null>(null)
 
+// ── Preference keys (localStorage) ───────────────────────────────────────────
+const PREF_RULE_SET = 'spc_rule_set'
+const PREF_EXCLUDE_OUTLIERS = 'spc_exclude_outliers'
+const PREF_LIMITS_MODE = 'spc_limits_mode'
+
+// ── URL param keys ────────────────────────────────────────────────────────────
+const VALID_TABS = ['flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation'] as const
+
+// ── State factory: merges hardcoded defaults → localStorage prefs → URL params
+function buildInitialState(): SPCState {
+  const state: SPCState = {
+    selectedMaterial: null,
+    selectedPlant: null,
+    selectedMIC: null,
+    dateFrom: '',
+    dateTo: '',
+    activeTab: 'flow',
+    chartTypeOverride: null,
+    excludedIndices: new Set<number>(),
+    ruleSet: 'weco',
+    excludeOutliers: false,
+    limitsMode: 'live',
+    stratifyBy: null,
+    exclusionAudit: null,
+    exclusionDialog: null,
+  }
+
+  // Apply persisted analysis preferences
+  try {
+    const ruleSet = localStorage.getItem(PREF_RULE_SET)
+    if (ruleSet === 'weco' || ruleSet === 'nelson') state.ruleSet = ruleSet
+    const excludeOutliers = localStorage.getItem(PREF_EXCLUDE_OUTLIERS)
+    if (excludeOutliers !== null) state.excludeOutliers = excludeOutliers === 'true'
+    const limitsMode = localStorage.getItem(PREF_LIMITS_MODE)
+    if (limitsMode === 'live' || limitsMode === 'locked') state.limitsMode = limitsMode
+  } catch { /* localStorage unavailable */ }
+
+  // Apply URL-encoded analysis context
+  try {
+    const params = new URLSearchParams(window.location.search)
+
+    const tab = params.get('tab')
+    if (tab && (VALID_TABS as readonly string[]).includes(tab)) {
+      state.activeTab = tab as SPCState['activeTab']
+    }
+
+    const matId = params.get('mat')
+    if (matId) {
+      state.selectedMaterial = {
+        material_id: matId,
+        material_name: params.get('mat_n') ?? null,
+      }
+    }
+
+    const plantId = params.get('plant')
+    if (plantId) {
+      state.selectedPlant = {
+        plant_id: plantId,
+        plant_name: params.get('plant_n') ?? null,
+      }
+    }
+
+    const micId = params.get('mic')
+    if (micId) {
+      state.selectedMIC = {
+        mic_id: micId,
+        mic_name: params.get('mic_n') ?? null,
+        chart_type: params.get('mic_ct') ?? null,
+      }
+    }
+
+    const from = params.get('from')
+    if (from) state.dateFrom = from
+    const to = params.get('to')
+    if (to) state.dateTo = to
+  } catch { /* no window.location (e.g., test environment) */ }
+
+  return state
+}
+
+// Keep exported `initialState` for tests that reference it directly.
 export const initialState: SPCState = {
   selectedMaterial: null,
   selectedPlant: null,
@@ -121,7 +202,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
 }
 
 export function SPCProvider({ children }: SPCProviderProps) {
-  const [state, dispatch] = useReducer(reducer, initialState)
+  const [state, dispatch] = useReducer(reducer, null, buildInitialState)
   return (
     <SPCContext.Provider value={{ state, dispatch }}>
       {children}
@@ -134,3 +215,6 @@ export function useSPC(): SPCContextValue {
   if (!ctx) throw new Error('useSPC must be used within SPCProvider')
   return ctx
 }
+
+// ── Preference key constants (used by useSPCPreferences hook) ────────────────
+export { PREF_RULE_SET, PREF_EXCLUDE_OUTLIERS, PREF_LIMITS_MODE }
