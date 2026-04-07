@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
+import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
@@ -79,19 +79,22 @@ function SummaryBar({ rows }: SummaryBarProps) {
 interface TriagePanelProps {
   rows: ScorecardRow[]
   onViewChart: (row: ScorecardRow) => void
-  onCreateDeviation: (row: ScorecardRow) => void
 }
 
-function TriagePanel({ rows, onViewChart, onCreateDeviation }: TriagePanelProps) {
-  // Top 3 worst: prefer poor/marginal, sorted by Cpk ascending (worst first)
-  const worst = [...rows]
-    .filter(r => r.cpk != null || r.ppk != null || (r.ooc_rate ?? 0) > 0)
-    .sort((a, b) => {
-      const aCpk = a.cpk ?? a.ppk ?? 999
-      const bCpk = b.cpk ?? b.ppk ?? 999
-      return aCpk - bCpk
-    })
-    .slice(0, 3)
+function TriagePanel({ rows, onViewChart }: TriagePanelProps) {
+  // Top 3 worst: sorted by Cpk ascending (worst first)
+  const worst = useMemo(
+    () =>
+      [...rows]
+        .filter(r => r.cpk != null || r.ppk != null || (r.ooc_rate ?? 0) > 0)
+        .sort((a, b) => {
+          const aCpk = a.cpk ?? a.ppk ?? 999
+          const bCpk = b.cpk ?? b.ppk ?? 999
+          return aCpk - bCpk
+        })
+        .slice(0, 3),
+    [rows],
+  )
 
   if (!worst.length) return null
 
@@ -142,13 +145,6 @@ function TriagePanel({ rows, onViewChart, onCreateDeviation }: TriagePanelProps)
                 >
                   View Chart
                 </button>
-                <button
-                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-                  onClick={() => onCreateDeviation(row)}
-                  aria-label={`Create deviation for ${row.mic_name}`}
-                >
-                  Create Deviation
-                </button>
               </div>
             </div>
           )
@@ -173,13 +169,6 @@ export default function ScorecardView() {
     dispatch({ type: 'SET_MIC', payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
-
-  const handleCreateDeviation = useCallback((_row: ScorecardRow) => {
-    // Placeholder: opens deviation workflow. Full implementation in PR 2/3 wiring sprint.
-    // For now surface a console note so it's auditable during development.
-    // eslint-disable-next-line no-console
-    console.info('[SPC] Create Deviation triggered for', _row.mic_name)
-  }, [])
 
   if (!state.selectedMaterial) {
     return (
@@ -215,7 +204,7 @@ export default function ScorecardView() {
       <div className={scorecardHeaderClass}>
         <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Portfolio review</div>
         <h3 className={scorecardTitleClass}>
-          {state.selectedMaterial.material_name}
+          {state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}
           {state.selectedPlant && (
             <span className={scorecardPlantClass}> · {state.selectedPlant.plant_name || state.selectedPlant.plant_id}</span>
           )}
@@ -233,7 +222,6 @@ export default function ScorecardView() {
         <TriagePanel
           rows={scorecard}
           onViewChart={handleViewChart}
-          onCreateDeviation={handleCreateDeviation}
         />
       </div>
 

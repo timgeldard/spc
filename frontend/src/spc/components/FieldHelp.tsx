@@ -23,7 +23,7 @@ export default function FieldHelp({ id, error = false, live = false, children }:
     <span
       id={id}
       className={error ? fieldValidationErrorClass : fieldHelpClass}
-      role={error ? 'alert' : undefined}
+      role={error && live ? 'alert' : undefined}
       aria-live={live ? (error ? 'assertive' : 'polite') : undefined}
     >
       {children}

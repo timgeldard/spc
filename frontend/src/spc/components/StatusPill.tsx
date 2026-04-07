@@ -32,9 +32,9 @@ const STATUS_CONFIG: Record<StatusPillStatus, { label: string; icon: string; cla
     className: 'bg-red-50 text-red-700 border-red-200',
   },
   'out-of-control-high': {
-    label: 'Out of Control',
-    icon: '✕',
-    className: 'bg-red-50 text-red-700 border-red-200',
+    label: 'Critical — Out of Control',
+    icon: '‼',
+    className: 'bg-red-100 text-red-800 border-red-400',
   },
   unknown: {
     label: 'Unknown',

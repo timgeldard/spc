@@ -94,10 +94,12 @@ export default function SPCFilterBar() {
   // Auto-clear MIC if it's no longer valid for the current material/plant
   useEffect(() => {
     if (charsLoading || !state.selectedMIC) return
-    const stillValid = allCharacteristics.some(
-      c => c.mic_id === state.selectedMIC?.mic_id && c.mic_name === state.selectedMIC?.mic_name,
-    )
-    if (!stillValid) {
+    const match = allCharacteristics.find(c => c.mic_id === state.selectedMIC?.mic_id)
+    if (match) {
+      if (match.mic_name !== state.selectedMIC?.mic_name) {
+        dispatch({ type: 'SET_MIC', payload: match })
+      }
+    } else {
       dispatch({ type: 'SET_MIC', payload: null })
     }
   }, [allCharacteristics, charsLoading, dispatch, state.selectedMIC])
@@ -178,6 +180,7 @@ export default function SPCFilterBar() {
                     onChange={event => {
                       setInputValue(event.target.value)
                       setNotFound(false)
+                      clearError()
                     }}
                     onKeyDown={handleKeyDown}
                     disabled={validating}

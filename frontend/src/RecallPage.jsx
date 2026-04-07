@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import InfoBanner from './spc/components/InfoBanner'
 import TraceForm from './components/TraceForm'
 import TraceTree from './components/TraceTree'
 import CoACard from './components/CoACard'
@@ -101,7 +102,7 @@ export default function RecallPage() {
       <TraceForm onSubmit={handleTrace} loading={loading} />
 
       {error && (
-        <div className="banner banner--error" role="alert">{error}</div>
+        <InfoBanner variant="error">{error}</InfoBanner>
       )}
 
       {nodeCount !== null && !error && (
@@ -132,7 +133,7 @@ export default function RecallPage() {
             {selectedNode ? (
               <>
                 {detailsError && (
-                  <div className="banner banner--error" role="alert">{detailsError}</div>
+                  <InfoBanner variant="error">{detailsError}</InfoBanner>
                 )}
                 <CoACard coaResults={batchDetails?.coa_results ?? null} loading={detailsLoading} />
                 <MassBalanceChart
