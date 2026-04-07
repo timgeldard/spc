@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useCallback, useState } from 'react'
 import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
@@ -10,10 +10,11 @@ import {
   buttonSmClass,
   cardSubClass,
   cardTitleClass,
+  heroCardClass,
   heroCardDenseClass,
   metricGridClass,
-  scorecardHeaderClass,
   scorecardEvidenceClass,
+  scorecardHeaderClass,
   scorecardLayoutClass,
   scorecardPlantClass,
   scorecardSidebarClass,
@@ -27,9 +28,19 @@ import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import MetricCard from '../components/MetricCard'
 import ModuleEmptyState from '../components/ModuleEmptyState'
+import StatusPill, { deriveStatus } from '../components/StatusPill'
 
 const ScorecardTable = lazy(() => import('./ScorecardTable'))
 const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix'))
+
+// ── Capability-status colour tokens ─────────────────────────────────────────
+const STATUS_COLOR: Record<string, string> = {
+  excellent: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  good: 'border-green-200 bg-green-50 text-green-700',
+  marginal: 'border-amber-200 bg-amber-50 text-amber-700',
+  poor: 'border-red-200 bg-red-50 text-red-700',
+  out_of_spec_mean: 'border-red-300 bg-red-100 text-red-800',
+}
 
 interface SummaryBarProps {
   rows: ScorecardRow[]
@@ -64,8 +75,92 @@ function SummaryBar({ rows }: SummaryBarProps) {
   )
 }
 
+// ── Worst-first triage panel ─────────────────────────────────────────────────
+interface TriagePanelProps {
+  rows: ScorecardRow[]
+  onViewChart: (row: ScorecardRow) => void
+  onCreateDeviation: (row: ScorecardRow) => void
+}
+
+function TriagePanel({ rows, onViewChart, onCreateDeviation }: TriagePanelProps) {
+  // Top 3 worst: prefer poor/marginal, sorted by Cpk ascending (worst first)
+  const worst = [...rows]
+    .filter(r => r.cpk != null || r.ppk != null || (r.ooc_rate ?? 0) > 0)
+    .sort((a, b) => {
+      const aCpk = a.cpk ?? a.ppk ?? 999
+      const bCpk = b.cpk ?? b.ppk ?? 999
+      return aCpk - bCpk
+    })
+    .slice(0, 3)
+
+  if (!worst.length) return null
+
+  return (
+    <section aria-label="Worst-first triage — top 3 characteristics requiring attention">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">
+          Priority triage — review these first
+        </h4>
+        <span className="text-xs text-[var(--c-text-muted)]">Sorted by lowest Cpk</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {worst.map(row => {
+          const cpk = row.cpk ?? row.ppk
+          const hasViolations = (row.ooc_rate ?? 0) > 0.02
+          const status = deriveStatus(hasViolations, cpk)
+          const colorClass = STATUS_COLOR[row.capability_status ?? 'grey'] ?? 'border-slate-200 bg-slate-50'
+
+          return (
+            <div
+              key={row.mic_id}
+              className={`rounded-[calc(var(--radius)+4px)] border p-4 shadow-[var(--shadow)] ${colorClass}`}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold leading-snug text-[var(--c-text)]">{row.mic_name}</p>
+                <StatusPill status={status} compact />
+              </div>
+              <div className="mb-3 flex flex-wrap gap-3 text-xs">
+                {cpk != null && (
+                  <span>
+                    <span className="font-semibold">Cpk</span> {cpk.toFixed(2)}
+                  </span>
+                )}
+                {row.ooc_rate != null && (
+                  <span>
+                    <span className="font-semibold">OOC</span> {(row.ooc_rate * 100).toFixed(1)}%
+                  </span>
+                )}
+                <span>
+                  <span className="font-semibold">n</span> {row.batch_count}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonPrimaryClass}`}
+                  onClick={() => onViewChart(row)}
+                  aria-label={`View control chart for ${row.mic_name}`}
+                >
+                  View Chart
+                </button>
+                <button
+                  className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
+                  onClick={() => onCreateDeviation(row)}
+                  aria-label={`Create deviation for ${row.mic_name}`}
+                >
+                  Create Deviation
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+// ── Main view ────────────────────────────────────────────────────────────────
 export default function ScorecardView() {
-  const { state } = useSPC()
+  const { state, dispatch } = useSPC()
   const [viewMode, setViewMode] = useState<'table' | 'matrix'>('table')
   const { scorecard, loading, error } = useSPCScorecard(
     state.selectedMaterial?.material_id,
@@ -73,6 +168,18 @@ export default function ScorecardView() {
     state.dateTo,
     state.selectedPlant?.plant_id,
   )
+
+  const handleViewChart = useCallback((row: ScorecardRow) => {
+    dispatch({ type: 'SET_MIC', payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
+    dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
+  }, [dispatch])
+
+  const handleCreateDeviation = useCallback((_row: ScorecardRow) => {
+    // Placeholder: opens deviation workflow. Full implementation in PR 2/3 wiring sprint.
+    // For now surface a console note so it's auditable during development.
+    // eslint-disable-next-line no-console
+    console.info('[SPC] Create Deviation triggered for', _row.mic_name)
+  }, [])
 
   if (!state.selectedMaterial) {
     return (
@@ -103,6 +210,8 @@ export default function ScorecardView() {
 
   return (
     <div className={scorecardLayoutClass}>
+
+      {/* Header */}
       <div className={scorecardHeaderClass}>
         <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Portfolio review</div>
         <h3 className={scorecardTitleClass}>
@@ -112,24 +221,40 @@ export default function ScorecardView() {
           )}
         </h3>
         <p className={scorecardSubClass}>
-          Use this scorecard to triage which characteristics need chart-level review first.
+          Start with the priority triage panel below — then drill into the full table for a complete picture.
         </p>
       </div>
+
+      {/* Portfolio summary KPIs */}
       <SummaryBar rows={scorecard} />
+
+      {/* Worst-first triage panel */}
+      <div className={heroCardClass}>
+        <TriagePanel
+          rows={scorecard}
+          onViewChart={handleViewChart}
+          onCreateDeviation={handleCreateDeviation}
+        />
+      </div>
+
+      {/* View toggle */}
       <div className={scorecardToggleClass}>
         <button
           className={`${buttonBaseClass} ${buttonSmClass} ${viewMode === 'table' ? buttonPrimaryClass : buttonSecondaryClass}`}
           onClick={() => setViewMode('table')}
+          aria-pressed={viewMode === 'table'}
         >
           Table
         </button>
         <button
           className={`${buttonBaseClass} ${buttonSmClass} ${viewMode === 'matrix' ? buttonPrimaryClass : buttonSecondaryClass}`}
           onClick={() => setViewMode('matrix')}
+          aria-pressed={viewMode === 'matrix'}
         >
           Matrix
         </button>
       </div>
+
       {viewMode === 'table' && (
         <div className={scorecardEvidenceClass}>
           <div className="flex flex-col gap-4">
@@ -155,9 +280,15 @@ export default function ScorecardView() {
           <aside className={scorecardSidebarClass}>
             <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Decision support</div>
             <div className="space-y-3 text-sm text-[var(--c-text-muted)]">
-              <p>Start with low Cpk or high OOC-rate rows first. Those are the fastest path to meaningful intervention.</p>
+              <p>Start with the priority triage panel — those are the fastest path to meaningful intervention.</p>
               <p>Use Ppk to judge long-run performance drift, but only after the control chart shows stability.</p>
-              <p>Click any row to jump directly into its control chart with the same selected scope.</p>
+              <p>
+                In the table, use{' '}
+                <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">↑↓</kbd>{' '}
+                to navigate rows and{' '}
+                <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">Enter</kbd>{' '}
+                to open the chart.
+              </p>
             </div>
             <div className={metricGridClass}>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -172,6 +303,7 @@ export default function ScorecardView() {
           </aside>
         </div>
       )}
+
       {viewMode === 'matrix' && (
         <Suspense fallback={<LoadingSkeleton minHeight="280px" message="Loading view…" />}>
           <CapabilityMatrix rows={scorecard} />
