@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import React, { useEffect, useMemo, useCallback } from 'react'
 import {
   Background,
   Controls,
@@ -117,19 +117,25 @@ export default function ProcessFlowView() {
     setEdges(e)
   }, [flowData, setEdges, setNodes])
 
-  // Handles both mouse-click and keyboard selection (Tab + Enter/Space)
-  const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: FlowNode[] }) => {
-    if (selectedNodes.length === 1) {
-      const nodeData = selectedNodes[0].data as ProcessFlowNodeData
-      dispatch({
-        type: 'SELECT_MATERIAL_AND_CHARTS',
-        payload: {
-          material_id: String(nodeData.material_id),
-          material_name: typeof nodeData.material_name === 'string' ? nodeData.material_name : undefined,
-        },
-      })
-    }
+  const activateNode = useCallback((nodeData: ProcessFlowNodeData) => {
+    dispatch({
+      type: 'SELECT_MATERIAL_AND_CHARTS',
+      payload: {
+        material_id: String(nodeData.material_id),
+        material_name: typeof nodeData.material_name === 'string' ? nodeData.material_name : undefined,
+      },
+    })
   }, [dispatch])
+
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: FlowNode) => {
+    activateNode(node.data as ProcessFlowNodeData)
+  }, [activateNode])
+
+  const onKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    const focused = nodes.find(n => n.selected)
+    if (focused) activateNode(focused.data as ProcessFlowNodeData)
+  }, [activateNode, nodes])
 
   if (!state.selectedMaterial) {
     return (
@@ -189,7 +195,8 @@ export default function ProcessFlowView() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onSelectionChange={onSelectionChange}
+            onNodeClick={onNodeClick}
+            onKeyDown={onKeyDown}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.25 }}

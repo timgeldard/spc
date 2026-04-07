@@ -11,14 +11,33 @@ const PREF_LIMITS_MODE = 'spc_limits_mode'
 // ── URL param keys ────────────────────────────────────────────────────────────
 const VALID_TABS = ['flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation'] as const
 
+function getPref(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+
+function localDateString(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function defaultDateRange(): { from: string; to: string } {
+  const to = new Date()
+  const from = new Date(to)
+  from.setFullYear(from.getFullYear() - 1)
+  return { from: localDateString(from), to: localDateString(to) }
+}
+
 // ── State factory: merges hardcoded defaults → localStorage prefs → URL params
 function buildInitialState(): SPCState {
+  const { from: dateFrom, to: dateTo } = defaultDateRange()
   const state: SPCState = {
     selectedMaterial: null,
     selectedPlant: null,
     selectedMIC: null,
-    dateFrom: '',
-    dateTo: '',
+    dateFrom,
+    dateTo,
     activeTab: 'flow',
     chartTypeOverride: null,
     excludedIndices: new Set<number>(),
@@ -31,14 +50,12 @@ function buildInitialState(): SPCState {
   }
 
   // Apply persisted analysis preferences
-  try {
-    const ruleSet = localStorage.getItem(PREF_RULE_SET)
-    if (ruleSet === 'weco' || ruleSet === 'nelson') state.ruleSet = ruleSet
-    const excludeOutliers = localStorage.getItem(PREF_EXCLUDE_OUTLIERS)
-    if (excludeOutliers !== null) state.excludeOutliers = excludeOutliers === 'true'
-    const limitsMode = localStorage.getItem(PREF_LIMITS_MODE)
-    if (limitsMode === 'live' || limitsMode === 'locked') state.limitsMode = limitsMode
-  } catch { /* localStorage unavailable */ }
+  const ruleSet = getPref(PREF_RULE_SET)
+  if (ruleSet === 'weco' || ruleSet === 'nelson') state.ruleSet = ruleSet
+  const excludeOutliers = getPref(PREF_EXCLUDE_OUTLIERS)
+  if (excludeOutliers !== null) state.excludeOutliers = excludeOutliers === 'true'
+  const limitsMode = getPref(PREF_LIMITS_MODE)
+  if (limitsMode === 'live' || limitsMode === 'locked') state.limitsMode = limitsMode
 
   // Apply URL-encoded analysis context
   try {

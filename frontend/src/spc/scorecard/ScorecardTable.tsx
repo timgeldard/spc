@@ -173,7 +173,8 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
       if (sortMetric === 'ooc_rate') {
         return (bValue ?? -1) - (aValue ?? -1)
       }
-      return (bValue ?? Number.NEGATIVE_INFINITY) - (aValue ?? Number.NEGATIVE_INFINITY)
+      // cpk/ppk: lower = worse, so sort ascending; nulls go last
+      return (aValue ?? Infinity) - (bValue ?? Infinity)
     })
     return next
   }, [rows, sortMetric])
