@@ -11,12 +11,9 @@ import {
   cardSubClass,
   cardTitleClass,
   heroCardDenseClass,
-  kpiLabelClass,
-  kpiValueClass,
   metricGridClass,
   scorecardHeaderClass,
   scorecardEvidenceClass,
-  scorecardKpiClass,
   scorecardLayoutClass,
   scorecardPlantClass,
   scorecardSidebarClass,
@@ -26,6 +23,10 @@ import {
   scorecardToggleClass,
   stabilityNoteClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
+import LoadingSkeleton from '../components/LoadingSkeleton'
+import MetricCard from '../components/MetricCard'
+import ModuleEmptyState from '../components/ModuleEmptyState'
 
 const ScorecardTable = lazy(() => import('./ScorecardTable'))
 const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix'))
@@ -41,30 +42,24 @@ function SummaryBar({ rows }: SummaryBarProps) {
   const marginal = rows.filter(r => r.capability_status === 'marginal').length
   const poor = rows.filter(r => r.capability_status === 'poor').length
   const cards = [
-    { label: 'Characteristics', value: total, border: 'border-slate-200 bg-slate-50 text-slate-800', meta: 'Total measurable MICs in scope' },
-    { label: 'Highly Capable (≥1.67)', value: excellent, border: 'border-emerald-200 bg-emerald-50 text-emerald-700', meta: 'Strong headroom above specification' },
-    { label: 'Capable (≥1.33)', value: good, border: 'border-green-200 bg-green-50 text-green-700', meta: 'Operationally healthy and reliable' },
-    { label: 'Marginal (≥1.00)', value: marginal, border: 'border-amber-200 bg-amber-50 text-amber-700', meta: 'Monitor closely before release decisions' },
-    { label: 'Not Capable (<1.00)', value: poor, border: 'border-red-200 bg-red-50 text-red-700', meta: 'Immediate attention required' },
+    { label: 'Characteristics', value: total, colorClass: 'border-slate-200 bg-slate-50 text-slate-800', meta: 'Total measurable MICs in scope' },
+    { label: 'Highly Capable (≥1.67)', value: excellent, colorClass: 'border-emerald-200 bg-emerald-50 text-emerald-700', meta: 'Strong headroom above specification' },
+    { label: 'Capable (≥1.33)', value: good, colorClass: 'border-green-200 bg-green-50 text-green-700', meta: 'Operationally healthy and reliable' },
+    { label: 'Marginal (≥1.00)', value: marginal, colorClass: 'border-amber-200 bg-amber-50 text-amber-700', meta: 'Monitor closely before release decisions' },
+    { label: 'Not Capable (<1.00)', value: poor, colorClass: 'border-red-200 bg-red-50 text-red-700', meta: 'Immediate attention required' },
   ]
 
   return (
     <div className={scorecardSummaryClass}>
       {cards.map(card => (
-        <div key={card.label} className={`${scorecardKpiClass} ${card.border}`}>
-          <span className={kpiValueClass}>{card.value}</span>
-          <span className={kpiLabelClass}>{card.label}</span>
-          <span className="mt-2 block text-xs opacity-80">{card.meta}</span>
-        </div>
+        <MetricCard
+          key={card.label}
+          label={card.label}
+          value={card.value}
+          meta={card.meta}
+          colorClass={card.colorClass}
+        />
       ))}
-    </div>
-  )
-}
-
-function ScorecardPanelLoadingState() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm">
-      Loading scorecard view…
     </div>
   )
 }
@@ -81,56 +76,28 @@ export default function ScorecardView() {
 
   if (!state.selectedMaterial) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-        <div className="text-gray-300">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <line x1="3" y1="9" x2="21" y2="9" />
-            <line x1="3" y1="15" x2="21" y2="15" />
-            <line x1="9" y1="9" x2="9" y2="21" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-700">No material selected</p>
-          <p className="mt-1 max-w-xs text-xs text-gray-400">Select a material above to view the SPC scorecard with Cp/Cpk for all characteristics.</p>
-        </div>
-      </div>
+      <ModuleEmptyState
+        icon="▦"
+        title="No material selected"
+        description="Select a material above to view the SPC scorecard with Cp/Cpk for all characteristics."
+      />
     )
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: '1.5rem 0' }}>
-        <div className="flex flex-col gap-3">
-          <div className="h-10 w-full animate-pulse rounded-md bg-gray-200/70" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-gray-200/70" />
-          <div className="h-10 w-5/6 animate-pulse rounded-md bg-gray-200/70" />
-          <div className="h-10 w-4/6 animate-pulse rounded-md bg-gray-200/70" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-gray-200/70" />
-        </div>
-      </div>
-    )
+    return <LoadingSkeleton variant="lines" message="Loading scorecard…" />
   }
 
   if (error) {
-    return <div className="banner banner--error">Failed to load scorecard: {error}</div>
+    return <InfoBanner variant="error">Failed to load scorecard: {error}</InfoBanner>
   }
 
   if (!scorecard.length) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-        <div className="text-gray-300">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-700">No scorecard data</p>
-          <p className="mt-1 max-w-xs text-xs text-gray-400">No data found for <strong>{state.selectedMaterial.material_name}</strong>. At least 3 batches with quantitative results are required.</p>
-        </div>
-      </div>
+      <ModuleEmptyState
+        title="No scorecard data"
+        description={`No data found for ${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}. At least 3 batches with quantitative results are required.`}
+      />
     )
   }
 
@@ -181,7 +148,7 @@ export default function ScorecardView() {
                 </p>
               )}
             </div>
-            <Suspense fallback={<ScorecardPanelLoadingState />}>
+            <Suspense fallback={<LoadingSkeleton minHeight="280px" message="Loading view…" />}>
               <ScorecardTable rows={scorecard} />
             </Suspense>
           </div>
@@ -206,7 +173,7 @@ export default function ScorecardView() {
         </div>
       )}
       {viewMode === 'matrix' && (
-        <Suspense fallback={<ScorecardPanelLoadingState />}>
+        <Suspense fallback={<LoadingSkeleton minHeight="280px" message="Loading view…" />}>
           <CapabilityMatrix rows={scorecard} />
         </Suspense>
       )}

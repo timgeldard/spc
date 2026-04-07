@@ -33,20 +33,18 @@ import {
   chartsLayoutClass,
   chartsMainClass,
   chartsWorkspaceClass,
-  emptyCardClass,
-  emptyIconClass,
-  emptySubClass,
   evidenceRailClass,
   heroCardDenseClass,
-  loadingClass,
   rollingHeaderClass,
   rollingPanelClass,
   rollingTitleClass,
   rollingWindowInputClass,
   rollingWindowLabelClass,
   sideStackClass,
-  spinnerClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
+import LoadingSkeleton from '../components/LoadingSkeleton'
+import ModuleEmptyState from '../components/ModuleEmptyState'
 import ChartInfoBanners from './ChartInfoBanners'
 import ChartSettingsRail, { type AttributeChartType, type QuantChartType } from './ChartSettingsRail'
 import ChartSummaryBar from './ChartSummaryBar'
@@ -89,21 +87,6 @@ function getCapabilityHeadline(spc: SPCComputationResult | null | undefined): { 
   return null
 }
 
-function PanelLoadingState() {
-  return (
-    <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-4 py-8 text-sm text-slate-500 shadow-sm">
-      Loading chart panel…
-    </div>
-  )
-}
-
-function ChartLoadingState() {
-  return (
-    <div className="flex min-h-[520px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm">
-      Loading chart…
-    </div>
-  )
-}
 
 export default function ControlChartsView() {
   const { state, dispatch } = useSPC()
@@ -400,53 +383,46 @@ export default function ControlChartsView() {
 
   if (!selectedMaterial) {
     return (
-      <div className={emptyCardClass}>
-        <div className={emptyIconClass}>📈</div>
-        <p>Select a material and characteristic above to view control charts.</p>
-      </div>
+      <ModuleEmptyState
+        icon="📈"
+        title="No scope selected"
+        description="Select a material and characteristic above to view control charts."
+      />
     )
   }
 
   if (!selectedMIC) {
     return (
-      <div className={emptyCardClass}>
-        <p>Material selected: <strong>{selectedMaterial.material_name}</strong></p>
-        <p className={emptySubClass}>Now select a characteristic (MIC) to view its control chart.</p>
-      </div>
+      <ModuleEmptyState
+        title={`Material: ${selectedMaterial.material_name ?? selectedMaterial.material_id}`}
+        description="Now select a characteristic (MIC) to view its control chart."
+      />
     )
   }
 
   if (loading) {
-    return (
-      <div className={loadingClass}>
-        <div className={spinnerClass} />
-        <p>Loading measurement data…</p>
-      </div>
-    )
+    return <LoadingSkeleton message="Loading measurement data…" />
   }
 
   if (error) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900" role="alert">
-        Failed to load chart data: {error}
-      </div>
-    )
+    return <InfoBanner variant="error">Failed to load chart data: {error}</InfoBanner>
   }
 
   if (!points.length) {
     return (
-      <div className={emptyCardClass}>
-        <p>No {isAttributeChart ? 'attribute' : 'quantitative'} data found for <strong>{selectedMIC.mic_name}</strong>.</p>
-        <p className={emptySubClass}>Try widening the date range or selecting a different characteristic.</p>
-      </div>
+      <ModuleEmptyState
+        title={`No ${isAttributeChart ? 'attribute' : 'quantitative'} data found for ${selectedMIC.mic_name ?? selectedMIC.mic_id}`}
+        description="Try widening the date range or selecting a different characteristic."
+      />
     )
   }
 
   if (isQuantitative && !spc) {
     return (
-      <div className={emptyCardClass}>
-        <p>Insufficient data to compute control limits (minimum 2 points required).</p>
-      </div>
+      <ModuleEmptyState
+        title="Insufficient data"
+        description="Minimum 2 points required to compute control limits."
+      />
     )
   }
 
@@ -495,7 +471,7 @@ export default function ControlChartsView() {
     excludedSet = excludedIndices,
     pointClick?: (index: number) => void,
   ) => (
-    <Suspense fallback={<ChartLoadingState />}>
+    <Suspense fallback={<LoadingSkeleton minHeight="520px" message="Loading chart…" />}>
       {spcResult.chartType === 'imr' ? (
         <IMRChart
           spc={spcResult}
@@ -535,7 +511,7 @@ export default function ControlChartsView() {
           actionRail={null}
         />
         <div className={chartsMainClass}>
-          <Suspense fallback={<ChartLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="520px" message="Loading chart…" />}>
             {attrChartType === 'p_chart' && <PChart points={attrPoints} />}
             {attrChartType === 'c_chart' && <CChart points={countPoints} />}
             {attrChartType === 'u_chart' && <UChart points={countPoints} />}
@@ -635,10 +611,10 @@ export default function ControlChartsView() {
         </div>
 
         <div className={evidenceRailClass}>
-          <Suspense fallback={<PanelLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <CapabilityPanel spc={spc} />
           </Suspense>
-          <Suspense fallback={<PanelLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <ExcludedPointsPanel
               snapshot={exclusionsSnapshot ?? exclusionAudit}
               currentPoints={currentExcludedPoints}
@@ -660,7 +636,7 @@ export default function ControlChartsView() {
       </div>
 
       <div className={chartsBottomClass}>
-        <Suspense fallback={<PanelLoadingState />}>
+        <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
           <SignalsPanel
             signals={spc?.signals}
             mrSignals={spc?.mrSignals}
@@ -686,7 +662,7 @@ export default function ControlChartsView() {
               />
             </label>
           </div>
-          <Suspense fallback={<PanelLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <CapabilityTrendChart trendData={trendData} windowSize={rollingWindowSize} />
           </Suspense>
         </div>
@@ -698,7 +674,7 @@ export default function ControlChartsView() {
         sections={stratumSections}
         renderChart={sectionSpc => renderQuantitativeChart(sectionSpc, null, new Set<number>())}
         renderSignals={sectionSpc => (
-          <Suspense fallback={<PanelLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <SignalsPanel
               signals={sectionSpc.signals}
               mrSignals={sectionSpc.mrSignals}
@@ -708,7 +684,7 @@ export default function ControlChartsView() {
           </Suspense>
         )}
         renderCapability={sectionSpc => (
-          <Suspense fallback={<PanelLoadingState />}>
+          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <CapabilityPanel spc={sectionSpc} />
           </Suspense>
         )}

@@ -23,6 +23,7 @@ import {
   moduleHeaderCardClass,
   splitPanelClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
 
 interface SelectedCorrelationPair {
   micAId: string
@@ -108,7 +109,7 @@ export default function CorrelationView() {
         </aside>
       </div>
 
-      {error && <div className="banner banner--error">{error}</div>}
+      {error && <InfoBanner variant="error">{error}</InfoBanner>}
 
       {result && (
         <>
@@ -117,9 +118,9 @@ export default function CorrelationView() {
             {result.pair_count >= 500 && ' (showing top 500 by |r|)'}
           </p>
           {result.mics.length > 30 && (
-            <div className="banner banner--warning">
+            <InfoBanner variant="warn">
               More than 30 characteristics detected — consider narrowing the date range or increasing min batches.
-            </div>
+            </InfoBanner>
           )}
           <CorrelationMatrix
             pairs={result.pairs}

@@ -34,6 +34,7 @@ import {
   splitPanelClass,
   spinnerClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
 
 type FlowNode = Node<ProcessFlowNodeData, 'processNode'>
 type FlowEdge = Edge
@@ -151,11 +152,7 @@ export default function ProcessFlowView() {
   }
 
   if (error) {
-    return (
-      <div className="banner banner--error">
-        Failed to load process flow: {error}
-      </div>
-    )
+    return <InfoBanner variant="error">Failed to load process flow: {error}</InfoBanner>
   }
 
   if (!nodes.length) {

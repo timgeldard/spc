@@ -26,6 +26,7 @@ import {
   splitPanelClass,
   spinnerClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
 
 export default function CompareView() {
   const { state } = useSPC()
@@ -105,7 +106,7 @@ export default function CompareView() {
         </div>
       )}
 
-      {error && <div className="banner banner--error">{error}</div>}
+      {error && <InfoBanner variant="error">{error}</InfoBanner>}
 
       {result && (
         <>

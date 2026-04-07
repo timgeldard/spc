@@ -26,6 +26,8 @@ import {
   moduleHeaderCardClass,
   splitPanelClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
+import { grrStatusClass } from '../components/StatusPill'
 
 type MSADataCube = Array<Array<Array<number | null>>>
 
@@ -63,7 +65,7 @@ interface GRRResultProps {
 
 function GRRResult({ result, onSave, saving }: GRRResultProps) {
   if (!result) return null
-  if (result.error) return <div className="banner banner--error">{result.error}</div>
+  if (result.error) return <InfoBanner variant="error">{result.error}</InfoBanner>
 
   const {
     grrPct,
@@ -80,19 +82,18 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
     modelWarning,
     systemStabilityWarning,
   } = result
-  const pctColor = grrPct == null ? '#9ca3af' : grrPct < 10 ? '#059669' : grrPct < 30 ? '#d97706' : '#dc2626'
-  const verdict = grrPct == null ? 'Unknown' : grrPct < 10 ? 'Acceptable' : grrPct < 30 ? 'Conditionally Acceptable' : 'Not Acceptable'
+  const { colorClass, verdict } = grrStatusClass(grrPct)
 
   return (
     <div className={msaResultsClass}>
-      <div className={chartHintClass} style={{ marginBottom: '0.5rem' }}>
+      <div className={`${chartHintClass} mb-2`}>
         Method: <strong>{method === 'anova' ? 'ANOVA Gauge R&R' : 'Average & Range'}</strong>
         {method === 'anova' && interactionPValue != null && ` · interaction p = ${interactionPValue.toFixed(4)}`}
       </div>
-      {modelWarning && <div className="banner banner--warning">{modelWarning}</div>}
-      {systemStabilityWarning && <div className="banner banner--warning">{systemStabilityWarning}</div>}
+      {modelWarning && <InfoBanner variant="warn">{modelWarning}</InfoBanner>}
+      {systemStabilityWarning && <InfoBanner variant="warn">{systemStabilityWarning}</InfoBanner>}
 
-      <div className={msaVerdictClass} style={{ color: pctColor }}>
+      <div className={`${msaVerdictClass} ${colorClass}`}>
         <span>{grrPct?.toFixed(1) ?? '—'}% GRR</span>
         <span>{verdict}</span>
         {grrPctTol != null && <span className="text-sm font-normal">({grrPctTol.toFixed(1)}% of tolerance)</span>}
@@ -113,7 +114,7 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
       <div className={msaNdcClass}>
         NDC (Number of Distinct Categories): <strong>{ndc ?? '—'}</strong>
         {ndc != null && ndc < 5 && (
-          <span className="text-amber-600"> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
+          <span className="text-amber-700"> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
         )}
       </div>
 
@@ -208,9 +209,9 @@ export default function MSAView() {
         </p>
       </div>
       {!state.selectedMIC && (
-        <div className="banner banner--warning">
+        <InfoBanner variant="warn">
           Select a characteristic in the Charts tab first to associate this study with a specific MIC.
-        </div>
+        </InfoBanner>
       )}
 
       <div className={splitPanelClass}>
@@ -218,7 +219,7 @@ export default function MSAView() {
           <div className={msaSetupClass}>
             <div className={msaSetupRowClass}>
               <label>Method:</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className="flex gap-2">
                 <button
                   type="button"
                   className={`${buttonBaseClass} ${buttonSmClass} ${method === 'average_range' ? buttonPrimaryClass : buttonSecondaryClass}`}
@@ -258,8 +259,8 @@ export default function MSAView() {
           </div>
 
           <div className={msaDataClass}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '0.25rem' }}>
-              <label className="text-sm font-medium text-[var(--c-text)]" style={{ margin: 0 }}>
+            <div className="mb-1 flex items-baseline gap-4">
+              <label className="text-sm font-medium text-[var(--c-text)]">
                 Measurement data (CSV / TSV: operator, part, replicate, value)
               </label>
               <button
@@ -294,7 +295,7 @@ export default function MSAView() {
         </aside>
       </div>
 
-      {saveError && <div className="banner banner--error">{saveError}</div>}
+      {saveError && <InfoBanner variant="error">{saveError}</InfoBanner>}
       <GRRResult result={result} onSave={handleSave} saving={saving} />
     </div>
   )
