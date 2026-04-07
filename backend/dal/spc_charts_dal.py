@@ -11,6 +11,7 @@ from backend.utils.db import run_sql_async, sql_param, tbl
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
+_ATTRIBUTE_CHART_MAX_ROWS = 10000
 _MB_TABLE_PLACEHOLDER = "__spc_mass_balance__"
 _QR_TABLE_PLACEHOLDER = "__spc_quality_result__"
 _ALLOWED_STRATIFY_COLUMNS = {
@@ -73,7 +74,7 @@ def _apply_chart_row_formatting(rows: list[dict]) -> list[dict]:
                 lsl = nominal - tol
         row["usl"] = round(usl, 6) if usl is not None else None
         row["lsl"] = round(lsl, 6) if lsl is not None else None
-        row["spec_type"] = infer_spec_type(row["usl"], row["lsl"])
+        row["spec_type"] = infer_spec_type(row["usl"], row["lsl"], row.get("nominal"))
         if "plant_id" not in row:
             row["plant_id"] = None
         row.pop("cursor_batch_date_epoch", None)
@@ -556,14 +557,15 @@ async def fetch_p_chart_data(
         SELECT
             BATCH_ID        AS batch_id,
             CAST(batch_date AS STRING) AS batch_date,
-            DENSE_RANK() OVER (ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID) AS batch_seq,
             n_inspected,
             n_nonconforming,
             ROUND(n_nonconforming / GREATEST(n_inspected, 1), 4) AS p_value
         FROM attr_data
-        ORDER BY batch_seq
+        ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID
+        LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
     rows = await run_sql_async(token, query, params)
+    rows = _assign_batch_sequence(rows)
     for row in rows:
         row["batch_seq"] = int(float(row.get("batch_seq", 0) or 0))
         row["n_inspected"] = int(float(row.get("n_inspected", 0) or 0))
@@ -627,13 +629,14 @@ async def fetch_count_chart_data(
         SELECT
             BATCH_ID AS batch_id,
             CAST(batch_date AS STRING) AS batch_date,
-            DENSE_RANK() OVER (ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID) AS batch_seq,
             n_inspected,
             defect_count
         FROM counts
-        ORDER BY batch_seq
+        ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID
+        LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
     rows = await run_sql_async(token, query, params)
+    rows = _assign_batch_sequence(rows)
     for row in rows:
         row["batch_seq"] = int(float(row.get("batch_seq", 0) or 0))
         row["n_inspected"] = int(float(row.get("n_inspected", 0) or 0))

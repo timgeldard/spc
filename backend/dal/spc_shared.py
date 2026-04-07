@@ -38,15 +38,25 @@ def cpk_ci(cpk: float, n: int) -> tuple[Optional[float], Optional[float]]:
     return lower, upper
 
 
-def infer_spec_type(usl: Optional[float], lsl: Optional[float]) -> str:
+def infer_spec_type(
+    usl: Optional[float],
+    lsl: Optional[float],
+    nominal: Optional[float] = None,
+) -> str:
     """Infer spec type from resolved USL/LSL values."""
     if usl is not None and lsl is not None:
+        if nominal is not None:
+            upper_span = usl - nominal
+            lower_span = nominal - lsl
+            if math.isclose(abs(upper_span), abs(lower_span), rel_tol=1e-6, abs_tol=1e-6):
+                return "bilateral_symmetric"
+            return "bilateral_asymmetric"
         return "bilateral_symmetric"
     if usl is not None:
         return "unilateral_upper"
     if lsl is not None:
         return "unilateral_lower"
-    return "bilateral_symmetric"
+    return "unspecified"
 
 
 def compute_normality_result(values: list[Optional[float]]) -> dict:

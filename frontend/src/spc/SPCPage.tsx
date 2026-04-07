@@ -1,8 +1,9 @@
-import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react'
 import {
   GitBranch, Activity, BarChart2, Layers, Ruler, TrendingUp, type LucideIcon,
 } from 'lucide-react'
 import { SPCProvider, useSPC } from './SPCContext'
+import SPCErrorBoundary from './SPCErrorBoundary'
 import SPCFilterBar from './SPCFilterBar'
 import SPCPageHeader from './SPCPageHeader'
 import type { SPCState } from './types'
@@ -60,6 +61,14 @@ function TabLoadingState() {
 
 function Sidebar() {
   const { state, dispatch } = useSPC()
+  const [tabTransitioning, setTabTransitioning] = useState(false)
+
+  useEffect(() => {
+    setTabTransitioning(true)
+    const timer = window.setTimeout(() => setTabTransitioning(false), 220)
+    return () => window.clearTimeout(timer)
+  }, [state.activeTab])
+
   return (
     <aside className={shellSidebarClass}>
       <div className={sidebarGroupLabelClass}>Modules</div>
@@ -72,9 +81,13 @@ function Sidebar() {
               onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: id })}
               title={label}
               className={`${sidebarItemClass} ${active ? sidebarItemActiveClass : ''}`}
+              aria-current={active ? 'page' : undefined}
             >
               <Icon size={17} strokeWidth={active ? 2.5 : 1.9} />
               <span>{label}</span>
+              {active && tabTransitioning && (
+                <span className="ml-auto h-2 w-2 animate-pulse rounded-full bg-[var(--c-brand)]" aria-hidden="true" />
+              )}
             </button>
           )
         })}
@@ -100,9 +113,11 @@ function SPCContent() {
       <div className={workspaceClass}>
         <Sidebar />
         <div className={workspaceMainClass}>
-          <Suspense fallback={<TabLoadingState />}>
-            <ActiveView />
-          </Suspense>
+          <SPCErrorBoundary key={state.activeTab}>
+            <Suspense fallback={<TabLoadingState />}>
+              <ActiveView />
+            </Suspense>
+          </SPCErrorBoundary>
         </div>
       </div>
     </div>

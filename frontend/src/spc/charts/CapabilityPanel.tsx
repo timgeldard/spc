@@ -90,6 +90,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
     empiricalP50,
     empiricalP99865,
   } = spc.capability
+  const hasNoSpecification = spec_type === 'unspecified'
   const isUnilateral = spec_type === 'unilateral_upper' || spec_type === 'unilateral_lower'
   const cpkTier = getTier(cpk)
   const usesNonParametricCapability = capabilityMethod === 'non_parametric'
@@ -104,6 +105,11 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         </p>
       </div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
+      {hasNoSpecification && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+          No specification data is available for this characteristic in the selected range. Capability metrics cannot be calculated.
+        </p>
+      )}
       {normality?.is_normal === false && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           Distribution is non-normal. Non-parametric capability calculations (P50, P99.865, P0.135) applied.
@@ -152,7 +158,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p className="text-xs text-amber-700">{spc.capability.specWarning}</p>
       )}
 
-      {usesNonParametricCapability ? (
+      {hasNoSpecification ? null : usesNonParametricCapability ? (
         <div className="space-y-2">
           <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Empirical percentile evidence</div>
           <div className="grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>

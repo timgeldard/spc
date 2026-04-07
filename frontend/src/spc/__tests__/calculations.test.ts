@@ -98,15 +98,17 @@ describe('computeIMR', () => {
     expect(result.xBar).toBeCloseTo(10, 5)
   })
 
-  it('uses MSSD for low-n series', () => {
+  it('keeps MR/d2 as the I-MR estimator for low-n series', () => {
     const result = computeIMR([10, 11, 9, 12, 8, 11, 10, 12])
-    expect(result.sigmaMethod).toBe('mssd')
-    expect(result.sigmaWithin).toBeCloseTo(result.sigmaMSSD, 6)
+    expect(result.sigmaMethod).toBe('mr')
+    expect(result.sigmaWithin).toBeCloseTo(result.sigmaMR, 6)
+    expect(result.sigmaMSSD).toBeGreaterThan(0)
   })
 
-  it('uses MSSD when a monotonic trend is detected', () => {
+  it('does not switch away from MR/d2 when a monotonic trend is detected', () => {
     const result = computeIMR([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    expect(result.sigmaMethod).toBe('mssd')
+    expect(result.sigmaMethod).toBe('mr')
+    expect(result.sigmaWithin).toBeCloseTo(result.sigmaMR, 6)
   })
 
   it('keeps MR as the default estimator for stable series', () => {
@@ -185,14 +187,14 @@ describe('computeXbarR', () => {
 // ---------------------------------------------------------------------------
 describe('computeCapability', () => {
   it('returns nulls when insufficient data', () => {
-    const result = computeCapability([1, 2, 3], 10, 2, 0.5)
+    const result = computeCapability([1, 2, 3], { nominal: 10, tolerance: 2, spec_type: 'bilateral_symmetric' }, 0.5)
     expect(result.cp).toBeNull()
     expect(result.cpk).toBeNull()
   })
 
   it('returns nulls when tolerance is 0', () => {
     const values = Array.from({ length: 10 }, () => 10)
-    const result = computeCapability(values, 10, 0, 0.3)
+    const result = computeCapability(values, { nominal: 10, tolerance: 0, spec_type: 'bilateral_symmetric' }, 0.3)
     expect(result.cp).toBeNull()
     expect(result.cpk).toBeNull()
   })
@@ -203,7 +205,7 @@ describe('computeCapability', () => {
     const nominal = 10
     const tolerance = 3
     const sigmaWithin = 1
-    const result = computeCapability(values, nominal, tolerance, sigmaWithin)
+    const result = computeCapability(values, { nominal, tolerance, spec_type: 'bilateral_symmetric' }, sigmaWithin)
     expect(result.cp).toBeCloseTo(1, 0)
     expect(result.usl).toBe(13)
     expect(result.lsl).toBe(7)
@@ -214,13 +216,13 @@ describe('computeCapability', () => {
     const nominal = 10
     const tolerance = 3
     const sigmaWithin = 0.5
-    const result = computeCapability(values, nominal, tolerance, sigmaWithin)
+    const result = computeCapability(values, { nominal, tolerance, spec_type: 'bilateral_symmetric' }, sigmaWithin)
     expect(result.cpk).toBeLessThan(result.cp)
   })
 
   it('includes dpmo_convention field disclosing Motorola 1.5σ shift', () => {
     const values = Array.from({ length: 20 }, () => 10)
-    const result = computeCapability(values, 10, 3, 1)
+    const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1)
     expect(result.dpmo_convention).toBe('motorola_1.5sigma_shift')
   })
 
@@ -228,7 +230,7 @@ describe('computeCapability', () => {
     // Verify sigmaOverall uses stddevSample by comparing to manual calculation
     const values = [8, 9, 10, 11, 12]
     const expectedSigma = stddevSample(values) // N-1 denominator
-    const result = computeCapability(values, 10, 3, 1)
+    const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1)
     // Pp = (USL - LSL) / (6 * sigmaOverall)
     const usl = 13, lsl = 7
     const expectedPp = (usl - lsl) / (6 * expectedSigma)
@@ -237,16 +239,31 @@ describe('computeCapability', () => {
 
   it('carries through a non-normality warning when provided', () => {
     const values = [8, 9, 10, 11, 12, 13]
-    const result = computeCapability(values, 10, 3, 1, {
+    const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1, {
       normality: { method: 'shapiro_wilk', p_value: 0.0123, alpha: 0.05, is_normal: false, warning: null },
     })
     expect(result.normality?.is_normal).toBe(false)
     expect(result.normalityWarning).toMatch(/non-normal/i)
   })
 
+  it('returns null capability when specification type is unspecified', () => {
+    const values = [8, 9, 10, 11, 12, 13]
+    const result = computeCapability(
+      values,
+      { spec_type: 'unspecified', nominal: null, tolerance: null, usl: null, lsl: null },
+      1,
+    )
+
+    expect(result.cp).toBeNull()
+    expect(result.cpk).toBeNull()
+    expect(result.pp).toBeNull()
+    expect(result.ppk).toBeNull()
+    expect(result.spec_type).toBe('unspecified')
+  })
+
   it('uses empirical percentiles for long-term capability when data is non-normal', () => {
     const values = [7, 8, 8, 9, 10, 10, 11, 12, 14, 18]
-    const result = computeCapability(values, 10, 4, 1, {
+    const result = computeCapability(values, { nominal: 10, tolerance: 4, spec_type: 'bilateral_symmetric' }, 1, {
       normality: { method: 'shapiro_wilk', p_value: 0.001, alpha: 0.05, is_normal: false, warning: null },
     })
 
@@ -261,7 +278,7 @@ describe('computeCapability', () => {
 
   it('keeps the parametric long-term capability path for normal data', () => {
     const values = [8, 9, 10, 10, 10, 11, 12, 9, 10, 11]
-    const result = computeCapability(values, 10, 3, 1, {
+    const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1, {
       normality: { method: 'shapiro_wilk', p_value: 0.42, alpha: 0.05, is_normal: true, warning: null },
     })
 
@@ -445,6 +462,7 @@ describe('detectNelsonRules Rule 4 (alternating up/down)', () => {
       expect(sig.indices[0]).toBeGreaterThan(0)
     })
   })
+
 })
 
 // ---------------------------------------------------------------------------

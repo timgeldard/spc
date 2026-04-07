@@ -101,7 +101,8 @@ export function stddevSample(values: number[] | null | undefined): number | null
 }
 
 // Mean Square Successive Difference sigma estimator.
-// For a stable independent process, E(MSSD) = 2σ², so σ = sqrt(MSSD / 2).
+// Kept as supplemental diagnostics only; AIAG I-MR limits should continue to
+// use MR/d2 rather than silently switching estimators.
 export function stddevMSSD(values: number[] | null | undefined): number | null {
   if (!values || values.length < 2) return null
   let sumSquares = 0
@@ -110,17 +111,6 @@ export function stddevMSSD(values: number[] | null | undefined): number | null {
     sumSquares += diff * diff
   }
   return Math.sqrt(sumSquares / (2 * (values.length - 1)))
-}
-
-function hasMonotonicTrend(values: number[], minRunLength = 6): boolean {
-  if (values.length < minRunLength) return false
-  for (let end = minRunLength - 1; end < values.length; end++) {
-    const window = values.slice(end - minRunLength + 1, end + 1)
-    const increasing = window.every((v, idx) => idx === 0 || v > window[idx - 1])
-    const decreasing = window.every((v, idx) => idx === 0 || v < window[idx - 1])
-    if (increasing || decreasing) return true
-  }
-  return false
 }
 
 export function computeIMR(values: number[]): IMRResult | null {
@@ -138,10 +128,8 @@ export function computeIMR(values: number[]): IMRResult | null {
 
   const sigmaMR = mrBar / d2
   const sigmaMSSD = stddevMSSD(values)
-  const useMSSD = values.length <= 8 || hasMonotonicTrend(values)
-  const sigmaMethod: IMRResult['sigmaMethod'] =
-    useMSSD && sigmaMSSD != null && sigmaMSSD > 0 ? 'mssd' : 'mr'
-  const sigmaWithin = sigmaMethod === 'mssd' && sigmaMSSD != null ? sigmaMSSD : sigmaMR
+  const sigmaMethod: IMRResult['sigmaMethod'] = 'mr'
+  const sigmaWithin = sigmaMR
 
   return {
     xBar,
@@ -309,6 +297,24 @@ function quantile(values: number[], probability: number): number | null {
   return sorted[lower] * (1 - weight) + sorted[upper] * weight
 }
 
+function inferLocalSpecType(point?: ChartDataPoint): SpecConfig['spec_type'] {
+  if (point?.spec_type) return point.spec_type
+  if (point?.usl != null && point?.lsl != null) {
+    if (point.nominal != null) {
+      const upperSpan = point.usl - point.nominal
+      const lowerSpan = point.nominal - point.lsl
+      return Math.abs(Math.abs(upperSpan) - Math.abs(lowerSpan)) <= 1e-6
+        ? 'bilateral_symmetric'
+        : 'bilateral_asymmetric'
+    }
+    return 'bilateral_symmetric'
+  }
+  if (point?.usl != null) return 'unilateral_upper'
+  if (point?.lsl != null) return 'unilateral_lower'
+  if (point?.nominal != null && point?.tolerance != null && point.tolerance > 0) return 'bilateral_symmetric'
+  return 'unspecified'
+}
+
 export function computeCapability(
   values: number[],
   specConfig: SpecConfig,
@@ -317,47 +323,33 @@ export function computeCapability(
 ): CapabilityResult
 export function computeCapability(
   values: number[],
-  nominal: number | null | undefined,
-  tolerance: number | null | undefined,
+  specConfig: SpecConfig,
   sigmaWithin: number | null | undefined,
-  options?: CapabilityOptions,
-): CapabilityResult
-export function computeCapability(
-  values: number[],
-  specConfigOrNominal: SpecConfig | number | null | undefined,
-  toleranceOrSigmaWithin?: number | null,
-  sigmaWithinIfOld?: number | CapabilityOptions | null,
-  maybeOptions: CapabilityOptions = {},
+  options: CapabilityOptions = {},
 ): CapabilityResult {
-  let specConfig: SpecConfig
-  let sigmaWithin: number | null | undefined
-  let options: CapabilityOptions
-
-  if (
-    typeof specConfigOrNominal === 'number' ||
-    specConfigOrNominal == null
-  ) {
-    specConfig = {
-      spec_type: 'bilateral_symmetric',
-      nominal: specConfigOrNominal ?? null,
-      tolerance: toleranceOrSigmaWithin ?? null,
-    }
-    sigmaWithin = typeof sigmaWithinIfOld === 'number' ? sigmaWithinIfOld : null
-    options = maybeOptions
-  } else {
-    specConfig = specConfigOrNominal
-    sigmaWithin = toleranceOrSigmaWithin
-    options =
-      sigmaWithinIfOld != null && typeof sigmaWithinIfOld === 'object'
-        ? sigmaWithinIfOld
-        : {}
-  }
-
   const normality = options.normality ?? null
-  const { spec_type = 'bilateral_symmetric', nominal, tolerance } = specConfig
+  const { spec_type = 'unspecified', nominal, tolerance } = specConfig
 
   let usl = specConfig.usl ?? null
   let lsl = specConfig.lsl ?? null
+
+  if (spec_type === 'unspecified') {
+    return {
+      cp: null,
+      cpk: null,
+      pp: null,
+      ppk: null,
+      usl: null,
+      lsl: null,
+      cpkLower95: null,
+      cpkUpper95: null,
+      zScore: null,
+      dpmo: null,
+      spec_type,
+      normality,
+      normalityWarning: buildNormalityWarning(normality),
+    }
+  }
 
   if (spec_type === 'bilateral_symmetric') {
     if (usl == null || lsl == null) {
@@ -771,14 +763,14 @@ export function computeAll(
       lsl: p?.lsl ?? null,
       nominal: p?.nominal ?? null,
       tolerance: p?.tolerance ?? null,
-      spec_type: p?.spec_type ?? 'bilateral_symmetric',
+      spec_type: inferLocalSpecType(p),
     })
   const uniqueSpecCount = new Set(specCandidates.map(specSignature)).size
   const hasMixedSpec = uniqueSpecCount > 1
 
   const nominal = specPoint?.nominal ?? null
   const tolerance = specPoint?.tolerance ?? null
-  const spec_type = specPoint?.spec_type ?? 'bilateral_symmetric'
+  const spec_type = inferLocalSpecType(specPoint)
   const specConfig: SpecConfig = {
     spec_type,
     nominal,
@@ -788,7 +780,9 @@ export function computeAll(
     hasMixedSpec,
     specWarning: hasMixedSpec
       ? 'Capability uses the latest spec in the selected range because specifications changed across the time window.'
-      : null,
+      : spec_type === 'bilateral_asymmetric'
+        ? 'Capability is being interpreted against an asymmetric bilateral specification.'
+        : null,
   }
 
   const values = sorted.map((p) => p.value)

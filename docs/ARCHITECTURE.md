@@ -45,11 +45,12 @@ The backend follows a **Layered Architecture** to separate concerns and ensure m
 
 ```
 backend/
-├── main.py             App entry point, SPA serving, and trace logic
+├── main.py             App entry point, health/readiness, and SPA serving
 ├── routers/            HTTP Controllers (Rate limiting, auth, validation)
 │   ├── spc_charts.py   Chart-data & pagination logic
 │   ├── spc_metadata.py MIC & Material master data
 │   ├── spc_analysis.py Scorecard & Process flow
+│   ├── trace.py        Traceability endpoints
 │   └── export.py       Excel/CSV generation
 ├── dal/                Data Access Layer (SQL isolation)
 │   ├── spc_charts_dal.py Pypika-based dynamic queries
@@ -122,7 +123,37 @@ Databricks Apps injects the user's OIDC token into the header. The backend extra
 1.  **Auditor Visibility**: Every query in the SQL Warehouse logs shows the actual user's email.
 2.  **Native UC Security**: Row and column-level policies are enforced by Spark, not the application logic.
 
+### Health and Readiness
+
+- `/api/health` is a liveness endpoint only.
+- `/api/ready` performs a SQL `SELECT 1` probe using `DATABRICKS_READINESS_TOKEN`.
+- In a passthrough-auth app, readiness cannot verify warehouse connectivity without a dedicated non-user token.
+
 ---
+
+## Rate Limits
+
+The API uses `slowapi` limits to protect the warehouse from accidental UI storms while preserving a responsive analyst workflow.
+
+| Endpoint | Limit | Rationale |
+|---|---:|---|
+| `/api/trace` | `30/minute` | Recursive lineage queries are warehouse-expensive and typically user-driven, not polled |
+| `/api/summary` | `60/minute` | Summary cards are lighter and often refreshed during investigations |
+| `/api/batch-details` | `30/minute` | Consolidated CoA and movement lookups fan out across multiple gold views |
+| `/api/impact` | `60/minute` | Impact checks are analytical but lighter than full batch details |
+| `/api/spc/chart-data` | `60/minute` | Quantitative chart pages paginate and can trigger repeated fetches during navigation |
+| `/api/spc/p-chart-data` | `60/minute` | Attribute chart queries are batch-level and moderately sized |
+| `/api/spc/count-chart-data` | `60/minute` | Count-chart queries are batch-level and moderately sized |
+| `/api/spc/locked-limits` (POST/DELETE) | `30/minute` | Mutating audit-relevant control limits should remain deliberately paced |
+| `/api/spc/locked-limits` (GET) | `120/minute` | Read-only lookup used during chart hydration |
+
+---
+
+## Deployment Notes
+
+- `databricks.yml` now defines both `uat` and `prod` targets.
+- `make deploy` remains the supported path because bundle deploy resets `user_api_scopes`.
+- `scripts/post-deploy.sh` is still required until Databricks bundle schema supports persisted app scopes.
 
 ## Implementation Rationale
 
@@ -142,8 +173,9 @@ No automated deployment — push to UAT is a manual step via `make deploy`.
 | Area | Limitation |
 |---|---|
 | Databricks connector | Not used — REST API polling adds ~2s latency vs native driver |
-| Rate limiting | `rate_limit.py` is wired but no endpoint decorators applied (slowapi not in Databricks Apps venv) |
+| In-process SQL cache | `TTLCache` is per app instance; multi-instance deployments do not share cache state |
+| App scopes | `user_api_scopes: ["sql"]` still requires post-deploy re-application via script |
 | Plant filter in chart-data | Uses INNER JOIN on batch_dates — batches with no mass balance record are excluded |
-| Histogram bins | Sturges' formula underestimates bin count for non-normal distributions |
+| Histogram bins | Binning follows Freedman-Diaconis and may still need UX tuning for very small samples |
 | Scorecard stability | Cpk shown without per-MIC stability check (requires full chart-data fetch per MIC) |
 | UoM consistency | No unit-of-measure conversion; cross-plant SPC is only valid if UoM is consistent in the gold view |

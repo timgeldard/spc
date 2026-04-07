@@ -8,6 +8,7 @@ export type SpecType =
   | 'bilateral_asymmetric'
   | 'unilateral_upper'
   | 'unilateral_lower'
+  | 'unspecified'
   | (string & {})
 
 export interface MaterialRef {
@@ -315,7 +316,7 @@ export interface ScorecardRow {
   z_score?: number | null
   dpmo?: number | null
   ooc_rate?: number | null
-  capability_status?: 'excellent' | 'good' | 'marginal' | 'poor' | 'grey' | string
+  capability_status?: 'excellent' | 'good' | 'marginal' | 'poor' | 'grey' | 'out_of_spec_mean' | string
 }
 
 export interface ExportPayload {

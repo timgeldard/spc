@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import {
   ClientSideRowModelModule,
@@ -31,6 +31,7 @@ const STATUS_CONFIG = {
   good: { label: 'Capable', color: '#10b981', bg: '#ecfdf5' },
   marginal: { label: 'Marginal', color: '#d97706', bg: '#fffbeb' },
   poor: { label: 'Poor', color: '#dc2626', bg: '#fef2f2' },
+  out_of_spec_mean: { label: 'Mean OOS', color: '#991b1b', bg: '#fee2e2' },
   grey: { label: 'No Data', color: '#9ca3af', bg: '#f9fafb' },
 } as const
 
@@ -92,11 +93,14 @@ interface ScorecardTableProps {
   rows: ScorecardRow[]
 }
 
+type SortMetric = 'ppk' | 'cpk' | 'ooc_rate'
+
 export default function ScorecardTable({ rows }: ScorecardTableProps) {
   const { state, dispatch } = useSPC()
   const gridRef = useRef<AgGridReact<ScorecardRow>>(null)
   const { exportData, exporting } = useExport()
   const [dark, setDark] = useState(() => document.documentElement.getAttribute('data-theme') === 'dark')
+  const [sortMetric, setSortMetric] = useState<SortMetric>('ppk')
 
   useEffect(() => {
     const obs = new MutationObserver(() => {
@@ -128,10 +132,33 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     })
   }, [exportData, state.dateFrom, state.dateTo, state.selectedMaterial?.material_id, state.selectedPlant?.plant_id])
 
+  const sortedRows = useMemo(() => {
+    const next = [...rows]
+    next.sort((a, b) => {
+      const aValue = a[sortMetric]
+      const bValue = b[sortMetric]
+      if (sortMetric === 'ooc_rate') {
+        const aScore = aValue ?? -1
+        const bScore = bValue ?? -1
+        return bScore - aScore
+      }
+      const aScore = aValue ?? Number.NEGATIVE_INFINITY
+      const bScore = bValue ?? Number.NEGATIVE_INFINITY
+      return bScore - aScore
+    })
+    return next
+  }, [rows, sortMetric])
+
   return (
     <div className={scorecardTableWrapClass}>
       <div className={scorecardTableHeaderClass}>
         <span className={scorecardCountClass}>{rows.length} characteristic{rows.length !== 1 ? 's' : ''}</span>
+        <div className="mr-auto flex flex-wrap items-center gap-1 text-xs text-[var(--c-text-muted)]">
+          <span>Sort by:</span>
+          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'ppk' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('ppk')}>Ppk</button>
+          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'cpk' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('cpk')}>Cpk</button>
+          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'ooc_rate' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('ooc_rate')}>OOC Rate</button>
+        </div>
         <button
           className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
           onClick={exportCSV}
@@ -155,7 +182,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
       >
         <AgGridReact<ScorecardRow>
           ref={gridRef}
-          rowData={rows}
+          rowData={sortedRows}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           onRowClicked={onRowClicked}

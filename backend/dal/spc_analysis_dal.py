@@ -1,8 +1,7 @@
+import asyncio
 import math
 import uuid
 from typing import Optional
-
-from scipy.stats import pearsonr
 
 from backend.dal.spc_shared import D2_TABLE, infer_spec_type, normal_cdf
 from backend.utils.db import run_sql_async, sql_param, tbl
@@ -325,7 +324,7 @@ async def fetch_scorecard(
                 usl = nominal + tol_val
                 lsl = nominal - tol_val
 
-        spec_type = infer_spec_type(usl, lsl)
+        spec_type = infer_spec_type(usl, lsl, nominal)
         row["spec_type"] = spec_type
         row["usl"] = round(usl, 6) if usl is not None else None
         row["lsl"] = round(lsl, 6) if lsl is not None else None
@@ -377,8 +376,18 @@ async def fetch_scorecard(
             if row["has_mixed_spec"] else None
         )
 
+        mean_out_of_spec = (
+            mean_v is not None
+            and (
+                (usl is not None and mean_v > usl)
+                or (lsl is not None and mean_v < lsl)
+            )
+        )
+
         if ppk is None:
             row["capability_status"] = "grey"
+        elif mean_out_of_spec:
+            row["capability_status"] = "out_of_spec_mean"
         elif ppk >= CPK_HIGHLY_CAPABLE:
             row["capability_status"] = "excellent"
         elif ppk >= CPK_CAPABLE:
@@ -704,6 +713,8 @@ async def fetch_correlation_scatter(
     n = len(points)
     pearson_r = None
     if n >= 2:
+        from scipy.stats import pearsonr
+
         xs = [point["x"] for point in points]
         ys = [point["y"] for point in points]
         try:

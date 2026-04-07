@@ -60,9 +60,19 @@ class CharacteristicsRequest(BaseModel):
         return v
 
 
-class ChartDataRequest(_DateRangeMixin):
-    material_id: str
+class _MicIdMixin(BaseModel):
     mic_id: str
+
+    @field_validator("mic_id")
+    @classmethod
+    def check_mic_id(cls, v: str) -> str:
+        if len(v) > _MIC_ID_MAX_LEN:
+            raise ValueError(f"mic_id must be at most {_MIC_ID_MAX_LEN} characters")
+        return v
+
+
+class ChartDataRequest(_DateRangeMixin, _MicIdMixin):
+    material_id: str
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
     stratify_by: Optional[str] = None
@@ -117,9 +127,8 @@ class AttributeCharacteristicsRequest(BaseModel):
         return v
 
 
-class PChartDataRequest(_DateRangeMixin):
+class PChartDataRequest(_DateRangeMixin, _MicIdMixin):
     material_id: str
-    mic_id: str
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
 
@@ -131,9 +140,8 @@ class PChartDataRequest(_DateRangeMixin):
         return v
 
 
-class CountChartDataRequest(_DateRangeMixin):
+class CountChartDataRequest(_DateRangeMixin, _MicIdMixin):
     material_id: str
-    mic_id: str
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
     chart_subtype: str = "c"

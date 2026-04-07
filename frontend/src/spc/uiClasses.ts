@@ -39,6 +39,10 @@ export const metricCardMetaClass: string = 'mt-2 text-xs text-[var(--c-text-mute
 export const statusChipRowClass: string = 'flex flex-wrap items-center gap-2'
 export const statusChipClass: string = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold'
 export const infoBannerClass: string = 'flex flex-wrap items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm'
+export const infoBannerErrorClass: string = `${infoBannerClass} border-red-300 bg-red-50 text-red-900`
+export const infoBannerWarnClass: string = `${infoBannerClass} border-amber-300 bg-amber-50 text-amber-900`
+export const infoBannerInfoClass: string = `${infoBannerClass} border-blue-200 bg-blue-50 text-blue-800`
+export const infoBannerNeutralClass: string = `${infoBannerClass} border-slate-300 bg-slate-50 text-slate-700`
 
 export const chartPaneClass: string = 'mb-1 border-b border-[var(--c-border)] pb-4 last:mb-0 last:border-b-0 last:pb-0'
 export const chartPaneTitleClass: string = 'mb-2 flex items-center gap-3 text-[0.8125rem] font-semibold text-[var(--c-text-muted)]'

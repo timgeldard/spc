@@ -12,8 +12,7 @@ Design goals:
 
 from __future__ import annotations
 
-import base64
-import json
+import hashlib
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -64,9 +63,11 @@ def _parse_limit(limit: str) -> RateLimitRule:
 
 
 class _Limiter:
-    def __init__(self, default_limit: str = "120/minute") -> None:
+    def __init__(self, default_limit: str = "120/minute", max_buckets: int = 10_000) -> None:
         self.default_rule = _parse_limit(default_limit)
         self._events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+        self._last_seen: dict[tuple[str, str], float] = {}
+        self.max_buckets = max_buckets
         self._lock = Lock()
 
     def limit(self, limit: str) -> Callable:
@@ -85,12 +86,34 @@ class _Limiter:
         bucket_key = (route_key, client_key)
 
         with self._lock:
+            self._purge_inactive_buckets(window_start)
+            if bucket_key not in self._events and len(self._events) >= self.max_buckets:
+                self._evict_oldest_bucket()
             q = self._events[bucket_key]
             while q and q[0] <= window_start:
                 q.popleft()
             if len(q) >= active_rule.requests:
                 raise RateLimitExceeded(f"Rate limit exceeded for {route_key}")
             q.append(now)
+            self._last_seen[bucket_key] = now
+
+    def _purge_inactive_buckets(self, window_start: float) -> None:
+        stale_keys: list[tuple[str, str]] = []
+        for bucket_key, events in self._events.items():
+            while events and events[0] <= window_start:
+                events.popleft()
+            if not events:
+                stale_keys.append(bucket_key)
+        for bucket_key in stale_keys:
+            self._events.pop(bucket_key, None)
+            self._last_seen.pop(bucket_key, None)
+
+    def _evict_oldest_bucket(self) -> None:
+        if not self._last_seen:
+            return
+        oldest_key = min(self._last_seen, key=self._last_seen.get)
+        self._events.pop(oldest_key, None)
+        self._last_seen.pop(oldest_key, None)
 
 
 limiter = _Limiter(default_limit="120/minute")
@@ -100,32 +123,22 @@ def _extract_client_identity(request: Request) -> str:
     """Identify the rate-limit bucket for a request.
 
     Priority:
-    1. JWT ``sub`` claim from the x-forwarded-access-token header — uniquely
-       identifies the Databricks user even behind a reverse proxy.
+    1. Hash of the Databricks passthrough token — stable per user session
+       without trusting unverifiable JWT claims.
     2. x-forwarded-for header — identifies the originating IP when the app
        sits behind a load-balancer.
     3. ASGI client host — the direct TCP peer (last-resort fallback).
     """
     token = request.headers.get("x-forwarded-access-token", "")
     if token:
-        try:
-            # JWT structure: header.payload.signature — all base64url encoded
-            payload_b64 = token.split(".")[1]
-            # base64url padding
-            padding = 4 - len(payload_b64) % 4
-            if padding != 4:
-                payload_b64 += "=" * padding
-            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-            sub = payload.get("sub")
-            if sub:
-                return f"jwt:{sub}"
-        except Exception:
-            pass
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
+        return f"token:{token_hash}"
 
     forwarded_for = request.headers.get("x-forwarded-for", "")
     if forwarded_for:
-        # Take the leftmost (originating) IP when multiple hops are present
-        return f"xff:{forwarded_for.split(',')[0].strip()}"
+        forwarded_chain = [entry.strip() for entry in forwarded_for.split(",") if entry.strip()]
+        if forwarded_chain:
+            return f"xff:{forwarded_chain[0]}"
 
     return request.client.host if request.client else "unknown"
 

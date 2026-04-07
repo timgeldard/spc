@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from backend.dal import spc_analysis_dal, spc_charts_dal, spc_metadata_dal
+from backend.dal import spc_analysis_dal, spc_charts_dal, spc_metadata_dal, spc_shared
 from backend.routers import exclusions
 from backend.routers import spc_common
 
@@ -148,3 +148,32 @@ def test_get_exclusions_includes_legacy_plant_fallback(monkeypatch):
     assert "AND stratify_by IS NULL" in sql
     assert "AND :stratify_by = 'plant_id'" in sql
     assert any(param["name"] == "stratify_by" and param["value"] == "plant_id" for param in params)
+
+
+def test_infer_spec_type_distinguishes_unspecified_and_asymmetric_specs():
+    assert spc_shared.infer_spec_type(None, None) == "unspecified"
+    assert spc_shared.infer_spec_type(13.0, 7.0, 10.0) == "bilateral_symmetric"
+    assert spc_shared.infer_spec_type(14.0, 7.0, 10.0) == "bilateral_asymmetric"
+    assert spc_shared.infer_spec_type(12.0, None, 10.0) == "unilateral_upper"
+    assert spc_shared.infer_spec_type(None, 8.0, 10.0) == "unilateral_lower"
+
+
+def test_fetch_compare_scorecard_runs_parallel_queries(monkeypatch):
+    async def fake_fetch_scorecard(_token, material_id, _plant_id, _date_from, _date_to):
+        return [{"mic_id": f"MIC-{material_id}", "mic_name": f"MIC {material_id}", "ppk": 1.2, "batch_count": 4, "ooc_rate": 0.0}]
+
+    async def fake_run_sql_async(_token, _query, _params=None):
+        return [
+            {"material_id": "MAT-1", "material_name": "Material 1"},
+            {"material_id": "MAT-2", "material_name": "Material 2"},
+        ]
+
+    monkeypatch.setattr(spc_analysis_dal, "fetch_scorecard", fake_fetch_scorecard)
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+
+    result = asyncio.run(
+        spc_analysis_dal.fetch_compare_scorecard("token", ["MAT-1", "MAT-2"], None, None, None)
+    )
+
+    assert [entry["material_id"] for entry in result["materials"]] == ["MAT-1", "MAT-2"]
+    assert result["materials"][0]["material_name"] == "Material 1"
