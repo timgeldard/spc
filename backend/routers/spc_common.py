@@ -28,6 +28,31 @@ async def attach_validation_freshness(payload: dict, token: str, request_path: s
         raise
 
 
+async def attach_payload_freshness(
+    payload: dict,
+    token: str,
+    request_path: str,
+    source_views: list[str],
+) -> dict:
+    """Attach freshness metadata for a generic response payload."""
+    try:
+        return await attach_data_freshness(
+            payload,
+            token,
+            source_views,
+            request_path=request_path,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 503 and detail.get("message") == "Data freshness lookup failed":
+            return {
+                **payload,
+                "data_freshness": None,
+                "data_freshness_warning": detail,
+            }
+        raise
+
+
 def handle_sql_error(exc: Exception) -> None:
     """Convert common SQL errors to appropriate HTTP status codes."""
     mapped_error = classify_sql_runtime_error(exc)

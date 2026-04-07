@@ -76,3 +76,12 @@ The application detects out-of-control signals using standard rule sets.
 | **Rule 6** | 4 of 5 consecutive points > 1$\sigma$ (Zone B) | Moderate shift warning |
 | **Rule 7** | 15 consecutive points within 1$\sigma$ (Zone C) | Stratification / low variation |
 | **Rule 8** | 8 consecutive points > 1$\sigma$ both sides | Mixture pattern |
+
+---
+
+## 5. Histogram Binning
+
+Histogram binning is based on the **Freedman-Diaconis rule**, not Sturges' formula.
+
+* **Bin Width**: $2 \cdot IQR \cdot n^{-1/3}$
+* **Why**: Freedman-Diaconis is more robust for skewed and heavy-tailed manufacturing data, especially when the app is also detecting non-normal distributions.

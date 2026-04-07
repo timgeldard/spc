@@ -38,6 +38,12 @@ export default function SPCFilterBar() {
       ),
     [characteristics, attrCharacteristics],
   )
+  const selectedMicIndex = useMemo(
+    () => allCharacteristics.findIndex(
+      c => c.mic_id === state.selectedMIC?.mic_id && c.mic_name === state.selectedMIC?.mic_name,
+    ),
+    [allCharacteristics, state.selectedMIC],
+  )
 
   const [inputValue, setInputValue] = useState('')
   const [notFound, setNotFound] = useState(false)
@@ -55,6 +61,11 @@ export default function SPCFilterBar() {
     if (!stillValid) {
       dispatch({ type: 'SET_PLANT', payload: null })
     }
+  }, [dispatch, plants, plantsLoading, state.selectedPlant])
+
+  useEffect(() => {
+    if (plantsLoading || state.selectedPlant || plants.length !== 1) return
+    dispatch({ type: 'SET_PLANT', payload: plants[0] as PlantRef })
   }, [dispatch, plants, plantsLoading, state.selectedPlant])
 
   useEffect(() => {
@@ -94,8 +105,8 @@ export default function SPCFilterBar() {
   }
 
   const handleMICChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const [mic_id, mic_name] = event.target.value.split('|')
-    const mic = allCharacteristics.find(c => c.mic_id === mic_id && c.mic_name === mic_name) ?? null
+    const index = Number(event.target.value)
+    const mic = Number.isInteger(index) && index >= 0 ? allCharacteristics[index] ?? null : null
     dispatch({ type: 'SET_MIC', payload: mic as MicRef | null })
   }
 
@@ -209,7 +220,7 @@ export default function SPCFilterBar() {
             <select
               id="spc-mic"
               className={selectClass}
-              value={state.selectedMIC ? `${state.selectedMIC.mic_id}|${state.selectedMIC.mic_name}` : ''}
+              value={selectedMicIndex >= 0 ? String(selectedMicIndex) : ''}
               onChange={handleMICChange}
               disabled={!state.selectedMaterial || charsLoading}
             >
@@ -222,10 +233,10 @@ export default function SPCFilterBar() {
                       ? 'No characteristics found'
                       : '— Select a characteristic —'}
               </option>
-              {allCharacteristics.map(characteristic => (
+              {allCharacteristics.map((characteristic, index) => (
                 <option
                   key={`${characteristic.mic_id}|${characteristic.mic_name}`}
-                  value={`${characteristic.mic_id}|${characteristic.mic_name}`}
+                  value={String(index)}
                   title={characteristic.inspection_method || undefined}
                 >
                   {characteristic.chart_type === 'p_chart' ? '[Attribute] ' : ''}

@@ -38,8 +38,9 @@ Databricks Apps Runtime
     │
     └── uvicorn → FastAPI (Python)
           ├── /api/spc/*           SPC Routers (backend/routers/)
-          ├── /api/trace           Batch traceability (backend/main.py)
+          ├── /api/trace           Batch traceability (backend/routers/trace.py)
           ├── /api/health          Liveness probe
+          ├── /api/ready           SQL-backed readiness probe
           └── /assets + /*         Serves React SPA (frontend/dist/)
 
 React SPA (Vite + TypeScript)
@@ -84,6 +85,13 @@ pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
 
+To exercise the readiness probe locally, set a dedicated Databricks token:
+
+```bash
+export DATABRICKS_READINESS_TOKEN=...
+curl http://localhost:8000/api/ready
+```
+
 ### 3 — Frontend
 
 ```bash
@@ -103,6 +111,15 @@ Every query runs as the signed-in user. The app performs no app-level filtering;
 | `401` | Token missing or expired |
 | `403` | User lacks Unity Catalog permission on the requested view |
 | `500` | SQL failure or environment misconfiguration |
+
+### Health vs Readiness
+
+| Endpoint | Purpose |
+|---|---|
+| `/api/health` | Process liveness only — confirms the FastAPI app is running |
+| `/api/ready` | SQL warehouse readiness — requires `DATABRICKS_READINESS_TOKEN` to run a real `SELECT 1` probe |
+
+Because the app normally relies on per-user token passthrough, readiness needs its own non-user workspace token to verify warehouse connectivity before traffic is considered safe.
 
 ---
 
@@ -129,3 +146,19 @@ See [`docs/STATISTICAL_METHODS.md`](docs/STATISTICAL_METHODS.md) for full mathem
 | < 1.00 | Not Capable (red) |
 
 **Process flow health colouring** is based on batch rejection rate (`INSPECTION_RESULT_VALUATION = 'R'`), not Cpk. Thresholds: < 2% rejection → green, < 10% → amber, ≥ 10% → red.
+
+## Deployment
+
+Use the bundled make target rather than raw bundle deploys:
+
+```bash
+make deploy PROFILE=uat
+make deploy PROFILE=prod
+```
+
+Important deployment notes:
+- `databricks bundle deploy` alone is not sufficient for this app
+- Databricks bundle config cannot currently persist `user_api_scopes: ["sql"]`
+- `scripts/post-deploy.sh` is still required to re-apply the SQL scope after each deploy
+- `/api/ready` requires `DATABRICKS_READINESS_TOKEN` in the target environment for a real warehouse probe
+- the in-process SQL cache is per app instance, so multi-instance deployments should treat it as a latency optimisation rather than a shared consistency layer

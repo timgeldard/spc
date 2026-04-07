@@ -12,8 +12,7 @@ Design goals:
 
 from __future__ import annotations
 
-import base64
-import json
+import hashlib
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -100,32 +99,22 @@ def _extract_client_identity(request: Request) -> str:
     """Identify the rate-limit bucket for a request.
 
     Priority:
-    1. JWT ``sub`` claim from the x-forwarded-access-token header — uniquely
-       identifies the Databricks user even behind a reverse proxy.
+    1. Hash of the Databricks passthrough token — stable per user session
+       without trusting unverifiable JWT claims.
     2. x-forwarded-for header — identifies the originating IP when the app
        sits behind a load-balancer.
     3. ASGI client host — the direct TCP peer (last-resort fallback).
     """
     token = request.headers.get("x-forwarded-access-token", "")
     if token:
-        try:
-            # JWT structure: header.payload.signature — all base64url encoded
-            payload_b64 = token.split(".")[1]
-            # base64url padding
-            padding = 4 - len(payload_b64) % 4
-            if padding != 4:
-                payload_b64 += "=" * padding
-            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-            sub = payload.get("sub")
-            if sub:
-                return f"jwt:{sub}"
-        except Exception:
-            pass
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
+        return f"token:{token_hash}"
 
     forwarded_for = request.headers.get("x-forwarded-for", "")
     if forwarded_for:
-        # Take the leftmost (originating) IP when multiple hops are present
-        return f"xff:{forwarded_for.split(',')[0].strip()}"
+        # Trust the rightmost address added by the nearest proxy hop rather than
+        # the leftmost client-supplied entry in a forwarded chain.
+        return f"xff:{forwarded_for.split(',')[-1].strip()}"
 
     return request.client.host if request.client else "unknown"
 
