@@ -13,6 +13,7 @@ function getErrorMessage(body: any, status: number) {
 
 interface UseValidateMaterialResult {
   validateMaterial: (materialId: string) => Promise<ValidateMaterialResult | null>
+  clearError: () => void
   validating: boolean
   error: string | null
   result: ValidateMaterialResult | null
@@ -48,5 +49,7 @@ export function useValidateMaterial(): UseValidateMaterialResult {
     }
   }
 
-  return { validateMaterial, validating, error, result }
+  const clearError = () => { setError(null) }
+
+  return { validateMaterial, clearError, validating, error, result }
 }
