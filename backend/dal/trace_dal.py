@@ -13,16 +13,15 @@ def _build_tree(rows: list[dict]) -> Optional[dict]:
     if not rows:
         return None
 
-    seen: dict[tuple[str, str], dict] = {}
+    node_rows: dict[tuple[str, str], dict] = {}
+    edge_rows: list[dict] = []
     for row in rows:
         key = (str(row["material_id"]), str(row["batch_id"]))
-        if key not in seen or row.get("depth", 0) < seen[key].get("depth", 0):
-            seen[key] = row
-    rows = list(seen.values())
+        if key not in node_rows or row.get("depth", 0) < node_rows[key].get("depth", 0):
+            node_rows[key] = row
+        edge_rows.append(row)
 
-    nodes: dict[tuple[str, str], dict] = {}
-    for row in rows:
-        key = (str(row["material_id"]), str(row["batch_id"]))
+    def make_node(row: dict) -> dict:
         status = str(row.get("release_status", "Unknown")).strip()
         if status == "Released":
             color, tier = "#10b981", "Pass"
@@ -33,7 +32,7 @@ def _build_tree(rows: list[dict]) -> Optional[dict]:
         else:
             color, tier = "#9ca3af", "Unknown"
 
-        nodes[key] = {
+        return {
             "name": str(row["material_id"]),
             "status": status,
             "riskTier": tier,
@@ -46,49 +45,41 @@ def _build_tree(rows: list[dict]) -> Optional[dict]:
             "children": [],
         }
 
-    children_of: dict[tuple[str, str], list[tuple[str, str]]] = {k: [] for k in nodes}
-    root: Optional[dict] = None
+    children_of: dict[tuple[str, str], list[tuple[str, str]]] = {k: [] for k in node_rows}
     root_key: Optional[tuple[str, str]] = None
 
-    for row in rows:
+    for row in edge_rows:
         key = (str(row["material_id"]), str(row["batch_id"]))
         p_mat = row.get("parent_material_id")
         p_bat = row.get("parent_batch_id")
         if p_mat is None or p_bat is None:
-            if root is None or row.get("depth", 0) < nodes[root_key]["attributes"]["Depth"]:
-                root = nodes[key]
+            if root_key is None or row.get("depth", 0) < node_rows[root_key].get("depth", 0):
                 root_key = key
         else:
             parent_key = (str(p_mat), str(p_bat))
-            if parent_key in nodes:
-                children_of[parent_key].append(key)
+            if parent_key in node_rows and key in node_rows:
+                siblings = children_of[parent_key]
+                if key not in siblings:
+                    siblings.append(key)
 
-    if root_key:
-        ancestors: set[tuple[str, str]] = set()
-        stack: list[tuple[tuple[str, str], bool]] = [(root_key, False)]
-        while stack:
-            node_key, exiting = stack.pop()
-            if exiting:
-                ancestors.discard(node_key)
+    def build_subtree(node_key: tuple[str, str], ancestors: set[tuple[str, str]]) -> dict:
+        node = make_node(node_rows[node_key])
+        next_ancestors = set(ancestors)
+        next_ancestors.add(node_key)
+        for child_key in children_of.get(node_key, []):
+            if child_key in next_ancestors:
+                logger.warning(
+                    "Cycle detected in _build_tree: %s -> %s already in ancestor path",
+                    node_key,
+                    child_key,
+                )
                 continue
+            node["children"].append(build_subtree(child_key, next_ancestors))
+        return node
 
-            if node_key in ancestors:
-                continue
-
-            ancestors.add(node_key)
-            stack.append((node_key, True))
-            for child_key in reversed(children_of.get(node_key, [])):
-                if child_key in ancestors:
-                    logger.warning(
-                        "Cycle detected in _build_tree: %s -> %s already in ancestor path",
-                        node_key,
-                        child_key,
-                    )
-                    continue
-                nodes[node_key]["children"].append(nodes[child_key])
-                stack.append((child_key, False))
-
-    return root
+    if root_key is None:
+        return None
+    return build_subtree(root_key, set())
 
 
 async def fetch_trace_tree(
@@ -446,7 +437,14 @@ async def fetch_impact(token: str, batch_id: str) -> dict:
           END AS risk_level
         FROM exposed
         GROUP BY other_batch_id
-        ORDER BY risk_level DESC, other_batch_id
+        ORDER BY
+          CASE risk_level
+            WHEN 'High' THEN 3
+            WHEN 'Medium' THEN 2
+            WHEN 'Low' THEN 1
+            ELSE 0
+          END DESC,
+          other_batch_id
     """
 
     customers_rows, cross_rows = await asyncio.gather(

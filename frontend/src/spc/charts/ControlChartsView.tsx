@@ -81,8 +81,12 @@ function isQuantChartType(value: string | null | undefined): value is QuantChart
   return value === 'imr' || value === 'xbar_r'
 }
 
-function getCapabilityHeadlineValue(spc: SPCComputationResult | null | undefined): number | null {
-  return spc?.capability?.cpk ?? spc?.capability?.ppk ?? null
+function getCapabilityHeadline(spc: SPCComputationResult | null | undefined): { label: 'Cpk' | 'Ppk'; value: number } | null {
+  const cpk = spc?.capability?.cpk
+  if (cpk != null) return { label: 'Cpk', value: cpk }
+  const ppk = spc?.capability?.ppk
+  if (ppk != null) return { label: 'Ppk', value: ppk }
+  return null
 }
 
 function PanelLoadingState() {
@@ -454,7 +458,7 @@ export default function ControlChartsView() {
     : spc?.chartType === 'xbar_r'
       ? 'X̄-R variable chart'
       : 'I-MR variable chart'
-  const capabilityHeadline = getCapabilityHeadlineValue(spc)
+  const capabilityHeadline = getCapabilityHeadline(spc)
   const stratifyLabel = stratifyBy ? stratifyBy.replace(/_/g, ' ') : null
 
   const actionRail = isAttributeChart ? null : (
@@ -524,6 +528,7 @@ export default function ControlChartsView() {
           totalSignals={0}
           exclusionCount={0}
           capabilityHeadline={null}
+          capabilityHeadlineLabel={null}
           stratifyLabel={stratifyLabel}
           quantNormality={null}
           ruleSet={ruleSet}
@@ -581,7 +586,8 @@ export default function ControlChartsView() {
         chartFamilyLabel={chartFamilyLabel}
         totalSignals={totalSignals}
         exclusionCount={exclusionCount}
-        capabilityHeadline={capabilityHeadline}
+        capabilityHeadline={capabilityHeadline?.value ?? null}
+        capabilityHeadlineLabel={capabilityHeadline?.label ?? null}
         stratifyLabel={stratifyLabel}
         quantNormality={quantNormality}
         ruleSet={ruleSet}

@@ -216,7 +216,7 @@ export default function ChartSettingsRail({
             {outlierCount > 0 && (
               <label className={checkboxLabelClass}>
                 <input type="checkbox" checked={excludeOutliers} onChange={onToggleExcludeOutliers} />
-                Exclude attribute outliers ({outlierCount})
+                Exclude outliers ({outlierCount})
               </label>
             )}
             {exclusionCount > 0 && (

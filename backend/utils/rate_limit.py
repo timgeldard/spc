@@ -63,9 +63,11 @@ def _parse_limit(limit: str) -> RateLimitRule:
 
 
 class _Limiter:
-    def __init__(self, default_limit: str = "120/minute") -> None:
+    def __init__(self, default_limit: str = "120/minute", max_buckets: int = 10_000) -> None:
         self.default_rule = _parse_limit(default_limit)
         self._events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+        self._last_seen: dict[tuple[str, str], float] = {}
+        self.max_buckets = max_buckets
         self._lock = Lock()
 
     def limit(self, limit: str) -> Callable:
@@ -84,12 +86,34 @@ class _Limiter:
         bucket_key = (route_key, client_key)
 
         with self._lock:
+            self._purge_inactive_buckets(window_start)
+            if bucket_key not in self._events and len(self._events) >= self.max_buckets:
+                self._evict_oldest_bucket()
             q = self._events[bucket_key]
             while q and q[0] <= window_start:
                 q.popleft()
             if len(q) >= active_rule.requests:
                 raise RateLimitExceeded(f"Rate limit exceeded for {route_key}")
             q.append(now)
+            self._last_seen[bucket_key] = now
+
+    def _purge_inactive_buckets(self, window_start: float) -> None:
+        stale_keys: list[tuple[str, str]] = []
+        for bucket_key, events in self._events.items():
+            while events and events[0] <= window_start:
+                events.popleft()
+            if not events:
+                stale_keys.append(bucket_key)
+        for bucket_key in stale_keys:
+            self._events.pop(bucket_key, None)
+            self._last_seen.pop(bucket_key, None)
+
+    def _evict_oldest_bucket(self) -> None:
+        if not self._last_seen:
+            return
+        oldest_key = min(self._last_seen, key=self._last_seen.get)
+        self._events.pop(oldest_key, None)
+        self._last_seen.pop(oldest_key, None)
 
 
 limiter = _Limiter(default_limit="120/minute")
@@ -112,9 +136,9 @@ def _extract_client_identity(request: Request) -> str:
 
     forwarded_for = request.headers.get("x-forwarded-for", "")
     if forwarded_for:
-        # Trust the rightmost address added by the nearest proxy hop rather than
-        # the leftmost client-supplied entry in a forwarded chain.
-        return f"xff:{forwarded_for.split(',')[-1].strip()}"
+        forwarded_chain = [entry.strip() for entry in forwarded_for.split(",") if entry.strip()]
+        if forwarded_chain:
+            return f"xff:{forwarded_chain[0]}"
 
     return request.client.host if request.client else "unknown"
 

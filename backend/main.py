@@ -108,7 +108,7 @@ async def ready():
             detail={
                 "status": "not_ready",
                 "reason": "sql_warehouse_unreachable",
-                "message": str(exc)[:500],
+                "message": "An internal error occurred while reaching the SQL warehouse.",
             },
         ) from exc
 

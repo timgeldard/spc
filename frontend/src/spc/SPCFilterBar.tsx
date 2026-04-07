@@ -22,6 +22,11 @@ import {
   selectClass,
 } from './uiClasses'
 
+function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'mic_name'> | null | undefined): string {
+  if (!mic) return ''
+  return JSON.stringify({ mic_id: mic.mic_id, mic_name: mic.mic_name ?? null })
+}
+
 export default function SPCFilterBar() {
   const { state, dispatch } = useSPC()
   const { validateMaterial, validating, error: validateError } = useValidateMaterial()
@@ -38,11 +43,9 @@ export default function SPCFilterBar() {
       ),
     [characteristics, attrCharacteristics],
   )
-  const selectedMicIndex = useMemo(
-    () => allCharacteristics.findIndex(
-      c => c.mic_id === state.selectedMIC?.mic_id && c.mic_name === state.selectedMIC?.mic_name,
-    ),
-    [allCharacteristics, state.selectedMIC],
+  const selectedMicValue = useMemo(
+    () => serializeMicKey(state.selectedMIC),
+    [state.selectedMIC],
   )
 
   const [inputValue, setInputValue] = useState('')
@@ -105,8 +108,13 @@ export default function SPCFilterBar() {
   }
 
   const handleMICChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const index = Number(event.target.value)
-    const mic = Number.isInteger(index) && index >= 0 ? allCharacteristics[index] ?? null : null
+    if (!event.target.value) {
+      dispatch({ type: 'SET_MIC', payload: null })
+      return
+    }
+    const mic = allCharacteristics.find(characteristic =>
+      serializeMicKey(characteristic) === event.target.value,
+    ) ?? null
     dispatch({ type: 'SET_MIC', payload: mic as MicRef | null })
   }
 
@@ -220,7 +228,7 @@ export default function SPCFilterBar() {
             <select
               id="spc-mic"
               className={selectClass}
-              value={selectedMicIndex >= 0 ? String(selectedMicIndex) : ''}
+              value={selectedMicValue}
               onChange={handleMICChange}
               disabled={!state.selectedMaterial || charsLoading}
             >
@@ -236,7 +244,7 @@ export default function SPCFilterBar() {
               {allCharacteristics.map((characteristic, index) => (
                 <option
                   key={`${characteristic.mic_id}|${characteristic.mic_name}`}
-                  value={String(index)}
+                  value={serializeMicKey(characteristic)}
                   title={characteristic.inspection_method || undefined}
                 >
                   {characteristic.chart_type === 'p_chart' ? '[Attribute] ' : ''}

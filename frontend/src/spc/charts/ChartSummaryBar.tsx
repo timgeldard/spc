@@ -73,6 +73,7 @@ interface ChartSummaryBarProps {
   totalSignals: number
   exclusionCount: number
   capabilityHeadline: number | null
+  capabilityHeadlineLabel?: 'Cpk' | 'Ppk' | 'Capability' | null
   stratifyLabel?: string | null
   quantNormality?: NormalityResult | null
   ruleSet: 'weco' | 'nelson'
@@ -87,6 +88,7 @@ export default function ChartSummaryBar({
   totalSignals,
   exclusionCount,
   capabilityHeadline,
+  capabilityHeadlineLabel,
   stratifyLabel,
   quantNormality,
   ruleSet,
@@ -110,7 +112,7 @@ export default function ChartSummaryBar({
             </StatusChip>
             {capabilityHeadline != null && (
               <StatusChip tone={capabilityHeadline >= 1.33 ? 'green' : capabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
-                Headline Cpk {capabilityHeadline.toFixed(2)}
+                Headline {capabilityHeadlineLabel ?? 'Capability'} {capabilityHeadline.toFixed(2)}
               </StatusChip>
             )}
             {stratifyLabel && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}

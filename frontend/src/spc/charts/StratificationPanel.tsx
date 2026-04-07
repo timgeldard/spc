@@ -10,8 +10,12 @@ export interface StratumSection {
   spc: SPCComputationResult | null
 }
 
-function getCapabilityHeadlineValue(spc: SPCComputationResult | null): number | null {
-  return spc?.capability?.cpk ?? spc?.capability?.ppk ?? null
+function getCapabilityHeadline(spc: SPCComputationResult | null): { label: 'Cpk' | 'Ppk'; value: number } | null {
+  const cpk = spc?.capability?.cpk
+  if (cpk != null) return { label: 'Cpk', value: cpk }
+  const ppk = spc?.capability?.ppk
+  if (ppk != null) return { label: 'Ppk', value: ppk }
+  return null
 }
 
 interface StratificationPanelProps {
@@ -37,7 +41,7 @@ export default function StratificationPanel({
     <div className="flex flex-col gap-5">
       {sections.map(section => {
         const stratumSignalCount = (section.spc?.signals?.length ?? 0) + (section.spc?.mrSignals?.length ?? 0)
-        const stratumCapabilityHeadline = getCapabilityHeadlineValue(section.spc)
+        const stratumCapabilityHeadline = getCapabilityHeadline(section.spc)
 
         return (
           <section
@@ -60,8 +64,8 @@ export default function StratificationPanel({
                   {stratumSignalCount > 0 ? `${stratumSignalCount} signal${stratumSignalCount === 1 ? '' : 's'}` : 'No active signals'}
                 </StatusChip>
                 {stratumCapabilityHeadline != null && (
-                  <StatusChip tone={stratumCapabilityHeadline >= 1.33 ? 'green' : stratumCapabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
-                    Headline Cpk {stratumCapabilityHeadline.toFixed(2)}
+                  <StatusChip tone={stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'slate'}>
+                    Headline {stratumCapabilityHeadline.label} {stratumCapabilityHeadline.value.toFixed(2)}
                   </StatusChip>
                 )}
               </div>
@@ -82,9 +86,9 @@ export default function StratificationPanel({
               />
               <SummaryMetric
                 label="Capability"
-                value={stratumCapabilityHeadline != null ? stratumCapabilityHeadline.toFixed(2) : '—'}
+                value={stratumCapabilityHeadline != null ? stratumCapabilityHeadline.value.toFixed(2) : '—'}
                 meta={section.spc?.capability?.capabilityMethod === 'non_parametric' ? 'Empirical percentile method active' : 'Short-term and long-term evidence available'}
-                tone={stratumCapabilityHeadline == null ? 'slate' : stratumCapabilityHeadline >= 1.33 ? 'green' : stratumCapabilityHeadline >= 1.0 ? 'amber' : 'red'}
+                tone={stratumCapabilityHeadline == null ? 'slate' : stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'red'}
               />
             </div>
 

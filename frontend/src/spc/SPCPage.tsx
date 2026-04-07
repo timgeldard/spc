@@ -113,7 +113,7 @@ function SPCContent() {
       <div className={workspaceClass}>
         <Sidebar />
         <div className={workspaceMainClass}>
-          <SPCErrorBoundary>
+          <SPCErrorBoundary key={state.activeTab}>
             <Suspense fallback={<TabLoadingState />}>
               <ActiveView />
             </Suspense>

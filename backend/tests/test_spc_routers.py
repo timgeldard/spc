@@ -128,3 +128,19 @@ def test_ready_returns_200_when_sql_probe_succeeds(monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
     assert response.json()["checks"]["sql_warehouse"] == "ok"
+
+
+def test_ready_sanitizes_sql_probe_failures(monkeypatch):
+    async def fake_run_sql_async(_token, _statement):
+        raise RuntimeError("sensitive warehouse host detail")
+
+    monkeypatch.setattr(main, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+    monkeypatch.setattr(main, "run_sql_async", fake_run_sql_async)
+    monkeypatch.setenv("DATABRICKS_READINESS_TOKEN", "ready-token")
+
+    response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    body = response.json()["detail"]
+    assert body["reason"] == "sql_warehouse_unreachable"
+    assert body["message"] == "An internal error occurred while reaching the SQL warehouse."
