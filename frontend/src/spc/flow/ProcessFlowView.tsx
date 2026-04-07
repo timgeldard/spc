@@ -7,7 +7,6 @@ import {
   type BackgroundVariant,
   type Edge,
   type Node,
-  type NodeMouseHandler,
   useNodesState,
   useEdgesState,
 } from '@xyflow/react'
@@ -19,21 +18,19 @@ import type { ProcessFlowEdgeData, ProcessFlowNodeData, ProcessFlowNodeRecord } 
 import {
   cardSubClass,
   cardTitleClass,
-  emptyIconClass,
-  emptyStateClass,
-  emptySubClass,
   flowCanvasClass,
   flowLegendClass,
   heroCardDenseClass,
   legendDotClass,
   legendHintClass,
   legendItemClass,
-  loadingClass,
   moduleEyebrowClass,
   moduleHeaderCardClass,
   splitPanelClass,
-  spinnerClass,
 } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
+import LoadingSkeleton from '../components/LoadingSkeleton'
+import ModuleEmptyState from '../components/ModuleEmptyState'
 
 type FlowNode = Node<ProcessFlowNodeData, 'processNode'>
 type FlowEdge = Edge
@@ -120,50 +117,44 @@ export default function ProcessFlowView() {
     setEdges(e)
   }, [flowData, setEdges, setNodes])
 
-  const onNodeClick = useCallback<NodeMouseHandler>((_, node) => {
-    const nodeData = node.data as ProcessFlowNodeData
-    dispatch({
-      type: 'SELECT_MATERIAL_AND_CHARTS',
-      payload: {
-        material_id: String(nodeData.material_id),
-        material_name: typeof nodeData.material_name === 'string' ? nodeData.material_name : undefined,
-      },
-    })
+  // Handles both mouse-click and keyboard selection (Tab + Enter/Space)
+  const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: FlowNode[] }) => {
+    if (selectedNodes.length === 1) {
+      const nodeData = selectedNodes[0].data as ProcessFlowNodeData
+      dispatch({
+        type: 'SELECT_MATERIAL_AND_CHARTS',
+        payload: {
+          material_id: String(nodeData.material_id),
+          material_name: typeof nodeData.material_name === 'string' ? nodeData.material_name : undefined,
+        },
+      })
+    }
   }, [dispatch])
 
   if (!state.selectedMaterial) {
     return (
-      <div className={emptyStateClass}>
-        <div className={emptyIconClass}>⬡</div>
-        <p>Select a material above to view its process flow map.</p>
-        <p className={emptySubClass}>Each node shows SPC health status. Click a node to drill into control charts.</p>
-      </div>
+      <ModuleEmptyState
+        icon="⬡"
+        title="Select a material to view its process flow"
+        description="Each node shows batch rejection rate across the material network. Click or navigate to a node to drill into control charts."
+      />
     )
   }
 
   if (loading) {
-    return (
-      <div className={loadingClass}>
-        <div className={spinnerClass} />
-        <p>Loading process flow…</p>
-      </div>
-    )
+    return <LoadingSkeleton message="Loading process flow…" />
   }
 
   if (error) {
-    return (
-      <div className="banner banner--error">
-        Failed to load process flow: {error}
-      </div>
-    )
+    return <InfoBanner variant="error">Failed to load process flow: {error}</InfoBanner>
   }
 
   if (!nodes.length) {
     return (
-      <div className={emptyStateClass}>
-        <p>No process flow data found for <strong>{state.selectedMaterial.material_name}</strong>.</p>
-        <p className={emptySubClass}>This material may not have lineage data in the selected date range.</p>
-      </div>
+      <ModuleEmptyState
+        title="No process flow data found"
+        description={`${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id} may not have lineage data in the selected date range.`}
+      />
     )
   }
 
@@ -188,7 +179,9 @@ export default function ProcessFlowView() {
                  status === 'red'   ? 'Rejection rate ≥ 10%' : 'Insufficient data (< 5 batches)'}
               </span>
             ))}
-            <span className={legendHintClass}>Click a node to open control charts</span>
+            <span className={legendHintClass}>
+              Click a node — or Tab to focus, then Enter — to open control charts
+            </span>
           </div>
 
           <ReactFlow
@@ -196,7 +189,7 @@ export default function ProcessFlowView() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodeClick={onNodeClick}
+            onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.25 }}
@@ -216,12 +209,31 @@ export default function ProcessFlowView() {
         </div>
         <aside className={`${heroCardDenseClass} space-y-3`}>
           <div className={moduleEyebrowClass}>How to read this map</div>
-          <p className="text-sm text-[var(--c-text-muted)]">Nodes inherit a quality health colour based on rejection rate, not capability. This helps surface where process risk may be entering or leaving the selected material.</p>
-          <div className="space-y-2 text-sm text-[var(--c-text-muted)]">
-            <p>Green nodes are relatively healthy.</p>
-            <p>Amber nodes deserve monitoring.</p>
-            <p>Red nodes are likely risk hotspots and are the best places to drill in next.</p>
+          <p className="text-sm text-[var(--c-text-muted)]">
+            Node colour reflects <strong>batch rejection rate</strong>, not capability (Cpk). This is intentional — it surfaces
+            where batches are being rejected across the lineage, regardless of spec limits.
+          </p>
+          <div className="space-y-2 text-xs">
+            <p>
+              <span className="font-semibold" style={{ color: STATUS_COLOR.green }}>Green (&lt;2%)</span>
+              {' '}— rejection rate is low, operationally healthy.
+            </p>
+            <p>
+              <span className="font-semibold" style={{ color: STATUS_COLOR.amber }}>Amber (2–10%)</span>
+              {' '}— elevated rejection rate; monitor and investigate.
+            </p>
+            <p>
+              <span className="font-semibold" style={{ color: STATUS_COLOR.red }}>Red (≥10%)</span>
+              {' '}— high rejection rate; likely a risk hotspot. Drill in first.
+            </p>
+            <p>
+              <span className="font-semibold" style={{ color: STATUS_COLOR.grey }}>Grey</span>
+              {' '}— fewer than 5 batches in scope; insufficient data.
+            </p>
           </div>
+          <p className="text-xs text-[var(--c-text-muted)]">
+            To check process capability, click a node to open its control charts and scorecard.
+          </p>
         </aside>
       </div>
     </div>

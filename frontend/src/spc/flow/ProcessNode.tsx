@@ -3,11 +3,12 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import SparklineMini from './SparklineMini'
 import type { ProcessFlowNodeData } from '../types'
 
+// Labels reflect rejection-rate semantics, matching the flow legend
 const STATUS = {
-  green: { dot: '#10b981', text: '#059669', bg: '#f0fdf4', border: '#bbf7d0', label: 'Capable' },
-  amber: { dot: '#f59e0b', text: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Marginal' },
-  red: { dot: '#ef4444', text: '#dc2626', bg: '#fef2f2', border: '#fca5a5', label: 'Incapable' },
-  grey: { dot: '#9ca3af', text: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'No Data' },
+  green: { dot: '#10b981', text: '#059669', bg: '#f0fdf4', border: '#bbf7d0', label: 'Low rejection rate' },
+  amber: { dot: '#f59e0b', text: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Elevated rejection rate' },
+  red:   { dot: '#ef4444', text: '#dc2626', bg: '#fef2f2', border: '#fca5a5', label: 'High rejection rate' },
+  grey:  { dot: '#9ca3af', text: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'Insufficient data' },
 }
 
 type ProcessNodeStatus = keyof typeof STATUS
@@ -22,8 +23,14 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
     ? data.material_name.substring(0, 21) + '…'
     : (data.material_name || data.material_id)
 
+  const fullName = data.material_name || String(data.material_id)
+  const ariaLabel = `${fullName} — ${s.label}${data.is_root ? ' (root node)' : ''}`
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={ariaLabel}
       style={{
         background: s.bg,
         border: `1.5px solid ${selected ? s.dot : s.border}`,
@@ -37,19 +44,24 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
     >
       <Handle type="target" position={Position.Left} style={{ background: s.dot }} />
 
-      <div style={{
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        background: s.dot,
-        boxShadow: `0 0 0 2px ${s.dot}30`,
-      }} title={s.label} />
+      <div
+        role="img"
+        aria-label={s.label}
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: s.dot,
+          boxShadow: `0 0 0 2px ${s.dot}30`,
+        }}
+        title={s.label}
+      />
 
       <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#111827', paddingRight: 14, lineHeight: 1.3 }}
-        title={data.material_name || data.material_id}>
+        title={data.material_name || String(data.material_id)}>
         {shortName}
       </div>
 
