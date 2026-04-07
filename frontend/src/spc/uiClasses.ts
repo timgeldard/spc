@@ -113,6 +113,13 @@ export const badgeAmberClass: string = 'bg-amber-50 text-amber-700'
 export const badgeBlueClass: string = 'bg-sky-50 text-sky-700'
 export const badgeSlateClass: string = 'bg-slate-100 text-slate-700'
 
+export const fieldHelpClass: string = 'text-xs text-[var(--c-text-muted)]'
+export const fieldValidationErrorClass: string = 'text-xs font-medium text-red-700'
+export const filterStepClass: string = 'flex items-start gap-3'
+export const filterStepNumClass: string = 'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white'
+export const filterStepNumInactiveClass: string = 'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[var(--c-border)] bg-slate-100 text-[0.65rem] font-semibold text-[var(--c-text-muted)]'
+export const filterStepBodyClass: string = 'min-w-0 flex-1'
+
 export const scorecardLayoutClass: string = 'flex flex-col gap-5'
 export const scorecardHeaderClass: string = `${heroCardClass} flex flex-col gap-2`
 export const scorecardTitleClass: string = 'text-[1.25rem] font-semibold text-[var(--c-text)]'
