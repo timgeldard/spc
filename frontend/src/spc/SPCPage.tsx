@@ -92,7 +92,7 @@ function ScopeSummaryStrip() {
       <Card>
         <CardContent className="space-y-3">
           <MetadataLabel>Scope Completeness</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900 tabular-nums">{scopeCount}/4</div>
+          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">{scopeCount}/4</div>
           <StatusBadge
             status={scopeCount >= 3 ? 'healthy' : scopeCount >= 2 ? 'warning' : 'critical'}
             label={scopeCount >= 3 ? 'Analysis ready' : scopeCount >= 2 ? 'Needs refinement' : 'Scope incomplete'}
@@ -103,7 +103,7 @@ function ScopeSummaryStrip() {
       <Card>
         <CardContent className="space-y-3">
           <MetadataLabel>Analysis Mode</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900">{chartModeLabel}</div>
+          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{chartModeLabel}</div>
           <StatusBadge
             status={state.stratifyBy ? 'warning' : 'healthy'}
             label={state.stratifyBy ? `Stratified by ${state.stratifyBy.replace('_', ' ')}` : 'Single view'}
@@ -114,7 +114,7 @@ function ScopeSummaryStrip() {
       <Card>
         <CardContent className="space-y-3">
           <MetadataLabel>Governance State</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900 tabular-nums">{exclusions}</div>
+          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">{exclusions}</div>
           <StatusBadge
             status={exclusions > 0 || state.limitsMode === 'locked' ? 'warning' : 'healthy'}
             label={state.limitsMode === 'locked' ? 'Locked limits active' : exclusions > 0 ? 'Reviewed exclusions' : 'Live baseline'}
@@ -129,7 +129,7 @@ function TabNavigation() {
   const { state, dispatch } = useSPC()
 
   return (
-    <div className="border-b border-slate-200">
+    <div className="border-b border-slate-200 dark:border-slate-700">
       <div className="flex flex-wrap gap-6">
         {TABS.map(tab => {
           const active = state.activeTab === tab.id
@@ -139,8 +139,8 @@ function TabNavigation() {
               onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id })}
               className={`pb-4 px-1 font-medium text-sm border-b-2 transition-colors ${
                 active
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
+                  ? 'border-slate-900 text-slate-900 dark:border-slate-100 dark:text-slate-100'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
               }`}
               aria-current={active ? 'page' : undefined}
             >
@@ -183,7 +183,7 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
         <ScopeSummaryStrip />
         <TabNavigation />
         <SPCPageHeader />
-        <div className="rounded-xl border border-slate-200 bg-white/70 p-1 shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 p-1 shadow-sm">
           <SPCErrorBoundary key={state.activeTab}>
             <AnimatePresence mode="wait">
               <motion.div

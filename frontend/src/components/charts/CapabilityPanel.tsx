@@ -7,9 +7,10 @@ interface CapabilityPanelProps {
   ppk?: number | null
 }
 
-function getStatus(value: number | null | undefined): 'healthy' | 'warning' | 'critical' {
-  if ((value ?? Number.NEGATIVE_INFINITY) >= 1.67) return 'healthy'
-  if ((value ?? Number.NEGATIVE_INFINITY) >= 1.33) return 'warning'
+function getStatus(value: number | null | undefined): 'healthy' | 'warning' | 'critical' | null {
+  if (value == null) return null
+  if (value >= 1.67) return 'healthy'
+  if (value >= 1.33) return 'warning'
   return 'critical'
 }
 
@@ -27,13 +28,13 @@ function CapabilityMetric({
     value == null ? 'Unavailable' : value >= 1.33 ? 'Capable' : 'Not Capable'
 
   return (
-    <div className={`rounded-xl border p-4 ${emphasis ? 'bg-slate-900 text-white border-slate-800 shadow-xl' : 'bg-white border-slate-200 shadow-sm'}`}>
+    <div className={`rounded-xl border p-4 ${emphasis ? 'bg-slate-900 text-white border-slate-800 shadow-xl' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm'}`}>
       <MetadataLabel className={emphasis ? 'text-slate-400' : undefined}>{label}</MetadataLabel>
-      <div className={`mt-2 text-4xl font-semibold tabular-nums ${emphasis ? 'text-white' : 'text-slate-900'}`}>
+      <div className={`mt-2 text-4xl font-semibold tabular-nums ${emphasis ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
         {value == null ? '—' : value.toFixed(2)}
       </div>
       <div className="mt-3">
-        <StatusBadge status={status} label={numericLabel} />
+        {status ? <StatusBadge status={status} label={numericLabel} /> : <span className="text-xs text-slate-500 dark:text-slate-400">{numericLabel}</span>}
       </div>
     </div>
   )

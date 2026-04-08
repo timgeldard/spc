@@ -17,6 +17,7 @@ export interface IndustrialIMRPoint {
   mr?: number | null
   batchId?: string | null
   isSignal?: boolean
+  isMrSignal?: boolean
   isExcluded?: boolean
   isOutlier?: boolean
   signalLabel?: string | null
@@ -34,6 +35,14 @@ interface IndustrialIMRChartProps {
   onPointClick?: (index: number) => void
 }
 
+const chartTheme = {
+  grid: 'var(--c-border)',
+  muted: 'var(--c-text-muted)',
+  danger: 'var(--c-status-red)',
+  primary: 'var(--c-text)',
+  contrast: 'var(--c-surface)',
+}
+
 function PrimaryDot(props: {
   cx?: number
   cy?: number
@@ -42,18 +51,18 @@ function PrimaryDot(props: {
   const { cx, cy, payload } = props
   if (cx == null || cy == null || !payload) return null
 
-  let fill = '#0f172a'
-  let stroke = '#ffffff'
+  let fill = chartTheme.primary
+  let stroke = chartTheme.contrast
   let size = 4
 
   if (payload.isExcluded) {
-    fill = '#94a3b8'
+    fill = chartTheme.muted
     size = 5
   } else if (payload.isOutlier) {
     fill = '#7c3aed'
     size = 6
   } else if (payload.isSignal) {
-    fill = '#e11d48'
+    fill = chartTheme.danger
     size = 5
   }
 
@@ -68,6 +77,18 @@ function PrimaryDot(props: {
       className={payload.onClickIndex != null ? 'cursor-pointer' : undefined}
     />
   )
+}
+
+function MrDot(props: {
+  cx?: number
+  cy?: number
+  payload?: IndustrialIMRPoint
+}) {
+  const { cx, cy, payload } = props
+  if (cx == null || cy == null || !payload) return null
+  const fill = payload.isMrSignal ? chartTheme.danger : chartTheme.muted
+  const size = payload.isMrSignal ? 4.5 : 3.5
+  return <circle cx={cx} cy={cy} r={size} fill={fill} stroke={chartTheme.contrast} strokeWidth={1.25} />
 }
 
 export function IMRChart({
@@ -96,17 +117,17 @@ export function IMRChart({
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 20, right: 30, left: 8, bottom: 10 }}>
-              <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+              <CartesianGrid vertical={false} stroke={chartTheme.grid} />
+              <XAxis dataKey="time" tick={{ fill: chartTheme.muted, fontSize: 11 }} tickLine={false} />
+              <YAxis tick={{ fill: chartTheme.muted, fontSize: 11 }} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              {ucl != null && <ReferenceLine y={ucl} stroke="#e11d48" strokeDasharray="3 3" label={{ value: 'UCL', fill: '#e11d48', fontSize: 11 }} />}
-              {lcl != null && <ReferenceLine y={lcl} stroke="#e11d48" strokeDasharray="3 3" label={{ value: 'LCL', fill: '#e11d48', fontSize: 11 }} />}
-              {target != null && <ReferenceLine y={target} stroke="#64748b" strokeDasharray="2 2" label={{ value: 'Target', fill: '#64748b', fontSize: 11 }} />}
+              {ucl != null && <ReferenceLine y={ucl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'UCL', fill: chartTheme.danger, fontSize: 11 }} />}
+              {lcl != null && <ReferenceLine y={lcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'LCL', fill: chartTheme.danger, fontSize: 11 }} />}
+              {target != null && <ReferenceLine y={target} stroke={chartTheme.muted} strokeDasharray="2 2" label={{ value: 'Target', fill: chartTheme.muted, fontSize: 11 }} />}
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#0f172a"
+                stroke={chartTheme.primary}
                 strokeWidth={2.5}
                 dot={(props) => {
                   const payload = props.payload as IndustrialIMRPoint | undefined
@@ -128,18 +149,18 @@ export function IMRChart({
         <div className="h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={movingRangeData} margin={{ top: 8, right: 30, left: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="mrTime" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+              <CartesianGrid vertical={false} stroke={chartTheme.grid} />
+              <XAxis dataKey="mrTime" tick={{ fill: chartTheme.muted, fontSize: 11 }} tickLine={false} />
+              <YAxis tick={{ fill: chartTheme.muted, fontSize: 11 }} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              {mrUcl != null && <ReferenceLine y={mrUcl} stroke="#e11d48" strokeDasharray="3 3" label={{ value: 'MR UCL', fill: '#e11d48', fontSize: 11 }} />}
-              {mrTarget != null && <ReferenceLine y={mrTarget} stroke="#64748b" strokeDasharray="2 2" label={{ value: 'MR̄', fill: '#64748b', fontSize: 11 }} />}
+              {mrUcl != null && <ReferenceLine y={mrUcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'MR UCL', fill: chartTheme.danger, fontSize: 11 }} />}
+              {mrTarget != null && <ReferenceLine y={mrTarget} stroke={chartTheme.muted} strokeDasharray="2 2" label={{ value: 'MR̄', fill: chartTheme.muted, fontSize: 11 }} />}
               <Line
                 type="monotone"
                 dataKey="mr"
-                stroke="#64748b"
+                stroke={chartTheme.muted}
                 strokeWidth={1.75}
-                dot={false}
+                dot={(props) => <MrDot cx={props.cx} cy={props.cy} payload={props.payload as IndustrialIMRPoint | undefined} />}
                 activeDot={{ r: 5 }}
                 name="Moving Range"
               />

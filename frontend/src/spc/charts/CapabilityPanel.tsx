@@ -131,11 +131,13 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         ppk={ppk}
       />
       <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-        <MetricCard
-          label="Cpk"
-          value={cpk}
-          note={cpkLower95 != null && cpkUpper95 != null ? `95% CI [${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]` : 'Short-term'}
-        />
+        {cpkLower95 != null && cpkUpper95 != null && (
+          <MetricCard
+            label="Cpk 95% CI"
+            value={cpk}
+            note={`[${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]`}
+          />
+        )}
         {zScore != null && (
           <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
         )}
@@ -150,7 +152,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         )}
       </div>
 
-      {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && (
+      {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && !isUnilateral && (
         <p className="text-xs text-gray-500">
           Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
         </p>

@@ -12,7 +12,7 @@ export function GlobalFilterBar({ children }: GlobalFilterBarProps) {
         <div className="flex flex-col gap-4 text-sm sm:flex-row sm:flex-wrap sm:items-end sm:gap-6">
           <div>
             <MetadataLabel>Material</MetadataLabel>
-            <select className="mt-1 block w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500">
+            <select aria-label="Material" className="mt-1 block w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500">
               <option>All Materials</option>
               <option>Steel 304</option>
               <option>Aluminum 6061</option>
@@ -23,6 +23,7 @@ export function GlobalFilterBar({ children }: GlobalFilterBarProps) {
             <MetadataLabel>Lot / Batch</MetadataLabel>
             <input
               type="text"
+              aria-label="Lot or batch"
               placeholder="Enter lot number..."
               className="mt-1 block w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
@@ -31,9 +32,9 @@ export function GlobalFilterBar({ children }: GlobalFilterBarProps) {
           <div>
             <MetadataLabel>Date Range</MetadataLabel>
             <div className="mt-1 flex gap-2">
-              <input type="date" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
+              <input aria-label="Start date" type="date" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
               <span className="self-center text-slate-400 dark:text-slate-500">to</span>
-              <input type="date" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
+              <input aria-label="End date" type="date" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
             </div>
           </div>
 

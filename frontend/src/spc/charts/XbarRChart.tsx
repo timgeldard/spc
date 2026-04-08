@@ -13,6 +13,14 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
     return set
   }, [signals])
 
+  const mrSignalIndexSet = useMemo(() => {
+    const set = new Set<number>()
+    for (const signal of mrSignals) {
+      for (const idx of signal.indices) set.add(idx)
+    }
+    return set
+  }, [mrSignals])
+
   const chartData = useMemo(() => {
     if (!xbarR) return []
     return xbarR.subgroupStats.map((stat, index) => ({
@@ -21,11 +29,11 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
       range: stat.range,
       batchId: stat.batchId,
       subgroupSize: stat.n,
-      isSignal: signalIndexSet.has(index),
+      isSignal: signalIndexSet.has(index) || mrSignalIndexSet.has(index),
       uclX: stat.ucl_x,
       lclX: stat.lcl_x,
     }))
-  }, [signalIndexSet, xbarR])
+  }, [mrSignalIndexSet, signalIndexSet, xbarR])
 
   if (!xbarR || !chartData.length) return null
 

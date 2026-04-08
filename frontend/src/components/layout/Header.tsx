@@ -4,9 +4,12 @@ import { Button } from '../ui'
 interface HeaderProps {
   dark?: boolean
   onToggleDark?: () => void
+  userName?: string | null
+  userTitle?: string | null
+  userInitials?: string | null
 }
 
-export function Header({ dark = false, onToggleDark }: HeaderProps) {
+export function Header({ dark = false, onToggleDark, userName = null, userTitle = null, userInitials = null }: HeaderProps) {
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -26,13 +29,17 @@ export function Header({ dark = false, onToggleDark }: HeaderProps) {
         <Button variant="ghost" size="sm" aria-label="Settings">
           <Settings className="w-4 h-4" />
         </Button>
-        <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
-          <div className="text-right">
-            <div className="text-sm font-medium text-slate-900 dark:text-white">John Doe</div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Quality Engineer</div>
+        {(userName || userTitle || userInitials) && (
+          <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
+            <div className="text-right">
+              {userName && <div className="text-sm font-medium text-slate-900 dark:text-white">{userName}</div>}
+              {userTitle && <div className="text-[10px] text-slate-500 dark:text-slate-400">{userTitle}</div>}
+            </div>
+            {userInitials && (
+              <div className="w-8 h-8 bg-slate-900 dark:bg-white dark:text-slate-900 rounded-full flex items-center justify-center text-white text-sm font-medium">{userInitials}</div>
+            )}
           </div>
-          <div className="w-8 h-8 bg-slate-900 dark:bg-white dark:text-slate-900 rounded-full flex items-center justify-center text-white text-sm font-medium">JD</div>
-        </div>
+        )}
       </div>
     </header>
   )

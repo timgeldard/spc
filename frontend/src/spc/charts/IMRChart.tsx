@@ -37,21 +37,19 @@ export default function IMRChart({
       mr: index > 0 ? imr?.movingRanges[index - 1] ?? null : null,
       batchId: point.batch_id,
       isSignal: signalIndexSet.has(point.originalIndex),
+      isMrSignal: index > 0 ? mrSignalIndexSet.has(index - 1) : false,
       isExcluded: point.excluded,
       isOutlier: Boolean(point.is_outlier && !point.excluded),
       signalLabel: signalIndexSet.has(point.originalIndex) ? 'Signal' : null,
       onClickIndex: point.originalIndex,
     }))
-  }, [indexedPoints, imr?.movingRanges, signalIndexSet])
+  }, [indexedPoints, imr?.movingRanges, mrSignalIndexSet, signalIndexSet])
 
   if (!imr || !chartData.length) return null
 
   return (
     <IndustrialIMRChart
-      data={chartData.map((point, index) => ({
-        ...point,
-        isSignal: index > 0 ? mrSignalIndexSet.has(index - 1) || point.isSignal : point.isSignal,
-      }))}
+      data={chartData}
       ucl={externalLimits?.ucl ?? imr.ucl_x}
       lcl={externalLimits?.lcl ?? imr.lcl_x}
       target={externalLimits?.cl ?? imr.xBar}

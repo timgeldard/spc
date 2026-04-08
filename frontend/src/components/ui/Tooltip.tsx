@@ -1,9 +1,9 @@
 import * as RadixTooltip from '@radix-ui/react-tooltip'
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 
 interface TooltipProps {
-  children: ReactNode
+  children: ReactElement
   content: ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
   className?: string

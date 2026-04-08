@@ -60,7 +60,7 @@ export default function PChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <IndustrialPChart data={chartData} title="P Chart" />
+      <IndustrialPChart data={chartData} />
       <p className={chartHintClass}>
         p̄ = {(pChart.pBar * 100).toFixed(2)}% overall nonconforming · Variable control limits shown per batch size
       </p>

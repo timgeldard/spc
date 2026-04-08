@@ -39,7 +39,7 @@ export function Sidebar({
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1024 : false))
   const [uncontrolledActiveItem, setUncontrolledActiveItem] = useState(items[0]?.id ?? 'charts')
   const activeItem = controlledActiveItem ?? uncontrolledActiveItem
-  const effectiveCollapsed = collapsed || isMobile
+  const effectiveCollapsed = isMobile ? true : collapsed
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024)
@@ -90,14 +90,16 @@ export function Sidebar({
       </nav>
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setCollapsed(!collapsed)}
-          className="w-full justify-center"
-        >
-          {effectiveCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </Button>
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className="w-full justify-center"
+          >
+            {effectiveCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </Button>
+        )}
       </div>
     </div>
   )

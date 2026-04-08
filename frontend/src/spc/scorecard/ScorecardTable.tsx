@@ -62,8 +62,9 @@ function formatPercent(value: number | null | undefined) {
 function downloadCsv(filename: string, columns: ColumnSpec[], rows: ScorecardRow[]) {
   const escapeCell = (value: string | number) => {
     const text = String(value ?? '')
-    if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`
-    return text
+    const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+    if (/[",\r\n]/.test(safeText)) return `"${safeText.replace(/"/g, '""')}"`
+    return safeText
   }
 
   const lines = [
@@ -102,10 +103,6 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
 
-  const exportCSV = useCallback(() => {
-    downloadCsv('spc_scorecard.csv', CSV_COLUMNS, rows)
-  }, [rows])
-
   const exportExcel = useCallback(() => {
     void exportData({
       export_type: 'excel',
@@ -127,6 +124,10 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     })
     return next
   }, [rows, sortMetric])
+
+  const exportCSV = useCallback(() => {
+    downloadCsv('spc_scorecard.csv', CSV_COLUMNS, sortedRows)
+  }, [sortedRows])
 
   return (
     <div className={scorecardTableWrapClass}>
@@ -186,19 +187,17 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
             {sortedRows.map(row => (
               <tr
                 key={row.mic_id}
-                tabIndex={0}
-                onClick={() => openChart(row)}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    openChart(row)
-                  }
-                }}
-                className="cursor-pointer transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none dark:hover:bg-slate-800/60 dark:focus:bg-slate-800/60"
-                aria-label={`Open control chart for ${row.mic_name}`}
+                className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
               >
                 <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
-                  {row.mic_name}
+                  <button
+                    type="button"
+                    onClick={() => openChart(row)}
+                    className="rounded-md text-left text-inherit transition-colors hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:hover:text-white"
+                    aria-label={`Open control chart for ${row.mic_name}`}
+                  >
+                    {row.mic_name}
+                  </button>
                 </td>
                 <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{row.batch_count}</td>
                 <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.mean_value, 4)}</td>
