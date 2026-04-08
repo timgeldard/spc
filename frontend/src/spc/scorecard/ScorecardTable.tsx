@@ -4,6 +4,7 @@ import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
 import {
   buttonBaseClass,
+  buttonPrimaryClass,
   buttonSecondaryClass,
   buttonSmClass,
   pillValueClass,
@@ -14,12 +15,12 @@ import {
 } from '../uiClasses'
 
 const STATUS_CONFIG = {
-  excellent: { label: 'Excellent', color: '#059669', bg: '#d1fae5' },
-  good: { label: 'Capable', color: '#10b981', bg: '#ecfdf5' },
-  marginal: { label: 'Marginal', color: '#d97706', bg: '#fffbeb' },
-  poor: { label: 'Poor', color: '#dc2626', bg: '#fef2f2' },
-  out_of_spec_mean: { label: 'Mean OOS', color: '#991b1b', bg: '#fee2e2' },
-  grey: { label: 'No Data', color: '#9ca3af', bg: '#f9fafb' },
+  excellent: { label: 'Excellent', icon: '✓✓', color: '#059669', bg: '#d1fae5' },
+  good: { label: 'Capable', icon: '✓', color: '#10b981', bg: '#ecfdf5' },
+  marginal: { label: 'Marginal', icon: '⚠', color: '#d97706', bg: '#fffbeb' },
+  poor: { label: 'Poor', icon: '✕', color: '#dc2626', bg: '#fef2f2' },
+  out_of_spec_mean: { label: 'Mean OOS', icon: '✕✕', color: '#991b1b', bg: '#fee2e2' },
+  grey: { label: 'No Data', icon: '—', color: '#9ca3af', bg: '#f9fafb' },
 } as const
 
 type StatusKey = keyof typeof STATUS_CONFIG
@@ -32,20 +33,19 @@ interface ScorecardTableProps {
 interface ColumnSpec {
   key: string
   label: string
-  align?: 'left' | 'right'
   value: (row: ScorecardRow) => string | number
 }
 
 const CSV_COLUMNS: ColumnSpec[] = [
   { key: 'mic_name', label: 'Characteristic', value: row => row.mic_name },
-  { key: 'batch_count', label: 'Batches', align: 'right', value: row => row.batch_count },
-  { key: 'mean_value', label: 'Mean', align: 'right', value: row => row.mean_value ?? '' },
-  { key: 'stddev_overall', label: 'Std Dev', align: 'right', value: row => row.stddev_overall ?? '' },
-  { key: 'nominal_target', label: 'Target', align: 'right', value: row => row.nominal_target ?? '' },
-  { key: 'pp', label: 'Pp', align: 'right', value: row => row.pp ?? '' },
-  { key: 'cpk', label: 'Cpk', align: 'right', value: row => row.cpk ?? '' },
-  { key: 'ppk', label: 'Ppk', align: 'right', value: row => row.ppk ?? '' },
-  { key: 'ooc_rate', label: 'OOC Rate', align: 'right', value: row => row.ooc_rate ?? '' },
+  { key: 'batch_count', label: 'Batches', value: row => row.batch_count },
+  { key: 'mean_value', label: 'Mean', value: row => row.mean_value ?? '' },
+  { key: 'stddev_overall', label: 'Std Dev', value: row => row.stddev_overall ?? '' },
+  { key: 'nominal_target', label: 'Target', value: row => row.nominal_target ?? '' },
+  { key: 'pp', label: 'Pp', value: row => row.pp ?? '' },
+  { key: 'cpk', label: 'Cpk', value: row => row.cpk ?? '' },
+  { key: 'ppk', label: 'Ppk', value: row => row.ppk ?? '' },
+  { key: 'ooc_rate', label: 'OOC Rate', value: row => row.ooc_rate ?? '' },
   { key: 'capability_status', label: 'Status', value: row => row.capability_status ?? '' },
 ]
 
@@ -82,15 +82,40 @@ function downloadCsv(filename: string, columns: ColumnSpec[], rows: ScorecardRow
 }
 
 function CapabilityValue({ value }: { value: number | null | undefined }) {
-  if (value == null) return '—'
+  if (value == null) return <span aria-label="No data">—</span>
   const status: StatusKey = value >= 1.67 ? 'excellent' : value >= 1.33 ? 'good' : value >= 1.0 ? 'marginal' : 'poor'
-  const { color, bg } = STATUS_CONFIG[status]
-  return <span className={pillValueClass} style={{ color, background: bg }}>{value.toFixed(2)}</span>
+  const { color, bg, label } = STATUS_CONFIG[status]
+  return (
+    <span className={pillValueClass} style={{ color, background: bg }} title={label}>
+      {value.toFixed(2)}
+    </span>
+  )
+}
+
+function OOCValue({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span aria-label="No data">—</span>
+  const pct = (value * 100).toFixed(1)
+  const isHigh = value > 0.1
+  const isMedium = !isHigh && value > 0.02
+  const color = isHigh ? '#dc2626' : isMedium ? '#d97706' : '#10b981'
+  const label = isHigh ? 'High OOC rate' : isMedium ? 'Elevated OOC rate' : 'Low OOC rate'
+  return (
+    <span style={{ color, fontWeight: value > 0 ? 600 : 400 }} title={label}>
+      {isHigh && <span aria-hidden="true">⚠ </span>}
+      <span>{pct}%</span>
+      <span className="sr-only"> ({label})</span>
+    </span>
+  )
 }
 
 function StatusValue({ value }: { value: ScorecardRow['capability_status'] }) {
   const cfg = STATUS_CONFIG[(value as StatusKey) ?? 'grey'] ?? STATUS_CONFIG.grey
-  return <span className={statusPillClass} style={{ color: cfg.color, background: cfg.bg }}>{cfg.label}</span>
+  return (
+    <span className={statusPillClass} style={{ color: cfg.color, background: cfg.bg }}>
+      <span aria-hidden="true">{cfg.icon} </span>
+      {cfg.label}
+    </span>
+  )
 }
 
 export default function ScorecardTable({ rows }: ScorecardTableProps) {
@@ -120,7 +145,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
       const aValue = a[sortMetric]
       const bValue = b[sortMetric]
       if (sortMetric === 'ooc_rate') return (bValue ?? -1) - (aValue ?? -1)
-      return (bValue ?? Number.NEGATIVE_INFINITY) - (aValue ?? Number.NEGATIVE_INFINITY)
+      return (aValue ?? Number.POSITIVE_INFINITY) - (bValue ?? Number.POSITIVE_INFINITY)
     })
     return next
   }, [rows, sortMetric])
@@ -134,10 +159,17 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
       <div className={scorecardTableHeaderClass}>
         <span className={scorecardCountClass}>{rows.length} characteristic{rows.length !== 1 ? 's' : ''}</span>
         <div className="mr-auto flex flex-wrap items-center gap-1 text-xs text-[var(--c-text-muted)]">
-          <span>Sort by:</span>
-          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'ppk' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('ppk')}>Ppk</button>
-          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'cpk' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('cpk')}>Cpk</button>
-          <button className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === 'ooc_rate' ? '' : buttonSecondaryClass}`} onClick={() => setSortMetric('ooc_rate')}>OOC Rate</button>
+          <span>Worst first:</span>
+          {(['ppk', 'cpk', 'ooc_rate'] as const).map(metric => (
+            <button
+              key={metric}
+              className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === metric ? buttonPrimaryClass : buttonSecondaryClass}`}
+              onClick={() => setSortMetric(metric)}
+              aria-pressed={sortMetric === metric}
+            >
+              {metric === 'ooc_rate' ? 'OOC Rate' : metric.toUpperCase()}
+            </button>
+          ))}
         </div>
         <button
           className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
@@ -163,17 +195,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
               <th className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-400">
                 Characteristic
               </th>
-              {[
-                'Batches',
-                'Mean',
-                'Std Dev',
-                'Target',
-                'Pp',
-                'Cpk',
-                'Ppk',
-                'OOC Rate',
-                'Status',
-              ].map(label => (
+              {['Batches', 'Mean', 'Std Dev', 'Target', 'Pp', 'Cpk', 'Ppk', 'OOC Rate', 'Status'].map(label => (
                 <th
                   key={label}
                   className="border-b border-slate-200 px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:text-slate-400"
@@ -185,10 +207,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
           </thead>
           <tbody>
             {sortedRows.map(row => (
-              <tr
-                key={row.mic_id}
-                className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
-              >
+              <tr key={row.mic_id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
                 <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
                   <button
                     type="button"
@@ -206,7 +225,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
                 <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.pp, 2)}</td>
                 <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.cpk} /></td>
                 <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.ppk} /></td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatPercent(row.ooc_rate)}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300"><OOCValue value={row.ooc_rate} /></td>
                 <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><StatusValue value={row.capability_status} /></td>
               </tr>
             ))}

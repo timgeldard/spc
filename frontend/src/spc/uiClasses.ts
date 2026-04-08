@@ -95,6 +95,8 @@ export const buttonPrimaryClass: string = 'bg-[var(--c-brand)] text-white hover:
 export const buttonSecondaryClass: string = 'border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text)] hover:border-[var(--c-brand)] hover:text-[var(--c-brand)]'
 export const buttonDangerClass: string = 'bg-red-600 text-white hover:bg-red-700'
 export const buttonGhostClass: string = 'border-[var(--c-border)] bg-transparent text-[var(--c-text-muted)] hover:border-[var(--c-brand)] hover:text-[var(--c-brand)]'
+export const fieldHelpClass: string = 'text-xs text-[var(--c-text-muted)]'
+export const fieldValidationErrorClass: string = 'text-xs font-medium text-red-700'
 export const inputBaseClass: string = 'h-10 w-full rounded-md border border-[var(--c-border)] bg-[var(--c-surface)] px-3 text-sm text-[var(--c-text)] outline-none transition focus:border-[var(--c-brand)] focus-visible:ring-2 focus-visible:ring-[var(--c-brand)]/25'
 export const inputSmClass: string = 'h-9 px-2.5 text-sm'
 export const selectClass: string = `${inputBaseClass} pr-8`
@@ -112,6 +114,11 @@ export const badgeGreenClass: string = 'bg-emerald-50 text-emerald-700'
 export const badgeAmberClass: string = 'bg-amber-50 text-amber-700'
 export const badgeBlueClass: string = 'bg-sky-50 text-sky-700'
 export const badgeSlateClass: string = 'bg-slate-100 text-slate-700'
+
+export const filterStepClass: string = 'flex items-start gap-3'
+export const filterStepNumClass: string = 'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white'
+export const filterStepNumInactiveClass: string = 'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[var(--c-border)] bg-slate-100 text-[0.65rem] font-semibold text-[var(--c-text-muted)]'
+export const filterStepBodyClass: string = 'min-w-0 flex-1'
 
 export const scorecardLayoutClass: string = 'flex flex-col gap-5'
 export const scorecardHeaderClass: string = `${heroCardClass} flex flex-col gap-2`

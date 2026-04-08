@@ -170,33 +170,6 @@ body {
 .btn-primary:active:not(:disabled) { transform: scale(.97); }
 .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 
-/* =========================================================================
-   Banners
-   ========================================================================= */
-.banner {
-  padding: .75rem 1rem;
-  border-radius: var(--radius);
-  margin-bottom: 1rem;
-  font-size: .9rem;
-}
-
-.banner--error {
-  background: var(--c-error-bg);
-  color: var(--c-error-text);
-  border: 1px solid var(--c-error-border);
-}
-
-.banner--warning {
-  background: #fffbeb;
-  color: #92400e;
-  border: 1px solid #fcd34d;
-}
-
-.banner--info {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-}
 
 .result-info {
   font-size: .875rem;

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import { loadingClass, spinnerClass, surfacePanelClass } from '../uiClasses'
+import InfoBanner from '../components/InfoBanner'
 import type { CorrelationScatterPoint, CorrelationScatterProps, EventParamLike } from '../types'
 
 interface RegressionLine {
@@ -110,7 +111,7 @@ export default function CorrelationScatter({ result, loading, error }: Correlati
   }
 
   if (error) {
-    return <div className="banner banner--error">{error}</div>
+    return <InfoBanner variant="error">{error}</InfoBanner>
   }
 
   if (!option) return null

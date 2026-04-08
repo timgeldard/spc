@@ -9,6 +9,8 @@ import { SPCProvider, useSPC } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
 import SPCFilterBar from './SPCFilterBar'
 import SPCPageHeader from './SPCPageHeader'
+import { useSPCUrlSync } from './hooks/useSPCUrlSync'
+import { useSPCPreferences } from './hooks/useSPCPreferences'
 import type { SPCState } from './types'
 import {
   pageShellClass,
@@ -155,6 +157,8 @@ function TabNavigation() {
 
 function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
   const { state, dispatch } = useSPC()
+  useSPCUrlSync()
+  useSPCPreferences()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
   const [tabTransitioning, setTabTransitioning] = useState(false)
 
@@ -169,7 +173,6 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
     label: tabTransitioning && state.activeTab === id ? `${label} •` : label,
     icon: Icon,
   }))
-
   return (
     <AppShell
       dark={dark}

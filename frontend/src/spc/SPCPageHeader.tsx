@@ -114,11 +114,14 @@ export default function SPCPageHeader() {
         </div>
         <div className={pageActionRailClass}>
           <StatusChip tone="slate">Mode: {state.limitsMode === 'locked' ? 'Locked limits' : 'Live limits'}</StatusChip>
-          {state.dateFrom && (
-            <StatusChip tone="slate">From {state.dateFrom}</StatusChip>
-          )}
-          {state.dateTo && (
-            <StatusChip tone="slate">To {state.dateTo}</StatusChip>
+          {(state.dateFrom || state.dateTo) && (
+            <StatusChip tone="slate">
+              {state.dateFrom && state.dateTo
+                ? `${state.dateFrom} → ${state.dateTo}`
+                : state.dateFrom
+                  ? `From ${state.dateFrom}`
+                  : `To ${state.dateTo}`}
+            </StatusChip>
           )}
         </div>
       </div>
