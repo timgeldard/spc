@@ -22,12 +22,16 @@ import {
   selectClass,
 } from './uiClasses'
 
+interface SPCFilterBarProps {
+  embedded?: boolean
+}
+
 function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'mic_name'> | null | undefined): string {
   if (!mic) return ''
   return JSON.stringify({ mic_id: mic.mic_id, mic_name: mic.mic_name ?? null })
 }
 
-export default function SPCFilterBar() {
+export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   const { state, dispatch } = useSPC()
   const { validateMaterial, validating, error: validateError } = useValidateMaterial()
   const { plants, loading: plantsLoading } = usePlants(state.selectedMaterial?.material_id)
@@ -129,7 +133,10 @@ export default function SPCFilterBar() {
   }
 
   return (
-    <div className={filterBarClass} aria-label="SPC analysis filters">
+    <div
+      className={embedded ? 'grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]' : filterBarClass}
+      aria-label="SPC analysis filters"
+    >
       <div className={filterSectionClass}>
         <div className={filterCardClass}>
           <div className={filterGroupClass}>

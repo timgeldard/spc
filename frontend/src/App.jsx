@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import AppShell from './AppShell'
 import SPCPage from './spc/SPCPage'
 import '@xyflow/react/dist/style.css'
 
@@ -10,12 +9,11 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
 
   return (
-    <AppShell dark={dark} onToggleDark={() => setDark(d => !d)}>
-      <SPCPage />
-    </AppShell>
+    <SPCPage dark={dark} onToggleDark={() => setDark(d => !d)} />
   )
 }

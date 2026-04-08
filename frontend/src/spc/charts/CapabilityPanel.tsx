@@ -1,4 +1,5 @@
 import CapabilityHistogram from './CapabilityHistogram'
+import { CapabilityPanel as IndustrialCapabilityPanel } from '../../components/charts'
 import type { SPCComputationResult } from '../types'
 import { heroCardDenseClass } from '../uiClasses'
 
@@ -123,15 +124,18 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p className="mb-2 text-xs text-amber-700">{normality.warning}</p>
       )}
 
+      <IndustrialCapabilityPanel
+        cp={isUnilateral ? null : cp}
+        cpk={cpk}
+        pp={isUnilateral ? null : pp}
+        ppk={ppk}
+      />
       <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-        {!isUnilateral && <MetricCard label="Cp" value={cp} note="Short-term" />}
         <MetricCard
           label="Cpk"
           value={cpk}
           note={cpkLower95 != null && cpkUpper95 != null ? `95% CI [${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]` : 'Short-term'}
         />
-        {!isUnilateral && <MetricCard label="Pp" value={pp} note="Long-term" />}
-        <MetricCard label="Ppk" value={ppk} note="Long-term" />
         {zScore != null && (
           <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
         )}

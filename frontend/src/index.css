@@ -1,6 +1,8 @@
 /* Tailwind utilities layer only - no preflight reset, preserves existing App.css */
 @import "tailwindcss/utilities";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Tailwind theme tokens that map to existing design system */
 @theme {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -14,7 +16,8 @@
 }
 
 /* Dark mode overrides on existing CSS variables */
-[data-theme="dark"] {
+[data-theme="dark"],
+.dark {
   --c-bg: #0f172a;
   --c-surface: #1e293b;
   --c-text: #f1f5f9;
