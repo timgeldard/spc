@@ -51,7 +51,7 @@ const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
 
 function TabLoadingState() {
   return (
-    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm">
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
       Loading analysis view…
     </div>
   )
@@ -193,13 +193,12 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
         <SPCPageHeader />
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 p-1 shadow-sm">
           <SPCErrorBoundary key={state.activeTab}>
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               <motion.div
                 key={state.activeTab}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <Suspense fallback={<TabLoadingState />}>
                   <ActiveView />
