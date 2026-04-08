@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, type ComponentType, type LazyExoticComponent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   GitBranch, Activity, BarChart2, Layers, Ruler, TrendingUp, type LucideIcon,
@@ -161,8 +161,13 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
   useSPCPreferences()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
   const [tabTransitioning, setTabTransitioning] = useState(false)
+  const hasMountedRef = useRef(false)
 
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
     setTabTransitioning(true)
     const timer = window.setTimeout(() => setTabTransitioning(false), 220)
     return () => window.clearTimeout(timer)

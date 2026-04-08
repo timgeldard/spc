@@ -29,6 +29,7 @@ interface IndustrialXbarRChartProps {
   lcl?: number | null
   target?: number | null
   rangeUcl?: number | null
+  rangeLcl?: number | null
   rangeTarget?: number | null
   title?: string
 }
@@ -67,6 +68,7 @@ export function XbarRChart({
   lcl,
   target,
   rangeUcl,
+  rangeLcl,
   rangeTarget,
   title = 'X-bar & R Chart',
 }: IndustrialXbarRChartProps) {
@@ -102,6 +104,7 @@ export function XbarRChart({
               <YAxis tick={{ fill: chartTheme.muted, fontSize: 11 }} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
               {rangeUcl != null && <ReferenceLine y={rangeUcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'R UCL', fill: chartTheme.danger, fontSize: 11 }} />}
+              {rangeLcl != null && <ReferenceLine y={rangeLcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'R LCL', fill: chartTheme.danger, fontSize: 11 }} />}
               {rangeTarget != null && <ReferenceLine y={rangeTarget} stroke={chartTheme.muted} strokeDasharray="2 2" label={{ value: 'R̄', fill: chartTheme.muted, fontSize: 11 }} />}
               <Line type="monotone" dataKey="range" stroke={chartTheme.muted} strokeWidth={1.75} dot={(props) => <RangeDot cx={props.cx} cy={props.cy} payload={props.payload as IndustrialXbarRPoint | undefined} />} activeDot={{ r: 5 }} name="Subgroup Range" />
             </LineChart>

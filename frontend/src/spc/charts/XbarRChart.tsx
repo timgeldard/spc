@@ -45,6 +45,7 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
       lcl={externalLimits?.lcl ?? xbarR.lcl_x}
       target={externalLimits?.cl ?? xbarR.grandMean}
       rangeUcl={externalLimits?.ucl_r ?? xbarR.ucl_r}
+      rangeLcl={externalLimits?.lcl_r ?? xbarR.lcl_r}
       rangeTarget={xbarR.rBar}
       title="X-bar & R Chart"
     />

@@ -104,6 +104,7 @@ export function Sidebar({
             variant="ghost"
             size="sm"
             onClick={() => setCollapsed(!collapsed)}
+            aria-label={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="w-full justify-center"
           >
             {effectiveCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
