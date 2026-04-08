@@ -1,4 +1,9 @@
 import CapabilityHistogram from './CapabilityHistogram'
+import {
+  CAPABILITY_TIERS,
+  CapabilityPanel as IndustrialCapabilityPanel,
+  getCapabilityTier,
+} from '../../components/charts/CapabilityPanel'
 import type { SPCComputationResult } from '../types'
 import { heroCardDenseClass } from '../uiClasses'
 
@@ -21,21 +26,16 @@ function StabilityWarning({ signals, mrSignals }: StabilityWarningProps) {
   )
 }
 
-const TIERS = [
-  { min: 1.67, label: 'Highly Capable', color: '#059669', bg: '#d1fae5' },
-  { min: 1.33, label: 'Capable', color: '#10b981', bg: '#ecfdf5' },
-  { min: 1.0, label: 'Marginally Capable', color: '#d97706', bg: '#fffbeb' },
-  { min: 0, label: 'Not Capable', color: '#dc2626', bg: '#fef2f2' },
-] as const
+const TIER_STYLES = {
+  healthy: { color: '#059669', bg: '#d1fae5' },
+  warning: { color: '#d97706', bg: '#fffbeb' },
+  critical: { color: '#dc2626', bg: '#fef2f2' },
+} as const
 
-type Tier = (typeof TIERS)[number]
+type Tier = ReturnType<typeof getCapabilityTier>
 
 function getTier(v: number | null | undefined): Tier | null {
-  if (v == null) return null
-  for (const t of TIERS) {
-    if (v >= t.min) return t
-  }
-  return TIERS[TIERS.length - 1]
+  return getCapabilityTier(v)
 }
 
 interface MetricCardProps {
@@ -48,18 +48,19 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, tier, subtitle, note }: MetricCardProps) {
   const t = tier ?? getTier(value)
+  const tierStyle = t ? TIER_STYLES[t.status] : null
   const displayVal = value != null ? value.toFixed(2) : '—'
   return (
     <div
       className="min-w-0 rounded-lg p-3"
-      style={{ background: t?.bg ?? '#f9fafb', border: `1px solid ${t?.color ?? '#e5e7eb'}20` }}
+      style={{ background: tierStyle?.bg ?? '#f9fafb', border: `1px solid ${tierStyle?.color ?? '#e5e7eb'}20` }}
     >
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium" style={{ color: t?.color ?? '#6b7280' }}>{label}</span>
-        <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: t?.color ?? '#111827' }}>
+        <span className="text-xs font-medium" style={{ color: tierStyle?.color ?? '#6b7280' }}>{label}</span>
+        <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: tierStyle?.color ?? '#111827' }}>
           {displayVal}
         </span>
-        {subtitle && <span className="text-xs" style={{ color: t?.color ?? '#6b7280' }}>{subtitle}</span>}
+        {subtitle && <span className="text-xs" style={{ color: tierStyle?.color ?? '#6b7280' }}>{subtitle}</span>}
         {note && <span className="mt-0.5 text-xs text-gray-400">{note}</span>}
       </div>
     </div>
@@ -123,15 +124,20 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p className="mb-2 text-xs text-amber-700">{normality.warning}</p>
       )}
 
+      <IndustrialCapabilityPanel
+        cp={isUnilateral ? null : cp}
+        cpk={cpk}
+        pp={isUnilateral ? null : pp}
+        ppk={ppk}
+      />
       <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-        {!isUnilateral && <MetricCard label="Cp" value={cp} note="Short-term" />}
-        <MetricCard
-          label="Cpk"
-          value={cpk}
-          note={cpkLower95 != null && cpkUpper95 != null ? `95% CI [${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]` : 'Short-term'}
-        />
-        {!isUnilateral && <MetricCard label="Pp" value={pp} note="Long-term" />}
-        <MetricCard label="Ppk" value={ppk} note="Long-term" />
+        {cpkLower95 != null && cpkUpper95 != null && (
+          <MetricCard
+            label="Cpk 95% CI"
+            value={cpk}
+            note={`[${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]`}
+          />
+        )}
         {zScore != null && (
           <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
         )}
@@ -146,7 +152,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         )}
       </div>
 
-      {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && (
+      {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && !isUnilateral && (
         <p className="text-xs text-gray-500">
           Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
         </p>
@@ -172,9 +178,9 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
       )}
 
       <div className="flex flex-wrap gap-2 text-xs">
-        {TIERS.map((t, i) => (
-          <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: t.color }}>
-            {i < TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< 1.00 ${t.label}`}
+        {CAPABILITY_TIERS.map((t, i) => (
+          <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: TIER_STYLES[t.status].color }}>
+            {i < CAPABILITY_TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< ${CAPABILITY_TIERS[i - 1]?.min.toFixed(2) ?? '1.33'} ${t.label}`}
           </span>
         ))}
       </div>

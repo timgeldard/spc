@@ -15,10 +15,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/ag-grid-')) return 'ag-grid'
-          if (id.includes('node_modules/echarts') || id.includes('node_modules/echarts-for-react')) return 'echarts'
+          if (id.includes('node_modules/zrender/')) return 'zrender'
+          if (id.includes('node_modules/echarts/')) return 'echarts-core'
           if (id.includes('node_modules/@xyflow/react') || id.includes('node_modules/d3-') || id.includes('node_modules/react-d3-tree')) return 'process-flow'
-          if (id.includes('node_modules/recharts')) return 'recharts'
         },
       },
     },

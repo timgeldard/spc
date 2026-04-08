@@ -1,16 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AgGridReact } from 'ag-grid-react'
-import {
-  ClientSideRowModelModule,
-  CsvExportModule,
-  ModuleRegistry,
-  type ColDef,
-  type CellKeyDownEvent,
-  type ICellRendererParams,
-  type RowClickedEvent,
-} from 'ag-grid-community'
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-quartz.css'
+import { useCallback, useMemo, useState } from 'react'
 import { useSPC } from '../SPCContext'
 import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
@@ -26,21 +14,74 @@ import {
   statusPillClass,
 } from '../uiClasses'
 
-ModuleRegistry.registerModules([ClientSideRowModelModule, CsvExportModule])
-
-// ── Status config with text labels + icons (no color-only meaning) ──────────
 const STATUS_CONFIG = {
   excellent: { label: 'Excellent', icon: '✓✓', color: '#059669', bg: '#d1fae5' },
-  good:      { label: 'Capable',   icon: '✓',  color: '#10b981', bg: '#ecfdf5' },
-  marginal:  { label: 'Marginal',  icon: '⚠',  color: '#d97706', bg: '#fffbeb' },
-  poor:      { label: 'Poor',      icon: '✕',  color: '#dc2626', bg: '#fef2f2' },
+  good: { label: 'Capable', icon: '✓', color: '#10b981', bg: '#ecfdf5' },
+  marginal: { label: 'Marginal', icon: '⚠', color: '#d97706', bg: '#fffbeb' },
+  poor: { label: 'Poor', icon: '✕', color: '#dc2626', bg: '#fef2f2' },
   out_of_spec_mean: { label: 'Mean OOS', icon: '✕✕', color: '#991b1b', bg: '#fee2e2' },
-  grey:      { label: 'No Data',   icon: '—',  color: '#9ca3af', bg: '#f9fafb' },
+  grey: { label: 'No Data', icon: '—', color: '#9ca3af', bg: '#f9fafb' },
 } as const
 
 type StatusKey = keyof typeof STATUS_CONFIG
+type SortMetric = 'ppk' | 'cpk' | 'ooc_rate'
 
-function PpkCell({ value }: ICellRendererParams<ScorecardRow, number | null | undefined>) {
+interface ScorecardTableProps {
+  rows: ScorecardRow[]
+}
+
+interface ColumnSpec {
+  key: string
+  label: string
+  value: (row: ScorecardRow) => string | number
+}
+
+const CSV_COLUMNS: ColumnSpec[] = [
+  { key: 'mic_name', label: 'Characteristic', value: row => row.mic_name },
+  { key: 'batch_count', label: 'Batches', value: row => row.batch_count },
+  { key: 'mean_value', label: 'Mean', value: row => row.mean_value ?? '' },
+  { key: 'stddev_overall', label: 'Std Dev', value: row => row.stddev_overall ?? '' },
+  { key: 'nominal_target', label: 'Target', value: row => row.nominal_target ?? '' },
+  { key: 'pp', label: 'Pp', value: row => row.pp ?? '' },
+  { key: 'cpk', label: 'Cpk', value: row => row.cpk ?? '' },
+  { key: 'ppk', label: 'Ppk', value: row => row.ppk ?? '' },
+  { key: 'ooc_rate', label: 'OOC Rate', value: row => row.ooc_rate ?? '' },
+  { key: 'capability_status', label: 'Status', value: row => row.capability_status ?? '' },
+]
+
+function formatFixed(value: number | null | undefined, digits: number) {
+  if (value == null) return '—'
+  return value.toFixed(digits)
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value == null) return '—'
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function downloadCsv(filename: string, columns: ColumnSpec[], rows: ScorecardRow[]) {
+  const escapeCell = (value: string | number) => {
+    const text = String(value ?? '')
+    const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+    if (/[",\r\n]/.test(safeText)) return `"${safeText.replace(/"/g, '""')}"`
+    return safeText
+  }
+
+  const lines = [
+    columns.map(column => escapeCell(column.label)).join(','),
+    ...rows.map(row => columns.map(column => escapeCell(column.value(row))).join(',')),
+  ]
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function CapabilityValue({ value }: { value: number | null | undefined }) {
   if (value == null) return <span aria-label="No data">—</span>
   const status: StatusKey = value >= 1.67 ? 'excellent' : value >= 1.33 ? 'good' : value >= 1.0 ? 'marginal' : 'poor'
   const { color, bg, label } = STATUS_CONFIG[status]
@@ -51,7 +92,7 @@ function PpkCell({ value }: ICellRendererParams<ScorecardRow, number | null | un
   )
 }
 
-function OOCCell({ value }: ICellRendererParams<ScorecardRow, number | null | undefined>) {
+function OOCValue({ value }: { value: number | null | undefined }) {
   if (value == null) return <span aria-label="No data">—</span>
   const pct = (value * 100).toFixed(1)
   const isHigh = value > 0.1
@@ -67,7 +108,7 @@ function OOCCell({ value }: ICellRendererParams<ScorecardRow, number | null | un
   )
 }
 
-function StatusCell({ value }: ICellRendererParams<ScorecardRow, ScorecardRow['capability_status']>) {
+function StatusValue({ value }: { value: ScorecardRow['capability_status'] }) {
   const cfg = STATUS_CONFIG[(value as StatusKey) ?? 'grey'] ?? STATUS_CONFIG.grey
   return (
     <span className={statusPillClass} style={{ color: cfg.color, background: cfg.bg }}>
@@ -77,82 +118,15 @@ function StatusCell({ value }: ICellRendererParams<ScorecardRow, ScorecardRow['c
   )
 }
 
-function DPMOHeaderCell() {
-  return (
-    <span title="Defects Per Million Opportunities — Motorola 1.5σ long-term shift convention">
-      DPMO (1.5σ) ℹ
-    </span>
-  )
-}
-
-function DPMOCell({ value }: ICellRendererParams<ScorecardRow, number | null | undefined>) {
-  if (value == null) return <span aria-label="No data">—</span>
-  return <span>{value.toLocaleString()}</span>
-}
-
-const number4 = (params: { value: number | null | undefined }) => params.value?.toFixed(4) ?? '—'
-const number2 = (params: { value: number | null | undefined }) => params.value?.toFixed(2) ?? '—'
-
-const columnDefs: Array<ColDef<ScorecardRow>> = [
-  { field: 'mic_name', headerName: 'Characteristic', flex: 2, minWidth: 150 },
-  { field: 'batch_count', headerName: 'Batches', width: 90, type: 'numericColumn' },
-  { field: 'mean_value', headerName: 'Mean', width: 100, type: 'numericColumn', valueFormatter: number4 },
-  { field: 'stddev_overall', headerName: 'Std Dev', width: 100, type: 'numericColumn', valueFormatter: number4 },
-  { field: 'nominal_target', headerName: 'Target', width: 100, type: 'numericColumn', valueFormatter: number4, sortable: false },
-  { field: 'pp', headerName: 'Pp', width: 80, type: 'numericColumn', valueFormatter: number2 },
-  { field: 'cpk', headerName: 'Cpk', width: 90, cellRenderer: PpkCell },
-  { field: 'ppk', headerName: 'Ppk', width: 90, cellRenderer: PpkCell },
-  { field: 'z_score', headerName: 'Z (σ)', width: 80, type: 'numericColumn', valueFormatter: number2, hide: true },
-  { field: 'dpmo', headerName: 'DPMO (1.5σ)', width: 110, cellRenderer: DPMOCell, headerComponent: DPMOHeaderCell, hide: true },
-  { field: 'ooc_rate', headerName: 'OOC Rate', width: 100, cellRenderer: OOCCell },
-  { field: 'capability_status', headerName: 'Status', width: 120, cellRenderer: StatusCell },
-]
-
-const defaultColDef: ColDef<ScorecardRow> = { resizable: true, sortable: true }
-
-interface ScorecardTableProps {
-  rows: ScorecardRow[]
-}
-
-type SortMetric = 'ppk' | 'cpk' | 'ooc_rate'
-
 export default function ScorecardTable({ rows }: ScorecardTableProps) {
   const { state, dispatch } = useSPC()
-  const gridRef = useRef<AgGridReact<ScorecardRow>>(null)
   const { exportData, exporting } = useExport()
-  const [dark, setDark] = useState(() => document.documentElement.getAttribute('data-theme') === 'dark')
   const [sortMetric, setSortMetric] = useState<SortMetric>('ppk')
 
-  useEffect(() => {
-    const obs = new MutationObserver(() => {
-      setDark(document.documentElement.getAttribute('data-theme') === 'dark')
-    })
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => obs.disconnect()
-  }, [])
-
-  /** Drill to control chart for a given scorecard row */
-  const drillToChart = useCallback((row: ScorecardRow) => {
+  const openChart = useCallback((row: ScorecardRow) => {
     dispatch({ type: 'SET_MIC', payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
-
-  const onRowClicked = useCallback((event: RowClickedEvent<ScorecardRow>) => {
-    if (event.data) drillToChart(event.data)
-  }, [drillToChart])
-
-  /** Keyboard activation: Enter or Space on a focused cell triggers drill */
-  const onCellKeyDown = useCallback((event: CellKeyDownEvent<ScorecardRow>) => {
-    const key = (event.event as KeyboardEvent | undefined)?.key
-    if ((key === 'Enter' || key === ' ') && event.data) {
-      event.event?.preventDefault()
-      drillToChart(event.data)
-    }
-  }, [drillToChart])
-
-  const exportCSV = useCallback(() => {
-    gridRef.current?.api.exportDataAsCsv({ fileName: 'spc_scorecard.csv' })
-  }, [])
 
   const exportExcel = useCallback(() => {
     void exportData({
@@ -170,14 +144,15 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     next.sort((a, b) => {
       const aValue = a[sortMetric]
       const bValue = b[sortMetric]
-      if (sortMetric === 'ooc_rate') {
-        return (bValue ?? -1) - (aValue ?? -1)
-      }
-      // cpk/ppk: lower = worse, so sort ascending; nulls go last
-      return (aValue ?? Infinity) - (bValue ?? Infinity)
+      if (sortMetric === 'ooc_rate') return (bValue ?? -1) - (aValue ?? -1)
+      return (aValue ?? Number.POSITIVE_INFINITY) - (bValue ?? Number.POSITIVE_INFINITY)
     })
     return next
   }, [rows, sortMetric])
+
+  const exportCSV = useCallback(() => {
+    downloadCsv('spc_scorecard.csv', CSV_COLUMNS, sortedRows)
+  }, [sortedRows])
 
   return (
     <div className={scorecardTableWrapClass}>
@@ -212,24 +187,50 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
           {exporting ? 'Exporting…' : 'Export Excel'}
         </button>
       </div>
-      <p className="text-xs text-[var(--c-text-muted)]">
-        Press <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">Enter</kbd> or{' '}
-        <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">Space</kbd> on a row to open its control chart.
-      </p>
-      <div
-        className={dark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'}
-        style={{ height: 450, width: '100%' }}
-        aria-label="SPC scorecard results table — use arrow keys to navigate, Enter to open chart"
-      >
-        <AgGridReact<ScorecardRow>
-          ref={gridRef}
-          rowData={sortedRows}
-          columnDefs={columnDefs}
-          defaultColDef={defaultColDef}
-          onRowClicked={onRowClicked}
-          onCellKeyDown={onCellKeyDown}
-          rowStyle={{ cursor: 'pointer' }}
-        />
+
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <table className="min-w-full border-separate border-spacing-0 text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-950/70">
+            <tr>
+              <th className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-400">
+                Characteristic
+              </th>
+              {['Batches', 'Mean', 'Std Dev', 'Target', 'Pp', 'Cpk', 'Ppk', 'OOC Rate', 'Status'].map(label => (
+                <th
+                  key={label}
+                  className="border-b border-slate-200 px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map(row => (
+              <tr key={row.mic_id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => openChart(row)}
+                    className="rounded-md text-left text-inherit transition-colors hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:hover:text-white"
+                    aria-label={`Open control chart for ${row.mic_name}`}
+                  >
+                    {row.mic_name}
+                  </button>
+                </td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{row.batch_count}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.mean_value, 4)}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.stddev_overall, 4)}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.nominal_target, 4)}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.pp, 2)}</td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.cpk} /></td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.ppk} /></td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300"><OOCValue value={row.ooc_rate} /></td>
+                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><StatusValue value={row.capability_status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
