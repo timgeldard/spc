@@ -47,6 +47,14 @@ export function Sidebar({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  useEffect(() => {
+    if (controlledActiveItem != null) return
+    const itemIds = new Set(items.map(item => item.id))
+    if (!itemIds.has(uncontrolledActiveItem)) {
+      setUncontrolledActiveItem(items[0]?.id ?? 'charts')
+    }
+  }, [controlledActiveItem, items, uncontrolledActiveItem])
+
   const handleSelect = (id: string) => {
     setUncontrolledActiveItem(id)
     onSelectItem?.(id)
@@ -72,6 +80,7 @@ export function Sidebar({
               <li key={item.id}>
                 <button
                   onClick={() => handleSelect(item.id)}
+                  aria-label={item.label}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white border-l-4 border-slate-900 dark:border-white'

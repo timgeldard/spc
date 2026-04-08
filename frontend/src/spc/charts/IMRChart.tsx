@@ -7,7 +7,6 @@ export default function IMRChart({
   indexedPoints = [],
   signals = [],
   mrSignals = [],
-  excludedIndices,
   onPointClick,
   externalLimits,
 }: IMRChartProps) {

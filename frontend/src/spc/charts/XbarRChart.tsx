@@ -29,7 +29,8 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
       range: stat.range,
       batchId: stat.batchId,
       subgroupSize: stat.n,
-      isSignal: signalIndexSet.has(index) || mrSignalIndexSet.has(index),
+      isSignal: signalIndexSet.has(index),
+      isRangeSignal: mrSignalIndexSet.has(index),
       uclX: stat.ucl_x,
       lclX: stat.lcl_x,
     }))

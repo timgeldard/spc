@@ -68,7 +68,7 @@ function ScopeSummaryStrip() {
     state.selectedMaterial,
     state.selectedPlant,
     state.selectedMIC,
-    state.dateFrom || state.dateTo,
+    state.dateFrom && state.dateTo,
   ].filter(Boolean).length
 
   const activeModuleLabel = TABS.find(tab => tab.id === state.activeTab)?.label ?? 'SPC'

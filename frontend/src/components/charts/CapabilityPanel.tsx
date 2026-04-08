@@ -1,5 +1,13 @@
 import { Card, CardContent, MetadataLabel, StatusBadge } from '../ui'
 
+export const CAPABILITY_TIERS = [
+  { min: 1.67, label: 'Highly Capable', badgeLabel: 'Excellent', status: 'healthy' as const },
+  { min: 1.33, label: 'Capable', badgeLabel: 'Capable', status: 'warning' as const },
+  { min: 0, label: 'Not Capable', badgeLabel: 'Not Capable', status: 'critical' as const },
+] as const
+
+export type CapabilityTier = (typeof CAPABILITY_TIERS)[number]
+
 interface CapabilityPanelProps {
   cp?: number | null
   cpk?: number | null
@@ -7,11 +15,12 @@ interface CapabilityPanelProps {
   ppk?: number | null
 }
 
-function getStatus(value: number | null | undefined): 'healthy' | 'warning' | 'critical' | null {
+export function getCapabilityTier(value: number | null | undefined): CapabilityTier | null {
   if (value == null) return null
-  if (value >= 1.67) return 'healthy'
-  if (value >= 1.33) return 'warning'
-  return 'critical'
+  for (const tier of CAPABILITY_TIERS) {
+    if (value >= tier.min) return tier
+  }
+  return CAPABILITY_TIERS[CAPABILITY_TIERS.length - 1]
 }
 
 function CapabilityMetric({
@@ -23,9 +32,8 @@ function CapabilityMetric({
   value?: number | null
   emphasis?: boolean
 }) {
-  const status = getStatus(value)
-  const numericLabel =
-    value == null ? 'Unavailable' : value >= 1.33 ? 'Capable' : 'Not Capable'
+  const tier = getCapabilityTier(value)
+  const numericLabel = value == null ? 'Unavailable' : tier?.badgeLabel ?? 'Not Capable'
 
   return (
     <div className={`rounded-xl border p-4 ${emphasis ? 'bg-slate-900 text-white border-slate-800 shadow-xl' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm'}`}>
@@ -34,7 +42,7 @@ function CapabilityMetric({
         {value == null ? '—' : value.toFixed(2)}
       </div>
       <div className="mt-3">
-        {status ? <StatusBadge status={status} label={numericLabel} /> : <span className="text-xs text-slate-500 dark:text-slate-400">{numericLabel}</span>}
+        {tier ? <StatusBadge status={tier.status} label={numericLabel} /> : <span className="text-xs text-slate-500 dark:text-slate-400">{numericLabel}</span>}
       </div>
     </div>
   )
