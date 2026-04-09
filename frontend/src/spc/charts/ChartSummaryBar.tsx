@@ -49,12 +49,12 @@ export function SummaryMetric({
   tone = 'slate',
 }: SummaryMetricProps) {
   const toneClass = tone === 'green'
-    ? 'border-[#8FE2BE] bg-[#DAF5E9]'              /* Jade */
+    ? 'border-[var(--c-status-ok-border)] bg-[var(--c-status-ok-bg)]'
     : tone === 'amber'
-      ? 'border-[#FDE79D] bg-[#FEF3CE]'            /* Sunrise */
+      ? 'border-[var(--c-status-warn-border)] bg-[var(--c-status-warn-bg)]'
       : tone === 'red'
-        ? 'border-[#FAB799] bg-[#FCDBCC]'          /* Sunset */
-        : 'border-[var(--c-border)] bg-[#F4F4EA]'  /* Stone/Slate */
+        ? 'border-[var(--c-status-bad-border)] bg-[var(--c-status-bad-bg)]'
+        : 'border-[var(--c-border)] bg-[var(--c-status-neutral-bg)]'
 
   return (
     <div className={`${metricCardClass} ${toneClass}`}>

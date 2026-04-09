@@ -4,12 +4,13 @@ import SparklineMini from './SparklineMini'
 import NodeTooltip from './NodeTooltip'
 import type { ProcessFlowNodeData } from '../types'
 
-// Labels reflect rejection-rate semantics, matching the flow legend
+// Labels reflect rejection-rate semantics — colours follow the Kerry brand palette:
+// Jade (green), Sunrise (amber), Sunset (red), Slate (grey)
 const STATUS = {
-  green: { dot: '#10b981', text: '#059669', bg: '#f0fdf4', border: '#bbf7d0', label: 'Low rejection rate' },
-  amber: { dot: '#f59e0b', text: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Elevated rejection rate' },
-  red:   { dot: '#ef4444', text: '#dc2626', bg: '#fef2f2', border: '#fca5a5', label: 'High rejection rate' },
-  grey:  { dot: '#9ca3af', text: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'Insufficient data' },
+  green: { dot: '#44CF93', text: '#143700', bg: '#DAF5E9', border: '#8FE2BE', label: 'Low rejection rate' },
+  amber: { dot: '#F9C20A', text: '#005776', bg: '#FEF3CE', border: '#FDE79D', label: 'Elevated rejection rate' },
+  red:   { dot: '#F24A00', text: '#F24A00', bg: '#FCDBCC', border: '#FAB799', label: 'High rejection rate' },
+  grey:  { dot: '#99BCC8', text: '#4E7080', bg: '#F4F4EA', border: '#CCDDE4', label: 'Insufficient data' },
 }
 
 type ProcessNodeStatus = keyof typeof STATUS
@@ -119,9 +120,9 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
           padding: '2px 7px',
           fontSize: '0.625rem',
           fontWeight: 700,
-          color: '#6d28d9',
-          background: '#f5f3ff',
-          border: '1px solid #ddd6fe',
+          color: '#F24A00',
+          background: '#FCDBCC',
+          border: '1px solid #F56E33',
           letterSpacing: '0.04em',
         }}>
           OOC

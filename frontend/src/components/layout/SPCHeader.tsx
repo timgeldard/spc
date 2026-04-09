@@ -51,17 +51,17 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
   const nextRoleMode = state.roleMode === 'engineer' ? 'operator' : 'engineer'
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/90">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[var(--c-border)] bg-[var(--c-surface)]/90 backdrop-blur-md">
       <div className="mx-auto flex min-h-16 w-full max-w-screen-2xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-lg font-bold text-white dark:bg-white dark:text-slate-900">
+          <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-[var(--c-brand)] text-lg font-bold text-white">
             S
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 dark:text-white sm:text-lg">
+            <h1 className="truncate text-base font-semibold tracking-tight text-[var(--c-text)] sm:text-lg">
               SPC App
             </h1>
-            <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
+            <p className="hidden text-xs text-[var(--c-text-muted)] sm:block">
               Statistical Process Control
             </p>
           </div>
@@ -75,7 +75,7 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
               value={state.globalSearch}
               onChange={handleSearchChange}
               placeholder="Search by batch, lot, or material..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 pl-10 pr-4 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-slate-500"
+              className="h-10 w-full rounded-sm border border-[var(--c-border)] bg-[var(--c-status-neutral-bg)] pl-10 pr-4 text-sm text-[var(--c-text)] outline-none transition-colors focus:border-[var(--c-brand)]"
               aria-label="Global search"
             />
           </div>
@@ -88,7 +88,7 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
             >
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:border-slate-300 hover:text-slate-600 dark:border-slate-700 dark:text-slate-500 dark:hover:border-slate-600 dark:hover:text-slate-300"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--c-border)] text-[var(--c-text-muted)] transition hover:border-[var(--c-brand)] hover:text-[var(--c-brand)]"
                 aria-label="About saved views"
               >
                 <CircleHelp className="h-4 w-4" />
@@ -98,7 +98,7 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
               defaultValue=""
               onChange={handleApplySavedView}
               disabled={state.savedViews.length === 0}
-              className="h-10 min-w-[170px] rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none transition-colors focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
+              className="h-10 min-w-[170px] rounded-sm border border-[var(--c-border)] bg-[var(--c-status-neutral-bg)] px-3 text-sm text-[var(--c-text)] outline-none transition-colors focus:border-[var(--c-brand)] disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Apply saved view"
             >
               <option value="">Saved views</option>
@@ -145,9 +145,9 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
             </Button>
           )}
 
-          <div className="hidden items-center gap-3 border-l border-slate-200 pl-3 dark:border-slate-800 lg:flex">
+          <div className="hidden items-center gap-3 border-l border-[var(--c-border)] pl-3 lg:flex">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--c-text-muted)]">
                 Mode
               </span>
               <Tooltip
@@ -157,19 +157,19 @@ export function SPCHeader({ dark = false, onToggleDark }: SPCHeaderProps) {
                   type="button"
                   onClick={() => dispatch({ type: 'SET_ROLE_MODE', payload: nextRoleMode })}
                   aria-pressed={state.roleMode === 'engineer'}
-                  className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-900"
+                  className="rounded-sm bg-[var(--c-status-info-bg)] px-3 py-1 text-xs font-semibold text-[var(--c-brand)] transition hover:bg-[var(--c-status-info-border)]"
                 >
                   {state.roleMode === 'engineer' ? 'Engineer' : 'Operator'}
                 </button>
               </Tooltip>
             </div>
             <div className="text-right">
-              <p className="text-sm font-medium text-slate-900 dark:text-white">John Doe</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-sm font-medium text-[var(--c-text)]">John Doe</p>
+              <p className="text-xs text-[var(--c-text-muted)]">
                 {state.roleMode === 'engineer' ? 'Quality Engineer' : 'Line Operator'}
               </p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--c-status-neutral-bg)] text-[var(--c-text-muted)]">
               <User className="h-4 w-4" />
             </div>
           </div>

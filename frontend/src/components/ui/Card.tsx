@@ -7,8 +7,8 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function Card({ className, variant = 'default', children, ...props }: CardProps) {
-  const baseClasses = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-shadow'
-  const darkClasses = 'bg-slate-900 border-slate-700 shadow-xl text-white hover:border-slate-600'
+  const baseClasses = 'bg-[var(--c-surface)] border border-[var(--c-border)] rounded-sm shadow-sm overflow-hidden transition-shadow'
+  const darkClasses = 'bg-[var(--c-surface)] border-[var(--c-border)] shadow-xl text-white'
 
   return (
     <div
@@ -22,7 +22,7 @@ export function Card({ className, variant = 'default', children, ...props }: Car
 
 export function CardHeader({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn('px-6 py-5 border-b border-slate-200 dark:border-slate-700', className)}>
+    <div className={cn('px-6 py-5 border-b border-[var(--c-border)]', className)}>
       {children}
     </div>
   )
@@ -34,7 +34,7 @@ export function CardContent({ className, children }: { className?: string; child
 
 export function CardTitle({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <h3 className={cn('text-slate-900 dark:text-white text-xl font-semibold tracking-tight', className)}>
+    <h3 className={cn('text-[var(--c-text)] text-xl font-semibold tracking-tight', className)}>
       {children}
     </h3>
   )

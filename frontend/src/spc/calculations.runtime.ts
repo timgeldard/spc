@@ -558,40 +558,65 @@ export function detectWECORules(values: number[], limits: Limits): SPCSignal[] {
   const signals: SPCSignal[] = []
   const side = (v: number): number => (v > cl ? 1 : v < cl ? -1 : 0)
 
+  // Rule 1: one signal per point — no window overlap possible
   for (let i = 0; i < values.length; i++) {
     if (values[i] > ucl || values[i] < lcl) {
       signals.push({ rule: 1, indices: [i], description: 'Point beyond 3σ control limit' })
     }
   }
+
+  // Rules 2–4 use run-detection: fire once when the pattern FIRST appears,
+  // then suppress until the pattern breaks. Without this, each overlapping
+  // window position that satisfies the rule emits a separate signal, inflating
+  // the count by (run-length − window-size + 1) per event.
+  let r2Above = false; let r2Below = false
   for (let i = 2; i < values.length; i++) {
     const w = values.slice(i - 2, i + 1)
     const aboveZoneA = w.filter((v) => v > cl + sigma2).length
     const belowZoneA = w.filter((v) => v < cl - sigma2).length
     if (aboveZoneA >= 2) {
-      signals.push({ rule: 2, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond +2σ (Zone A)' })
+      if (!r2Above) signals.push({ rule: 2, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond +2σ (Zone A)' })
+      r2Above = true; r2Below = false
     } else if (belowZoneA >= 2) {
-      signals.push({ rule: 2, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond −2σ (Zone A)' })
+      if (!r2Below) signals.push({ rule: 2, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond −2σ (Zone A)' })
+      r2Below = true; r2Above = false
+    } else {
+      r2Above = false; r2Below = false
     }
   }
+
+  let r3Above = false; let r3Below = false
   for (let i = 4; i < values.length; i++) {
     const w = values.slice(i - 4, i + 1)
     const aboveZoneB = w.filter((v) => v > cl + sigma1).length
     const belowZoneB = w.filter((v) => v < cl - sigma1).length
     if (aboveZoneB >= 4) {
-      signals.push({ rule: 3, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond +1σ (Zone B)' })
+      if (!r3Above) signals.push({ rule: 3, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond +1σ (Zone B)' })
+      r3Above = true; r3Below = false
     } else if (belowZoneB >= 4) {
-      signals.push({ rule: 3, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond −1σ (Zone B)' })
+      if (!r3Below) signals.push({ rule: 3, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond −1σ (Zone B)' })
+      r3Below = true; r3Above = false
+    } else {
+      r3Above = false; r3Below = false
     }
   }
+
+  let r4Active = false
   for (let i = 7; i < values.length; i++) {
     const w = values.slice(i - 7, i + 1)
     const s = side(w[0])
-    if (s !== 0 && w.every((v) => side(v) === s)) {
-      signals.push({
-        rule: 4,
-        indices: range(i - 7, i),
-        description: `8 consecutive points ${s === 1 ? 'above' : 'below'} the centre line`,
-      })
+    const isRun = s !== 0 && w.every((v) => side(v) === s)
+    if (isRun) {
+      if (!r4Active) {
+        signals.push({
+          rule: 4,
+          indices: range(i - 7, i),
+          description: `8 consecutive points ${s === 1 ? 'above' : 'below'} the centre line`,
+        })
+      }
+      r4Active = true
+    } else {
+      r4Active = false
     }
   }
   return signals
@@ -608,21 +633,34 @@ export function detectNelsonRules(values: number[], limits: Limits): SPCSignal[]
       signals.push({ rule: 1, indices: [i], description: 'Point beyond 3σ control limit' })
     }
   }
+  // Nelson Rules 2–8: same run-detection approach — fire once when pattern starts,
+  // suppress while active, reset when pattern breaks.
+  let n2Active = false
   for (let i = 8; i < values.length; i++) {
     const w = values.slice(i - 8, i + 1)
     const s = side(w[0])
-    if (s !== 0 && w.every((v) => side(v) === s)) {
-      signals.push({ rule: 2, indices: range(i - 8, i), description: `9 consecutive points ${s === 1 ? 'above' : 'below'} the centre line` })
-    }
+    const isRun = s !== 0 && w.every((v) => side(v) === s)
+    if (isRun) {
+      if (!n2Active) signals.push({ rule: 2, indices: range(i - 8, i), description: `9 consecutive points ${s === 1 ? 'above' : 'below'} the centre line` })
+      n2Active = true
+    } else { n2Active = false }
   }
+
+  let n3Up = false; let n3Down = false
   for (let i = 5; i < values.length; i++) {
     const w = values.slice(i - 5, i + 1)
     const up = w.every((v, j) => j === 0 || v > w[j - 1])
     const down = w.every((v, j) => j === 0 || v < w[j - 1])
-    if (up || down) {
-      signals.push({ rule: 3, indices: range(i - 5, i), description: `6 consecutive points ${up ? 'increasing' : 'decreasing'} (trend)` })
-    }
+    if (up) {
+      if (!n3Up) signals.push({ rule: 3, indices: range(i - 5, i), description: '6 consecutive points increasing (trend)' })
+      n3Up = true; n3Down = false
+    } else if (down) {
+      if (!n3Down) signals.push({ rule: 3, indices: range(i - 5, i), description: '6 consecutive points decreasing (trend)' })
+      n3Down = true; n3Up = false
+    } else { n3Up = false; n3Down = false }
   }
+
+  let n4Active = false
   for (let i = 13; i < values.length; i++) {
     const w = values.slice(i - 13, i + 1)
     const alternating = w.every((v, j) => {
@@ -630,36 +668,59 @@ export function detectNelsonRules(values: number[], limits: Limits): SPCSignal[]
       return (v - w[j - 1]) * (w[j - 1] - w[j - 2]) < 0
     })
     if (alternating) {
-      signals.push({ rule: 4, indices: range(i - 13, i), description: '14 consecutive points alternating up/down' })
-    }
+      if (!n4Active) signals.push({ rule: 4, indices: range(i - 13, i), description: '14 consecutive points alternating up/down' })
+      n4Active = true
+    } else { n4Active = false }
   }
+
+  let n5Above = false; let n5Below = false
   for (let i = 2; i < values.length; i++) {
     const w = values.slice(i - 2, i + 1)
     const aboveA = w.filter((v) => v > cl + sigma2).length
     const belowA = w.filter((v) => v < cl - sigma2).length
-    if (aboveA >= 2) signals.push({ rule: 5, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond +2σ (Zone A)' })
-    else if (belowA >= 2) signals.push({ rule: 5, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond −2σ (Zone A)' })
+    if (aboveA >= 2) {
+      if (!n5Above) signals.push({ rule: 5, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond +2σ (Zone A)' })
+      n5Above = true; n5Below = false
+    } else if (belowA >= 2) {
+      if (!n5Below) signals.push({ rule: 5, indices: range(i - 2, i), description: '2 of 3 consecutive points beyond −2σ (Zone A)' })
+      n5Below = true; n5Above = false
+    } else { n5Above = false; n5Below = false }
   }
+
+  let n6Above = false; let n6Below = false
   for (let i = 4; i < values.length; i++) {
     const w = values.slice(i - 4, i + 1)
     const aboveB = w.filter((v) => v > cl + sigma1).length
     const belowB = w.filter((v) => v < cl - sigma1).length
-    if (aboveB >= 4) signals.push({ rule: 6, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond +1σ (Zone B)' })
-    else if (belowB >= 4) signals.push({ rule: 6, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond −1σ (Zone B)' })
+    if (aboveB >= 4) {
+      if (!n6Above) signals.push({ rule: 6, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond +1σ (Zone B)' })
+      n6Above = true; n6Below = false
+    } else if (belowB >= 4) {
+      if (!n6Below) signals.push({ rule: 6, indices: range(i - 4, i), description: '4 of 5 consecutive points beyond −1σ (Zone B)' })
+      n6Below = true; n6Above = false
+    } else { n6Above = false; n6Below = false }
   }
+
+  let n7Active = false
   for (let i = 14; i < values.length; i++) {
     const w = values.slice(i - 14, i + 1)
-    if (w.every((v) => Math.abs(v - cl) <= sigma1)) {
-      signals.push({ rule: 7, indices: range(i - 14, i), description: '15 consecutive points within Zone C (hugging centre line)' })
-    }
+    const isHug = w.every((v) => Math.abs(v - cl) <= sigma1)
+    if (isHug) {
+      if (!n7Active) signals.push({ rule: 7, indices: range(i - 14, i), description: '15 consecutive points within Zone C (hugging centre line)' })
+      n7Active = true
+    } else { n7Active = false }
   }
+
+  let n8Active = false
   for (let i = 7; i < values.length; i++) {
     const w = values.slice(i - 7, i + 1)
     const hasAbove = w.some((v) => v > cl + sigma1)
     const hasBelow = w.some((v) => v < cl - sigma1)
-    if (hasAbove && hasBelow && w.every((v) => Math.abs(v - cl) > sigma1)) {
-      signals.push({ rule: 8, indices: range(i - 7, i), description: '8 consecutive points outside Zone C (mixture pattern)' })
-    }
+    const isMix = hasAbove && hasBelow && w.every((v) => Math.abs(v - cl) > sigma1)
+    if (isMix) {
+      if (!n8Active) signals.push({ rule: 8, indices: range(i - 7, i), description: '8 consecutive points outside Zone C (mixture pattern)' })
+      n8Active = true
+    } else { n8Active = false }
   }
   return signals
 }

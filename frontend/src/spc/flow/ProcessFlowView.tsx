@@ -35,11 +35,12 @@ type FlowEdge = Edge
 type TraceDirection = 'upstream' | 'downstream' | null
 const nodeTypes = { processNode: ProcessNode }
 
+// Kerry brand palette — matches ProcessNode STATUS
 const STATUS_COLOR = {
-  green: '#10b981',
-  amber: '#f59e0b',
-  red:   '#ef4444',
-  grey:  '#9ca3af',
+  green: '#44CF93',  // Jade
+  amber: '#F9C20A',  // Sunrise
+  red:   '#F24A00',  // Sunset
+  grey:  '#99BCC8',  // Slate 40
 }
 
 function buildFlowElements(
@@ -99,7 +100,7 @@ function buildFlowElements(
       type: 'smoothstep',
       animated,
       style: {
-        stroke: animated ? '#ef4444' : '#94a3b8',
+        stroke: animated ? '#F24A00' : '#CCDDE4',  // Sunset / Slate 20
         strokeWidth: animated ? 2 : 1.5,
       },
     }
@@ -223,7 +224,7 @@ export default function ProcessFlowView() {
         style: {
           ...edge.style,
           opacity: hasSelection && !isHighlighted && !isIncident ? 0.18 : 1,
-          stroke: isHighlighted ? '#7c3aed' : isIncident ? '#2563eb' : (edge.style?.stroke ?? '#94a3b8'),
+          stroke: isHighlighted ? '#289BA2' : isIncident ? '#005776' : (edge.style?.stroke ?? '#CCDDE4'),  // Sage / Slate / Slate 20
           strokeWidth: isHighlighted ? 3 : isIncident ? 2.4 : (edge.style?.strokeWidth ?? 1.5),
         },
       }
@@ -349,7 +350,7 @@ export default function ProcessFlowView() {
                 <p><span className="font-semibold" style={{ color: STATUS_COLOR.green }}>Green</span> nodes are operationally healthy.</p>
                 <p><span className="font-semibold" style={{ color: STATUS_COLOR.amber }}>Amber</span> nodes should be monitored for drift.</p>
                 <p><span className="font-semibold" style={{ color: STATUS_COLOR.red }}>Red</span> nodes are likely risk hotspots.</p>
-                <p><span className="font-semibold" style={{ color: '#7c3aed' }}>Purple</span> highlights inferred OOC attention until dedicated signal timestamps are wired in.</p>
+                <p><span className="font-semibold" style={{ color: '#F24A00' }}>Red-orange</span> borders indicate inferred OOC attention from current rejection or capability posture.</p>
               </div>
             </>
           )}
@@ -388,7 +389,7 @@ export default function ProcessFlowView() {
                 </div>
 
                 {selectedNode.data.has_ooc_signal && (
-                  <div className="mt-4 rounded-xl bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                  <div className="mt-4 rounded-xl bg-[#FCDBCC] px-3 py-2 text-sm font-medium text-[#F24A00] dark:bg-[#3D1200] dark:text-[#F56E33]">
                     {selectedNode.data.last_ooc
                       ? `Latest OOC signal ${selectedNode.data.last_ooc}`
                       : 'OOC attention inferred from current rejection or capability posture.'}
@@ -418,7 +419,7 @@ export default function ProcessFlowView() {
               <button
                 type="button"
                 onClick={() => activateNode(selectedNode.data)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#CCDDE4] bg-[#D4EBEC] px-4 py-3 text-sm font-medium text-[#005776] transition hover:bg-[#A9D7DA] dark:border-[#337991] dark:bg-[#337991]/40 dark:text-[#44CF93] dark:hover:bg-[#337991]/60"
               >
                 <ScanSearch className="h-4 w-4" />
                 Open In Control Charts

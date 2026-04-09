@@ -1,3 +1,6 @@
+/* IBM Plex Sans — Carbon Design System primary typeface */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
 /* Tailwind utilities layer only - no preflight reset, preserves existing App.css */
 @import "tailwindcss/utilities";
 
@@ -5,7 +8,7 @@
 
 /* Tailwind theme tokens that map to existing design system */
 @theme {
-  --font-sans: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
 
   /* ── Colour tokens (reference CSS vars so dark mode works automatically) ── */
@@ -33,7 +36,7 @@
   /* ── Shadow tokens ── */
   --shadow-base: 0 1px 4px rgba(0, 0, 0, .08), 0 4px 12px rgba(0, 0, 0, .06);
 
-  --radius: 8px;
+  --radius: 2px;
 }
 
 /* ── Dark mode: Kerry brand-dark ── */
@@ -56,7 +59,23 @@
   --spc-amber-bg: #335500;     /* Forest-ish dark */
   --spc-red-bg:   #3D1200;     /* very dark warm */
   --spc-grey-bg:  #337991;     /* Slate 80 */
-}
 
-/* Noto Sans OpenType features */
-body { font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; }
+  /* Semantic status surfaces — dark */
+  --c-status-ok-bg:            #143700;
+  --c-status-ok-border:        #44CF93;
+  --c-status-ok-strong-border: #44CF93;
+  --c-status-ok-text:          #44CF93;
+  --c-status-warn-bg:          #335500;
+  --c-status-warn-border:      #F9C20A;
+  --c-status-warn-text:        #F9C20A;
+  --c-status-bad-bg:           #3D1200;
+  --c-status-bad-border:       #F56E33;
+  --c-status-bad-strong-border:#F24A00;
+  --c-status-bad-text:         #F56E33;
+  --c-status-neutral-bg:       #337991;
+  --c-status-neutral-border:   #99BCC8;
+  --c-status-neutral-text:     #CCDDE4;
+  --c-status-info-bg:          #003B45;
+  --c-status-info-border:      #289BA2;
+  --c-status-info-text:        #289BA2;
+}

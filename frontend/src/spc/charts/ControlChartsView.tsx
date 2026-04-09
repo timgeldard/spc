@@ -85,8 +85,8 @@ function PanelSelector({
   stratifyLabel: string | null
 }) {
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <h3 className="font-semibold text-gray-900 dark:text-white">Display Panels</h3>
+    <div className="rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)] p-6 shadow-sm">
+      <h3 className="font-semibold text-[var(--c-text)]">Display Panels</h3>
       <div className="mt-4 space-y-3">
         {availablePanels.map(panel => (
           <label
@@ -101,16 +101,16 @@ function PanelSelector({
               className="mt-1 h-4 w-4 accent-blue-600"
             />
             <span>
-              <span className="block text-sm font-medium text-gray-900 dark:text-white">{panel.label}</span>
-              <span className="block text-xs text-gray-500 dark:text-gray-400">{panel.description}</span>
+              <span className="block text-sm font-medium text-[var(--c-text)]">{panel.label}</span>
+              <span className="block text-xs text-[var(--c-text-muted)]">{panel.description}</span>
             </span>
           </label>
         ))}
       </div>
 
-      <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Stratification</h4>
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mt-8 border-t border-[var(--c-border)] pt-6">
+        <h4 className="text-sm font-medium text-[var(--c-text)]">Stratification</h4>
+        <p className="mt-2 text-xs text-[var(--c-text-muted)]">
           {stratifyLabel
             ? `Current view is stratified by ${stratifyLabel}.`
             : 'Line, shift, lot, and plant context are inherited from the top filter bar.'}
@@ -299,7 +299,7 @@ export default function ControlChartsView() {
               onAutoClean={ctrl.handleAutoClean}
             />
           ) : (
-            <div className="rounded-3xl border border-gray-200 bg-white p-5 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+            <div className="rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)] p-5 text-sm text-[var(--c-text-muted)] shadow-sm">
               Operator mode keeps this view focused on live monitoring. Switch back to Engineer mode in the header to unlock rule tuning, limit controls, and the audit panels.
             </div>
           )}
@@ -387,14 +387,14 @@ export default function ControlChartsView() {
                     exportLabel="Export Data"
                   >
                     <div className="mb-4 flex items-center justify-end">
-                      <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <label className="flex items-center gap-2 text-sm text-[var(--c-text-muted)]">
                         Window
                         <input
                           type="number"
                           min={5}
                           max={Math.max(5, ctrl.spc?.sorted?.length ?? 5)}
                           value={ctrl.rollingWindowSize}
-                          className="w-20 rounded-xl border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                          className="w-20 rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)] px-3 py-2 text-sm text-[var(--c-text)]"
                           onChange={event => {
                             const next = Number(event.target.value)
                             if (Number.isFinite(next) && next >= 5) ctrl.setRollingWindowSize(next)

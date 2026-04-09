@@ -36,11 +36,11 @@ const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix'))
 // ── Capability-status colour tokens ─────────────────────────────────────────
 // Kerry semantic status: Jade=capable, Sunrise=marginal, Sunset=poor
 const STATUS_COLOR: Record<string, string> = {
-  excellent:       'border-[#8FE2BE] bg-[#DAF5E9] text-[#143700]',  /* Jade strong */
-  good:            'border-[#B4ECD4] bg-[#DAF5E9] text-[#143700]',  /* Jade */
-  marginal:        'border-[#FDE79D] bg-[#FEF3CE] text-[#005776]',  /* Sunrise */
-  poor:            'border-[#FAB799] bg-[#FCDBCC] text-[#F24A00]',  /* Sunset */
-  out_of_spec_mean:'border-[#F56E33] bg-[#FCDBCC] text-[#F24A00]',  /* Sunset strong */
+  excellent:       'border-[var(--c-status-ok-border)] bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)]',
+  good:            'border-[var(--c-status-ok-strong-border)] bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)]',
+  marginal:        'border-[var(--c-status-warn-border)] bg-[var(--c-status-warn-bg)] text-[var(--c-status-warn-text)]',
+  poor:            'border-[var(--c-status-bad-border)] bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)]',
+  out_of_spec_mean:'border-[var(--c-status-bad-strong-border)] bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)]',
 }
 
 interface SummaryBarProps {
@@ -54,11 +54,11 @@ function SummaryBar({ rows }: SummaryBarProps) {
   const marginal = rows.filter(r => r.capability_status === 'marginal').length
   const poor = rows.filter(r => r.capability_status === 'poor').length
   const cards = [
-    { label: 'Characteristics', value: total, colorClass: 'border-[#CCDDE4] bg-[#F4F4EA] text-[#005776]', meta: 'Total measurable MICs in scope' },
-    { label: 'Highly Capable (≥1.67)', value: excellent, colorClass: 'border-[#8FE2BE] bg-[#DAF5E9] text-[#143700]', meta: 'Strong headroom above specification' },
-    { label: 'Capable (≥1.33)', value: good, colorClass: 'border-[#B4ECD4] bg-[#DAF5E9] text-[#143700]', meta: 'Operationally healthy and reliable' },
-    { label: 'Marginal (≥1.00)', value: marginal, colorClass: 'border-[#FDE79D] bg-[#FEF3CE] text-[#005776]', meta: 'Monitor closely before release decisions' },
-    { label: 'Not Capable (<1.00)', value: poor, colorClass: 'border-[#FAB799] bg-[#FCDBCC] text-[#F24A00]', meta: 'Immediate attention required' },
+    { label: 'Characteristics', value: total, colorClass: 'border-[var(--c-status-neutral-border)] bg-[var(--c-status-neutral-bg)] text-[var(--c-status-neutral-text)]', meta: 'Total measurable MICs in scope' },
+    { label: 'Highly Capable (≥1.67)', value: excellent, colorClass: 'border-[var(--c-status-ok-border)] bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)]', meta: 'Strong headroom above specification' },
+    { label: 'Capable (≥1.33)', value: good, colorClass: 'border-[var(--c-status-ok-strong-border)] bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)]', meta: 'Operationally healthy and reliable' },
+    { label: 'Marginal (≥1.00)', value: marginal, colorClass: 'border-[var(--c-status-warn-border)] bg-[var(--c-status-warn-bg)] text-[var(--c-status-warn-text)]', meta: 'Monitor closely before release decisions' },
+    { label: 'Not Capable (<1.00)', value: poor, colorClass: 'border-[var(--c-status-bad-border)] bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)]', meta: 'Immediate attention required' },
   ]
 
   return (

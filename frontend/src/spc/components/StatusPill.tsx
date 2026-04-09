@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CheckCircle2, AlertTriangle, XCircle, AlertOctagon, Minus } from 'lucide-react'
 
 export type StatusPillStatus =
   | 'in-control'          // No SPC violations AND Cpk >= threshold
@@ -16,31 +17,31 @@ interface StatusPillProps {
 }
 
 // Kerry semantic colors: Jade=success, Sunrise=warning, Sunset=critical
-const STATUS_CONFIG: Record<StatusPillStatus, { label: string; icon: string; className: string }> = {
+const STATUS_CONFIG: Record<StatusPillStatus, { label: string; icon: React.ReactNode; className: string }> = {
   'in-control': {
     label: 'In Control',
-    icon: '✓',
-    className: 'bg-[#DAF5E9] text-[#143700] border-[#8FE2BE]',   /* Jade */
+    icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
+    className: 'bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)] border-[var(--c-status-ok-border)]',
   },
   warning: {
     label: 'Warning',
-    icon: '⚠',
-    className: 'bg-[#FEF3CE] text-[#005776] border-[#FDE79D]',   /* Sunrise */
+    icon: <AlertTriangle className="h-3 w-3" aria-hidden="true" />,
+    className: 'bg-[var(--c-status-warn-bg)] text-[var(--c-status-warn-text)] border-[var(--c-status-warn-border)]',
   },
   'out-of-control': {
     label: 'Out of Control',
-    icon: '✕',
-    className: 'bg-[#FCDBCC] text-[#F24A00] border-[#FAB799]',   /* Sunset */
+    icon: <XCircle className="h-3 w-3" aria-hidden="true" />,
+    className: 'bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)] border-[var(--c-status-bad-border)]',
   },
   'out-of-control-high': {
     label: 'Critical — Out of Control',
-    icon: '‼',
-    className: 'bg-[#FCDBCC] text-[#F24A00] border-[#F56E33]',   /* Sunset strong */
+    icon: <AlertOctagon className="h-3 w-3" aria-hidden="true" />,
+    className: 'bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)] border-[var(--c-status-bad-strong-border)]',
   },
   unknown: {
     label: 'Unknown',
-    icon: '—',
-    className: 'bg-[#F4F4EA] text-[#4E7080] border-[#CCDDE4]',   /* Stone/Slate */
+    icon: <Minus className="h-3 w-3" aria-hidden="true" />,
+    className: 'bg-[var(--c-status-neutral-bg)] text-[var(--c-status-neutral-text)] border-[var(--c-status-neutral-border)]',
   },
 }
 
@@ -63,7 +64,7 @@ export default function StatusPill({ status, label, compact = false }: StatusPil
       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${className}`}
       title={displayLabel}
     >
-      <span aria-hidden="true">{icon}</span>
+      {icon}
       {!compact && <span>{displayLabel}</span>}
       {compact && <span className="sr-only">{displayLabel}</span>}
     </span>

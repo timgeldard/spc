@@ -64,7 +64,7 @@ const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
 
 function TabLoadingState() {
   return (
-    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-6 py-12 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
+    <div className="flex min-h-[320px] items-center justify-center rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)]/70 px-6 py-12 text-[var(--c-text-muted)] shadow-sm">
       Loading analysis view…
     </div>
   )
@@ -88,7 +88,7 @@ function PrimaryTabNavigation() {
   const { state, dispatch } = useSPC()
 
   return (
-    <div role="tablist" aria-label="SPC analysis modules" className="flex flex-wrap items-center gap-2">
+    <div role="tablist" aria-label="SPC analysis modules" className="flex flex-wrap items-center">
       {PRIMARY_TABS.map(tab => {
         const active = state.activeTab === tab.id
         const unavailableReason = getTabUnavailableReason(tab.id, state)
@@ -105,12 +105,12 @@ function PrimaryTabNavigation() {
             disabled={disabled}
             onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id as PrimaryTabId })}
             className={cn(
-              'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+              'inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors',
               active
-                ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                ? 'border-[var(--c-brand)] text-[var(--c-brand)]'
                 : disabled
-                  ? 'cursor-not-allowed border-slate-200 bg-white text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-white',
+                  ? 'cursor-not-allowed border-transparent text-[var(--c-text-muted)] opacity-40'
+                  : 'border-transparent text-[var(--c-text-muted)] hover:border-[var(--c-border)] hover:text-[var(--c-text)]',
             )}
           >
             <Icon className="h-4 w-4" />
@@ -148,12 +148,12 @@ function AdvancedModuleRail() {
             disabled={disabled}
             onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id as AdvancedTabId })}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              'border-b-2 px-3 py-2 text-xs font-medium transition-colors',
               active
-                ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
                 : disabled
-                  ? 'cursor-not-allowed border-slate-200 bg-white text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
-                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white',
+                  ? 'cursor-not-allowed border-transparent text-[var(--c-text-muted)] opacity-40'
+                  : 'border-transparent text-[var(--c-text-muted)] hover:border-[var(--c-border)] hover:text-[var(--c-text)]',
             )}
           >
             {tab.label}
@@ -171,15 +171,15 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
   const ActiveView = TAB_COMPONENTS[state.activeTab]
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-[var(--c-bg)]">
       <SPCHeader dark={dark} onToggleDark={onToggleDark} />
 
       <div className="px-4 pt-16 sm:px-6">
-        <div className="sticky top-16 z-40 -mx-4 border-b border-slate-200 bg-slate-50/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:-mx-6">
+        <div className="sticky top-16 z-40 -mx-4 border-b border-[var(--c-border)] bg-[var(--c-bg)]/95 backdrop-blur sm:-mx-6">
           <div className="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6">
             <SPCFilterBar embedded />
           </div>
-          <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 border-t border-[var(--c-border)] px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
             <PrimaryTabNavigation />
             <AdvancedModuleRail />
           </div>
@@ -192,7 +192,7 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
               role="tabpanel"
               id={`tabpanel-${state.activeTab}`}
               aria-labelledby={`tab-${state.activeTab}`}
-              className="rounded-xl border border-slate-200 bg-white/70 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/70"
+              className="rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)]/70 shadow-sm"
             >
               <SPCErrorBoundary key={state.activeTab}>
                 <AnimatePresence mode="wait">
