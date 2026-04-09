@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import {
-  Button,
-  DefinitionTooltip,
-  Tag,
-  Tile,
-} from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version
-import { Download, Edit, Flag } from '@carbon/icons-react'
+import { Button } from '~/lib/carbon-forms'
+import { DefinitionTooltip } from '~/lib/carbon-feedback'
+import { Tag, Tile } from '~/lib/carbon-layout'
+import Download from '@carbon/icons-react/es/Download.js'
+import Edit from '@carbon/icons-react/es/Edit.js'
+import Flag from '@carbon/icons-react/es/Flag.js'
 import PointExclusionModal from '../../components/Modals/PointExclusionModal'
 
 interface ChartCardProps {

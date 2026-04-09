@@ -1,0 +1,1 @@
+import{j as l}from"./react-vendor-FcW3QCVF.js";import{R as o,S as t}from"./uiClasses-Cr31bkWJ.js";function f({id:e,error:s=!1,live:a=!1,children:i}){return l.jsx("span",{id:e,className:s?o:t,role:s&&a?"alert":void 0,"aria-live":a?s?"assertive":"polite":void 0,children:i})}export{f as F};

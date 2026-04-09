@@ -1,23 +1,13 @@
-import { loadingClass, spinnerClass } from '../uiClasses'
+import { InlineLoading, SkeletonPlaceholder } from '~/lib/carbon-feedback'
+import { Stack } from '~/lib/carbon-layout'
 
 interface LoadingSkeletonProps {
-  /** Show animated skeleton lines instead of a spinner. Use for table/list contexts. */
   variant?: 'spinner' | 'lines'
   message?: string
-  /** Number of skeleton lines (variant="lines" only) */
   lines?: number
-  /** Minimum height for the container */
   minHeight?: string
 }
 
-/**
- * Consistent loading state for all module tabs.
- * - variant="spinner" (default): centered spinner + message, matches loadingClass token
- * - variant="lines": animated skeleton rows for table/list contexts
- *
- * Replaces: PanelLoadingState(), ChartLoadingState(), ScorecardPanelLoadingState(),
- *           and ad-hoc inline skeleton divs.
- */
 export default function LoadingSkeleton({
   variant = 'spinner',
   message = 'Loading…',
@@ -26,29 +16,51 @@ export default function LoadingSkeleton({
 }: LoadingSkeletonProps) {
   if (variant === 'lines') {
     return (
-      <div className="flex flex-col gap-3 py-6" style={minHeight ? { minHeight } : undefined}>
-        {Array.from({ length: lines }, (_, i) => (
-          <div
-            key={i}
-            className="h-10 animate-pulse rounded-md bg-slate-200/70"
-            style={{ width: i % 3 === 0 ? '100%' : i % 3 === 1 ? `${83 + (i % 2) * 4}%` : '66%' }}
-            aria-hidden="true"
-          />
-        ))}
-        <span className="sr-only">{message}</span>
+      <div style={minHeight ? { minHeight } : undefined}>
+        <Stack gap={3} style={{ padding: '1.5rem 0' }}>
+          {Array.from({ length: lines }, (_, i) => (
+            <SkeletonPlaceholder
+              key={i}
+              style={{ width: i % 3 === 0 ? '100%' : i % 3 === 1 ? `${83 + (i % 2) * 4}%` : '66%', height: '2.5rem' }}
+              aria-hidden="true"
+            />
+          ))}
+          <span
+            style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              padding: 0,
+              margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0, 0, 0, 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
+          >
+            {message}
+          </span>
+        </Stack>
       </div>
     )
   }
 
   return (
     <div
-      className={loadingClass}
-      style={minHeight ? { minHeight } : undefined}
+      style={{
+        minHeight,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '1rem',
+        padding: '1.5rem',
+        color: 'var(--cds-text-secondary)',
+      }}
       aria-live="polite"
       aria-label={message}
     >
-      <div className={spinnerClass} aria-hidden="true" />
-      <p>{message}</p>
+      <InlineLoading description={message} status="active" />
     </div>
   )
 }

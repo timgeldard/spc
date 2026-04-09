@@ -3,14 +3,9 @@ import './ensureEChartsTheme'
 import {
   Button,
   Checkbox,
-  Column,
-  Grid,
-  InlineNotification,
-  SkeletonPlaceholder,
-  Stack,
-  Tag,
-  Tile,
-} from '@carbon/react'
+} from '~/lib/carbon-forms'
+import { InlineNotification, SkeletonPlaceholder } from '~/lib/carbon-feedback'
+import { Column, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import { useControlChartsController } from '../hooks/useControlChartsController'
 import type { LockedLimits, SPCComputationResult } from '../types'

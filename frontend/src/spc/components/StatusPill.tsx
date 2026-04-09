@@ -1,14 +1,10 @@
 import type { ReactNode } from 'react'
-import { Tag } from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version:
-// https://carbondesignsystem.com/elements/icons/library/
-import {
-  CheckmarkFilled,
-  Misuse,           // out-of-control-high
-  SubtractFilled,   // unknown
-  WarningAltFilled, // warning
-  WarningFilled,    // out-of-control
-} from '@carbon/icons-react'
+import { Tag } from '~/lib/carbon-layout'
+import CheckmarkFilled from '@carbon/icons-react/es/CheckmarkFilled.js'
+import Misuse from '@carbon/icons-react/es/Misuse.js'
+import SubtractFilled from '@carbon/icons-react/es/SubtractFilled.js'
+import WarningAltFilled from '@carbon/icons-react/es/WarningAltFilled.js'
+import WarningFilled from '@carbon/icons-react/es/WarningFilled.js'
 
 export type StatusPillStatus =
   | 'in-control'           // No SPC violations AND Cpk >= threshold
@@ -43,7 +39,6 @@ export default function StatusPill({ status, label, compact = false }: StatusPil
   const displayLabel = label ?? defaultLabel
 
   if (compact) {
-    // Icon-only variant — full label moved to aria-label for screen readers
     return (
       <Tag
         type={type}
@@ -53,8 +48,21 @@ export default function StatusPill({ status, label, compact = false }: StatusPil
         aria-label={displayLabel}
         style={{ paddingInline: '0.25rem' }}
       >
-        {/* Zero-width hidden text preserves accessible label without visual clutter */}
-        <span className="sr-only">{displayLabel}</span>
+        <span
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            padding: 0,
+            margin: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {displayLabel}
+        </span>
       </Tag>
     )
   }

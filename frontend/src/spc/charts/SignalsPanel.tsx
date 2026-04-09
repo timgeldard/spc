@@ -1,6 +1,7 @@
+import { Button } from '~/lib/carbon-forms'
+import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import type { IndexedChartPoint, SPCSignal } from '../types'
-import { buttonBaseClass, buttonSecondaryClass, buttonSmClass, heroCardDenseClass } from '../uiClasses'
 
 const WECO_RULES = {
   desc: {
@@ -27,9 +28,9 @@ const NELSON_RULES = {
 } as const
 
 const SEVERITY_STYLE = {
-  critical: { dot: '#dc2626', label: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
-  warning: { dot: '#d97706', label: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
-  info: { dot: '#0284c7', label: '#0284c7', bg: '#f0f9ff', border: '#7dd3fc' },
+  critical: { dot: '#da1e28', label: '#a2191f', bg: '#fff1f1', border: '#fa4d56' },
+  warning: { dot: '#f1c21b', label: '#8e6a00', bg: '#fcf4d6', border: '#f1c21b' },
+  info: { dot: '#0f62fe', label: '#0043ce', bg: '#edf5ff', border: '#78a9ff' },
 } as const
 
 type SeverityKey = keyof typeof SEVERITY_STYLE
@@ -62,92 +63,100 @@ export default function SignalsPanel({
 
   if (allSignals.length === 0) {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium"
-        style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-        No {label} rule violations detected
-      </div>
+      <Tile role="status" aria-live="polite" style={{ border: '1px solid var(--cds-support-success)', background: 'color-mix(in srgb, var(--cds-support-success) 10%, var(--cds-layer) 90%)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+          <span aria-hidden="true">OK</span>
+          No {label} rule violations detected
+        </div>
+      </Tile>
     )
   }
 
   return (
-    <div className={`${heroCardDenseClass} space-y-4`} aria-label={`${label} signal queue`}>
-      <div>
-        <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Signal queue</div>
-        <div className="mt-1 flex items-center gap-2 text-sm font-bold text-[var(--c-text)]">
-          {label} Signals
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-600">
-            {allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}
-          </span>
+    <Tile aria-label={`${label} signal queue`}>
+      <Stack gap={5}>
+        <div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>Signal queue</div>
+          <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>
+            {label} Signals
+            <Tag type="warm-gray" size="sm">
+              {allSignals.length} signal{allSignals.length !== 1 ? 's' : ''}
+            </Tag>
+          </div>
+          <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+            Signals are ordered evidence of instability. Resolve assignable causes before trusting capability.
+          </p>
         </div>
-        <p className="mt-1 text-sm text-[var(--c-text-muted)]">
-          Signals are ordered evidence of instability. Resolve assignable causes before trusting capability.
-        </p>
-      </div>
 
-      <div className="relative ml-2 mt-2">
-        <div className="absolute bottom-0 top-0 left-[7px] w-px bg-gray-200" />
+        <div style={{ position: 'relative', marginLeft: '0.5rem', marginTop: '0.5rem' }}>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '7px', width: '1px', background: 'var(--cds-border-subtle-01)' }} />
 
-        <div className="flex flex-col gap-3">
-          {allSignals.map((signal, index) => {
-            const severity = (rules.severity[signal.rule as keyof typeof rules.severity] ?? 'info') as SeverityKey
-            const style = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.info
-            const batchIds = signal.indices
-              .map(idx => indexedPoints[idx]?.batch_id)
-              .filter((value): value is string => Boolean(value))
-              .filter((value, valueIndex, all) => all.indexOf(value) === valueIndex)
-              .slice(0, 3)
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {allSignals.map((signal, index) => {
+              const severity = (rules.severity[signal.rule as keyof typeof rules.severity] ?? 'info') as SeverityKey
+              const style = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.info
+              const batchIds = signal.indices
+                .map(idx => indexedPoints[idx]?.batch_id)
+                .filter((value): value is string => Boolean(value))
+                .filter((value, valueIndex, all) => all.indexOf(value) === valueIndex)
+                .slice(0, 3)
 
-            return (
-              <div key={`${signal.chart}-${signal.rule}-${index}`} className="relative pl-6">
-                <div
-                  className="absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white"
-                  style={{ background: style.dot, boxShadow: `0 0 0 2px ${style.dot}40` }}
-                />
-                <div
-                  className="rounded-lg px-3 py-2 text-sm"
-                  style={{ background: style.bg, border: `1px solid ${style.border}` }}
-                >
-                  <div className="mb-0.5 flex items-center gap-2">
-                    <span className="text-xs font-bold" style={{ color: style.label }}>Rule {signal.rule}</span>
-                    <span
-                      className="rounded px-1.5 py-0.5 text-xs font-medium"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: style.label }}
-                    >
-                      {signal.chart} chart
-                    </span>
-                  </div>
-                  <p className="text-xs leading-snug text-gray-600">
-                    {rules.desc[signal.rule as keyof typeof rules.desc] ?? signal.description}
-                  </p>
-                  {batchIds.length > 0 && (
-                    <p className="mt-1 text-xs text-gray-400">
-                      Batches: {batchIds.join(', ')}
-                      {signal.indices.length > 3 ? ` +${signal.indices.length - 3} more` : ''}
+              return (
+                <div key={`${signal.chart}-${signal.rule}-${index}`} style={{ position: 'relative', paddingLeft: '1.5rem' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: '0.375rem',
+                      height: '0.875rem',
+                      width: '0.875rem',
+                      borderRadius: '999px',
+                      border: '2px solid var(--cds-layer)',
+                      background: style.dot,
+                      boxShadow: `0 0 0 2px ${style.dot}40`,
+                    }}
+                  />
+                  <div
+                    style={{
+                      borderRadius: '0.25rem',
+                      padding: '0.75rem',
+                      fontSize: '0.875rem',
+                      background: style.bg,
+                      border: `1px solid ${style.border}`,
+                    }}
+                  >
+                    <div style={{ marginBottom: '0.125rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: style.label }}>Rule {signal.rule}</span>
+                      <span style={{ borderRadius: '0.25rem', padding: '0.125rem 0.375rem', fontSize: '0.75rem', fontWeight: 500, background: 'rgba(0,0,0,0.06)', color: style.label }}>
+                        {signal.chart} chart
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.75rem', lineHeight: 1.4, color: 'var(--cds-text-secondary)' }}>
+                      {rules.desc[signal.rule as keyof typeof rules.desc] ?? signal.description}
                     </p>
-                  )}
+                    {batchIds.length > 0 && (
+                      <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--cds-text-helper)' }}>
+                        Batches: {batchIds.join(', ')}
+                        {signal.indices.length > 3 ? ` +${signal.indices.length - 3} more` : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
 
-      <button
-        className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-        style={{ marginTop: 12 }}
-        onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'correlation' })}
-        title="Investigate whether correlated characteristics may share assignable causes"
-        aria-label="Open correlation analysis for signal investigation"
-      >
-        Investigate Correlations
-      </button>
-    </div>
+        <Button
+          kind="secondary"
+          size="sm"
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'correlation' })}
+          title="Investigate whether correlated characteristics may share assignable causes"
+          aria-label="Open correlation analysis for signal investigation"
+        >
+          Investigate Correlations
+        </Button>
+      </Stack>
+    </Tile>
   )
 }

@@ -1,1 +1,0 @@
-import{l as r,j as a,P as o}from"./index-BzLHZ5Mx.js";import{j as t}from"./process-flow-CxNUUBMy.js";const l=({className:s,...e})=>t.jsx("div",{className:r({[`${a()}--skeleton__placeholder`]:!0},s),...e});l.propTypes={className:o.string};export{l as S};

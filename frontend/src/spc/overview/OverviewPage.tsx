@@ -1,15 +1,14 @@
 import { useEffect, useMemo } from 'react'
 import {
   Button,
-  ClickableTile,
-  Column,
-  Grid,
-  SkeletonPlaceholder,
-  Tile,
-} from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version:
-// https://carbondesignsystem.com/elements/icons/library/
-import { Analytics, ArrowRight, Group, Growth, WarningFilled } from '@carbon/icons-react'
+} from '~/lib/carbon-forms'
+import { SkeletonPlaceholder } from '~/lib/carbon-feedback'
+import { ClickableTile, Column, Grid, Tile } from '~/lib/carbon-layout'
+import Analytics from '@carbon/icons-react/es/Analytics.js'
+import ArrowRight from '@carbon/icons-react/es/ArrowRight.js'
+import Group from '@carbon/icons-react/es/Group.js'
+import Growth from '@carbon/icons-react/es/Growth.js'
+import WarningFilled from '@carbon/icons-react/es/WarningFilled.js'
 import EmptyState from '../../components/EmptyState'
 import { useSPC } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'

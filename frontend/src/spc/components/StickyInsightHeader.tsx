@@ -1,3 +1,4 @@
+import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import type { ReactNode } from 'react'
 import type { StatusPillStatus } from './StatusPill'
 import StatusPill from './StatusPill'
@@ -8,28 +9,13 @@ interface KPI {
 }
 
 interface StickyInsightHeaderProps {
-  /** Context chips: material, MIC, plant, date window */
   contextLine?: string
-  /** Combination status */
   status?: StatusPillStatus
-  /** One-line reason explaining the status */
   statusReason?: string
-  /** Up to 3 KPIs (OOC count, Cpk, latest shift etc.) */
   kpis?: KPI[]
-  /** Primary actions: Acknowledge, Create Deviation */
   actions?: ReactNode
 }
 
-/**
- * Sticky insight header — answers "Is it OK? Why? What next?" on any tab.
- *
- * This is a SCAFFOLDING component. The full wiring (real status, KPIs from chart
- * data, Acknowledge + Deviation actions) is completed in PR 7 once the
- * ControlChartsView container refactor makes it safe to wire cleanly.
- *
- * For now it renders the structural shell so every tab has the same header shape,
- * and teams can validate placement / layout before the data layer lands.
- */
 export default function StickyInsightHeader({
   contextLine,
   status,
@@ -38,41 +24,60 @@ export default function StickyInsightHeader({
   actions,
 }: StickyInsightHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--radius)] border border-[var(--c-border)] bg-[var(--c-surface)] px-4 py-3 shadow-[var(--shadow)]">
-      <div className="flex min-w-0 flex-col gap-1.5">
-        {contextLine && (
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">
-            {contextLine}
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          {status ? (
-            <StatusPill status={status} />
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400">
-              — No scope selected
-            </span>
+    <Tile>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '0.75rem',
+        }}
+      >
+        <Stack gap={3} style={{ minWidth: 0 }}>
+          {contextLine && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--cds-text-secondary)',
+              }}
+            >
+              {contextLine}
+            </p>
           )}
-          {statusReason && (
-            <span className="text-sm text-[var(--c-text-muted)]">{statusReason}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+            {status ? (
+              <StatusPill status={status} />
+            ) : (
+              <Tag type="cool-gray" size="sm">
+                No scope selected
+              </Tag>
+            )}
+            {statusReason && (
+              <span style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>{statusReason}</span>
+            )}
+          </div>
+          {kpis.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+              {kpis.slice(0, 3).map((kpi) => (
+                <div key={kpi.label} style={{ display: 'flex', alignItems: 'baseline', gap: '0.375rem' }}>
+                  <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>{kpi.value}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>{kpi.label}</span>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-        {kpis.length > 0 && (
-          <div className="flex flex-wrap gap-4">
-            {kpis.slice(0, 3).map(kpi => (
-              <div key={kpi.label} className="flex items-baseline gap-1.5">
-                <span className="text-base font-bold text-[var(--c-text)]">{kpi.value}</span>
-                <span className="text-xs text-[var(--c-text-muted)]">{kpi.label}</span>
-              </div>
-            ))}
+        </Stack>
+        {actions && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+            {actions}
           </div>
         )}
       </div>
-      {actions && (
-        <div className="flex flex-wrap items-center gap-2">
-          {actions}
-        </div>
-      )}
-    </div>
+    </Tile>
   )
 }

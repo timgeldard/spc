@@ -1,5 +1,11 @@
 # Hybrid UX Execution Plan
 
+Note:
+The hybrid UX plan below predates the strict IBM Carbon adoption decision.
+For active design-system migration work, use
+[docs/CARBON_STRICT_MIGRATION_PLAN.md](/Users/timgeldard/spc-1/docs/CARBON_STRICT_MIGRATION_PLAN.md)
+as the source of truth.
+
 This plan translates the agreed hybrid design direction into a sequence of
 small, reviewable frontend PRs. The target experience combines:
 

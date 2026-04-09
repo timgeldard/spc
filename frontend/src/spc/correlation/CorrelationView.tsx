@@ -1,32 +1,17 @@
+import { Button, TextInput } from '~/lib/carbon-forms'
+import { Grid, Column, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useState } from 'react'
 import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
-import { useCorrelation } from '../hooks/useCorrelation'
-import CorrelationMatrix from '../charts/CorrelationMatrix'
-import CorrelationScatter from '../charts/CorrelationScatter'
-import { useCorrelationScatter } from '../hooks/useCorrelationScatter'
-import { Button } from '../../components/ui'
-import type { ChangeEvent } from 'react'
-import type { CorrelationPair } from '../types'
-import {
-  cardSubClass,
-  cardTitleClass,
-  controlsRowClass,
-  correlationMetaClass,
-  correlationViewClass,
-  heroCardDenseClass,
-  inputBaseClass,
-  inputSmClass,
-  inlineLabelClass,
-  moduleEyebrowClass,
-  moduleHeaderCardClass,
-  splitPanelClass,
-  surfacePanelClass,
-} from '../uiClasses'
 import FieldHelp from '../components/FieldHelp'
 import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import ModuleEmptyState from '../components/ModuleEmptyState'
+import CorrelationMatrix from '../charts/CorrelationMatrix'
+import CorrelationScatter from '../charts/CorrelationScatter'
+import { useCorrelation } from '../hooks/useCorrelation'
+import { useCorrelationScatter } from '../hooks/useCorrelationScatter'
+import type { CorrelationPair } from '../types'
 
 interface SelectedCorrelationPair {
   micAId: string
@@ -35,11 +20,10 @@ interface SelectedCorrelationPair {
   micBName: string
 }
 
-/** Top N strongest correlations (by |r|) for driver ranking */
 function DriverRanking({ pairs, n = 5 }: { pairs: CorrelationPair[]; n?: number }) {
   type RankedPair = CorrelationPair & { _r: number }
   const top: RankedPair[] = pairs
-    .map(p => ({ ...p, _r: p.pearson_r ?? null }))
+    .map((p) => ({ ...p, _r: p.pearson_r ?? null }))
     .filter((p): p is RankedPair => p._r != null)
     .sort((a, b) => Math.abs(b._r) - Math.abs(a._r))
     .slice(0, n)
@@ -47,33 +31,51 @@ function DriverRanking({ pairs, n = 5 }: { pairs: CorrelationPair[]; n?: number 
   if (!top.length) return null
 
   return (
-    <div className={`${surfacePanelClass} space-y-2`}>
-      <div className={moduleEyebrowClass}>Strongest relationships (top {top.length})</div>
-      <p className="text-xs text-[var(--c-text-muted)]">
-        High |r| values indicate a linear relationship. Click the corresponding cell in the matrix to validate with a scatter plot.
-      </p>
-      <ol className="space-y-1" aria-label="Top correlated characteristic pairs">
-        {top.map((p, i) => {
-          const r = p._r
-          const isPositive = r >= 0
-          const absR = Math.abs(r)
-          const strength = absR >= 0.7 ? 'strong' : absR >= 0.4 ? 'moderate' : 'weak'
-          const colorClass = absR >= 0.7 ? 'text-[#F24A00]' : absR >= 0.4 ? 'text-[#005776]' : 'text-[#4E7080]'
-          return (
-            <li key={`${p.mic_a_id}-${p.mic_b_id}`} className="flex items-baseline gap-2 text-sm">
-              <span className="w-4 shrink-0 text-right text-xs text-[var(--c-text-muted)]">{i + 1}.</span>
-              <span className="flex-1 truncate text-[var(--c-text)]">
-                {p.mic_a_name ?? p.mic_a_id} <span className="text-[var(--c-text-muted)]">↔</span> {p.mic_b_name ?? p.mic_b_id}
-              </span>
-              <span className={`shrink-0 font-mono text-xs font-semibold ${colorClass}`}>
-                r = {r.toFixed(3)}
-                <span className="sr-only"> ({isPositive ? 'positive' : 'negative'} {strength} correlation)</span>
-              </span>
-            </li>
-          )
-        })}
-      </ol>
-    </div>
+    <Tile>
+      <Stack gap={3}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
+          Strongest relationships (top {top.length})
+        </div>
+        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+          High |r| values indicate a linear relationship. Click the corresponding cell in the matrix to validate with a scatter plot.
+        </p>
+        <ol aria-label="Top correlated characteristic pairs" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '0.25rem' }}>
+          {top.map((p, i) => {
+            const r = p._r
+            const isPositive = r >= 0
+            const absR = Math.abs(r)
+            const strength = absR >= 0.7 ? 'strong' : absR >= 0.4 ? 'moderate' : 'weak'
+            const color = absR >= 0.7 ? '#d9480f' : absR >= 0.4 ? '#00539a' : '#697077'
+            return (
+              <li key={`${p.mic_a_id}-${p.mic_b_id}`} style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', fontSize: '0.875rem' }}>
+                <span style={{ width: '1rem', flexShrink: 0, textAlign: 'right', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>{i + 1}.</span>
+                <span style={{ flex: 1, minWidth: 0, color: 'var(--cds-text-primary)' }}>
+                  {p.mic_a_name ?? p.mic_a_id} <span style={{ color: 'var(--cds-text-secondary)' }}>↔</span> {p.mic_b_name ?? p.mic_b_id}
+                </span>
+                <span style={{ flexShrink: 0, fontFamily: 'var(--cds-code-02-font-family, monospace)', fontSize: '0.75rem', fontWeight: 600, color }}>
+                  r = {r.toFixed(3)}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      width: '1px',
+                      height: '1px',
+                      padding: 0,
+                      margin: '-1px',
+                      overflow: 'hidden',
+                      clip: 'rect(0, 0, 0, 0)',
+                      whiteSpace: 'nowrap',
+                      border: 0,
+                    }}
+                  >
+                    ({isPositive ? 'positive' : 'negative'} {strength} correlation)
+                  </span>
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      </Stack>
+    </Tile>
   )
 }
 
@@ -120,92 +122,108 @@ export default function CorrelationView() {
   }
 
   return (
-    <div className={correlationViewClass}>
-      <div className={moduleHeaderCardClass}>
-        <div className={moduleEyebrowClass}>Relationship analysis</div>
-        <h3 className={cardTitleClass}>Correlation Explorer</h3>
-        <p className={cardSubClass}>
-          Pairwise Pearson correlation between all characteristics for{' '}
-          <strong>{state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}</strong>.
-          Click a matrix cell to validate whether a relationship is operationally meaningful.
-        </p>
-      </div>
-
-      <div className={splitPanelClass}>
-        {/* ── Controls ── */}
-        <div className={`${heroCardDenseClass} space-y-3`}>
-          <div className={moduleEyebrowClass}>Analysis controls</div>
-          <div className={controlsRowClass}>
-            <label className={inlineLabelClass} htmlFor="corr-min-batches">
-              Min batches:
-              <input
-                id="corr-min-batches"
-                type="number"
-                className={`${inputBaseClass} ${inputSmClass} w-20`}
-                min={5}
-                max={100}
-                value={minBatches}
-                aria-describedby="corr-min-batches-help"
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value))))}
-              />
-            </label>
-            <Button
-              variant="primary"
-              onClick={handleRun}
-              disabled={loading}
-              aria-label={`Run correlation analysis for ${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}`}
-            >
-              {loading ? 'Computing…' : 'Run Correlation'}
-            </Button>
+    <Stack gap={5}>
+      <Tile>
+        <Stack gap={3}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
+            Relationship analysis
           </div>
-          <FieldHelp id="corr-min-batches-help">
-            Minimum number of shared batch observations required to include a pair. Higher values improve
-            statistical reliability but reduce the number of pairs shown.
-          </FieldHelp>
-          {(state.dateFrom || state.dateTo) && (
-            <p className="text-xs text-[var(--c-text-muted)]">
-              Window: {state.dateFrom || '—'} → {state.dateTo || 'today'}
-            </p>
-          )}
-        </div>
-
-        {/* ── Guardrails ── */}
-        <aside className={`${heroCardDenseClass} space-y-3`}>
-          <div className={moduleEyebrowClass}>Interpretation guardrails</div>
-          <p className="text-sm text-[var(--c-text-muted)]">
-            Correlation is a directional clue, not proof of causation. A strong r value may reflect a common
-            trend, a confounding variable, or true process coupling — use the scatter plot to distinguish.
+          <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+            Correlation Explorer
+          </h3>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+            Pairwise Pearson correlation between all characteristics for{' '}
+            <strong>{state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}</strong>.
+            Click a matrix cell to validate whether a relationship is operationally meaningful.
           </p>
-          <div className="space-y-1 text-xs text-[var(--c-text-muted)]">
-            <p><span className="font-semibold text-[#F24A00]">|r| ≥ 0.70</span> — strong, worth investigating</p>
-            <p><span className="font-semibold text-[#005776]">0.40 ≤ |r| &lt; 0.70</span> — moderate signal</p>
-            <p><span className="font-semibold text-[#4E7080]">|r| &lt; 0.40</span> — weak, usually noise</p>
-          </div>
-        </aside>
-      </div>
+        </Stack>
+      </Tile>
 
-      {/* ── Loading ── */}
+      <Grid condensed>
+        <Column sm={4} md={8} lg={11}>
+          <Tile>
+            <Stack gap={4}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
+                Analysis controls
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.75rem' }}>
+                <div style={{ width: '8rem' }}>
+                  <TextInput
+                    id="corr-min-batches"
+                    type="number"
+                    labelText="Min batches"
+                    value={String(minBatches)}
+                    onChange={(e) => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value) || 5)))}
+                  />
+                </div>
+                <Button
+                  kind="primary"
+                  onClick={handleRun}
+                  disabled={loading}
+                  aria-label={`Run correlation analysis for ${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}`}
+                >
+                  {loading ? 'Computing…' : 'Run Correlation'}
+                </Button>
+              </div>
+              <FieldHelp id="corr-min-batches-help">
+                Minimum number of shared batch observations required to include a pair. Higher values improve
+                statistical reliability but reduce the number of pairs shown.
+              </FieldHelp>
+              {(state.dateFrom || state.dateTo) && (
+                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                  Window: {state.dateFrom || '—'} → {state.dateTo || 'today'}
+                </p>
+              )}
+            </Stack>
+          </Tile>
+        </Column>
+
+        <Column sm={4} md={8} lg={5}>
+          <Tile>
+            <Stack gap={3}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
+                Interpretation guardrails
+              </div>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+                Correlation is a directional clue, not proof of causation. A strong r value may reflect a common
+                trend, a confounding variable, or true process coupling. Use the scatter plot to distinguish.
+              </p>
+              <div style={{ display: 'grid', gap: '0.375rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 600, color: '#d9480f' }}>|r| ≥ 0.70</span> — strong, worth investigating</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 600, color: '#00539a' }}>0.40 ≤ |r| &lt; 0.70</span> — moderate signal</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 600, color: '#697077' }}>|r| &lt; 0.40</span> — weak, usually noise</p>
+              </div>
+            </Stack>
+          </Tile>
+        </Column>
+      </Grid>
+
       {loading && <LoadingSkeleton message="Computing correlations…" />}
 
-      {/* ── Error ── */}
       {error && <InfoBanner variant="error">{error}</InfoBanner>}
 
-      {/* ── Results ── */}
       {result && (
         <>
-          <p className={correlationMetaClass}>
-            {result.pair_count} pairs · {result.mics.length} characteristics · min {minBatches} batches
-            {result.pair_count >= 500 && ' (showing top 500 by |r|)'}
-          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <Tag type="cool-gray" size="sm">
+              {result.pair_count} pairs
+            </Tag>
+            <Tag type="cool-gray" size="sm">
+              {result.mics.length} characteristics
+            </Tag>
+            <Tag type="cool-gray" size="sm">
+              min {minBatches} batches
+            </Tag>
+            {result.pair_count >= 500 && <Tag type="warm-gray" size="sm">showing top 500 by |r|</Tag>}
+          </div>
 
           {result.mics.length > 30 && (
             <InfoBanner variant="warn">
-              More than 30 characteristics detected — consider narrowing the date range or increasing min batches
+              More than 30 characteristics detected. Consider narrowing the date range or increasing min batches
               to focus on the most data-rich pairs.
             </InfoBanner>
           )}
 
-          {/* Driver ranking */}
           <DriverRanking pairs={result.pairs} />
 
           <InfoBanner variant="info">
@@ -218,15 +236,14 @@ export default function CorrelationView() {
             onCellClick={handleCellClick}
           />
 
-          {/* Scatter drill */}
           {selectedPair && (
             <>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
                   Scatter: {selectedPair.micAName} ↔ {selectedPair.micBName}
                 </span>
-                <span className="text-xs text-[var(--c-text-muted)]">
-                  — does the relationship hold across the batch range?
+                <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                  does the relationship hold across the batch range?
                 </span>
               </div>
               <CorrelationScatter
@@ -239,13 +256,12 @@ export default function CorrelationView() {
         </>
       )}
 
-      {/* ── Pre-run placeholder ── */}
       {!result && !loading && !error && (
         <ModuleEmptyState
           title="Run the analysis to explore relationships"
           description="Adjust the min-batches threshold if needed, then press Run Correlation."
         />
       )}
-    </div>
+    </Stack>
   )
 }

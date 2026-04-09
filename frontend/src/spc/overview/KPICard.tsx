@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { Tile } from '@carbon/react'
+import { Tile } from '~/lib/carbon-layout'
 
 interface KPICardProps {
   title: string

@@ -1,7 +1,7 @@
-import { Button, Tile } from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version:
-// https://carbondesignsystem.com/elements/icons/library/
-import { ArrowRight, WarningFilled } from '@carbon/icons-react'
+import { Button } from '~/lib/carbon-forms'
+import { Tile } from '~/lib/carbon-layout'
+import ArrowRight from '@carbon/icons-react/es/ArrowRight.js'
+import WarningFilled from '@carbon/icons-react/es/WarningFilled.js'
 import EmptyState from '../../components/EmptyState'
 import { useSPC } from '../SPCContext'
 

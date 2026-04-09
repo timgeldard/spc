@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  Modal,
   Select,
   SelectItem,
-  Stack,
   TextArea,
-} from '@carbon/react'
+} from '~/lib/carbon-forms'
+import { Modal } from '~/lib/carbon-feedback'
+import { Stack } from '~/lib/carbon-layout'
 import type { ExclusionDialogState } from '../types'
 
 // ── Reasons ──────────────────────────────────────────────────────────────────

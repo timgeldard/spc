@@ -6,13 +6,11 @@ import {
   DatePickerInput,
   Select,
   SelectItem,
-  Stack,
-  Tag,
   TextInput,
-  Tile,
-} from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version
-import { Edit, Filter } from '@carbon/icons-react'
+} from '~/lib/carbon-forms'
+import { Stack, Tag, Tile } from '~/lib/carbon-layout'
+import Edit from '@carbon/icons-react/es/Edit.js'
+import Filter from '@carbon/icons-react/es/Filter.js'
 import { useSPC } from './SPCContext'
 import { useValidateMaterial } from './hooks/useMaterials'
 import { usePlants } from './hooks/usePlants'

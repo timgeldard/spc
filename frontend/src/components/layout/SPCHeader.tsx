@@ -1,5 +1,10 @@
-import type { ChangeEvent } from 'react'
-import { useState } from 'react'
+import { useState, type ChangeEvent } from 'react'
+import {
+  Button,
+  Search,
+  Select,
+  SelectItem,
+} from '~/lib/carbon-forms'
 import {
   Header,
   HeaderGlobalAction,
@@ -7,32 +12,29 @@ import {
   HeaderMenuButton,
   HeaderName,
   HeaderPanel,
-  Search,
-} from '@carbon/react'
-// Verify icon names against your installed @carbon/icons-react version:
-// https://carbondesignsystem.com/elements/icons/library/
-import {
-  Asleep,       // dark mode (moon)
-  Bookmark,     // open saved views panel
-  BookmarkAdd,  // save current view
-  Download,
-  Light,        // light mode (sun)
-  UserAvatar,   // user profile
-  UserRole,     // role mode toggle
-} from '@carbon/icons-react'
+} from '~/lib/carbon-shell'
+import Asleep from '@carbon/icons-react/es/Asleep.js'
+import Bookmark from '@carbon/icons-react/es/Bookmark.js'
+import BookmarkAdd from '@carbon/icons-react/es/BookmarkAdd.js'
+import Download from '@carbon/icons-react/es/Download.js'
+import Light from '@carbon/icons-react/es/Light.js'
+import UserAvatar from '@carbon/icons-react/es/UserAvatar.js'
+import UserRole from '@carbon/icons-react/es/UserRole.js'
 import { useSPC } from '../../spc/SPCContext'
 
 interface SPCHeaderProps {
   dark?: boolean
   onToggleDark?: () => void
-  isSideNavExpanded: boolean
-  onClickSideNavExpand: () => void
+  showMenuButton?: boolean
+  isSideNavExpanded?: boolean
+  onClickSideNavExpand?: () => void
 }
 
 export function SPCHeader({
   dark = false,
   onToggleDark,
-  isSideNavExpanded,
+  showMenuButton = false,
+  isSideNavExpanded = false,
   onClickSideNavExpand,
 }: SPCHeaderProps) {
   const { state, dispatch } = useSPC()
@@ -76,11 +78,13 @@ export function SPCHeader({
 
   return (
     <Header aria-label="SPC Studio">
-      <HeaderMenuButton
-        aria-label={isSideNavExpanded ? 'Close menu' : 'Open menu'}
-        isActive={isSideNavExpanded}
-        onClick={() => onClickSideNavExpand()}
-      />
+      {showMenuButton && (
+        <HeaderMenuButton
+          aria-label={isSideNavExpanded ? 'Close menu' : 'Open menu'}
+          isActive={isSideNavExpanded}
+          onClick={() => onClickSideNavExpand?.()}
+        />
+      )}
 
       {/* prefix="" removes the default "IBM" company prefix */}
       <HeaderName href="#" prefix="">
@@ -171,30 +175,28 @@ export function SPCHeader({
               No saved views yet. Click the bookmark icon to save the current scope.
             </p>
           ) : (
-            /* Phase 2: replace with Carbon <Select> component */
-            <select
-              aria-label="Apply saved view"
-              defaultValue=""
-              onChange={handleApplySavedView}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                fontSize: '0.875rem',
-                border: '1px solid var(--cds-border-subtle)',
-                background: 'var(--cds-layer)',
-                color: 'var(--cds-text-primary)',
-                outline: 'none',
-              }}
-            >
-              <option value="" disabled>
-                Select a saved view…
-              </option>
-              {state.savedViews.map((view) => (
-                <option key={view.id} value={view.id}>
-                  {view.name}
-                </option>
-              ))}
-            </select>
+            <>
+              <Select
+                id="spc-saved-view-select"
+                labelText="Apply saved view"
+                defaultValue=""
+                onChange={handleApplySavedView}
+              >
+                <SelectItem value="" text="Select a saved view…" disabled hidden />
+                {state.savedViews.map((view) => (
+                  <SelectItem key={view.id} value={view.id} text={view.name} />
+                ))}
+              </Select>
+
+              <Button
+                kind="ghost"
+                size="sm"
+                style={{ marginTop: '1rem' }}
+                onClick={() => setSavedViewsOpen(false)}
+              >
+                Close
+              </Button>
+            </>
           )}
         </div>
       </HeaderPanel>

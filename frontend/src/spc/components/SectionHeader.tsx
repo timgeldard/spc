@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { moduleEyebrowClass, sectionSubClass, sectionTitleClass } from '../uiClasses'
 
 interface SectionHeaderProps {
   eyebrow?: string
@@ -8,21 +7,39 @@ interface SectionHeaderProps {
   actions?: ReactNode
 }
 
-/**
- * Consistent section heading used across all module tabs.
- *
- * Usage:
- *   <SectionHeader eyebrow="Portfolio review" title="Scorecard" subtitle="Use worst-first triage." />
- */
 export default function SectionHeader({ eyebrow, title, subtitle, actions }: SectionHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '0.75rem',
+      }}
+    >
       <div>
-        {eyebrow && <div className={moduleEyebrowClass}>{eyebrow}</div>}
-        <h3 className={sectionTitleClass}>{title}</h3>
-        {subtitle && <p className={sectionSubClass}>{subtitle}</p>}
+        {eyebrow && (
+          <div
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--cds-text-secondary)',
+            }}
+          >
+            {eyebrow}
+          </div>
+        )}
+        <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>{title}</h3>
+        {subtitle && <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

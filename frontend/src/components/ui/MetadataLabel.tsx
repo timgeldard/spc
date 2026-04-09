@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { cn } from '../../lib/utils'
 
 interface MetadataLabelProps {
   children: ReactNode
@@ -8,7 +7,16 @@ interface MetadataLabelProps {
 
 export function MetadataLabel({ children, className }: MetadataLabelProps) {
   return (
-    <div className={cn('text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500', className)}>
+    <div
+      className={className}
+      style={{
+        fontSize: '0.625rem',
+        fontWeight: 700,
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        color: 'var(--cds-text-secondary)',
+      }}
+    >
       {children}
     </div>
   )

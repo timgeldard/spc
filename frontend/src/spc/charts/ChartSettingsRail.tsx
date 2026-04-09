@@ -1,18 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { Button } from '../../components/ui'
-import type { ChartDataPoint, LockedLimits } from '../types'
 import {
-  checkboxLabelClass,
-  settingsRailClass,
-  settingsRailLabelClass,
-  settingsRailRowClass,
-  toggleAutoClass,
-  toggleButtonActiveClass,
-  toggleButtonBaseClass,
-  toggleButtonResetClass,
-  toggleGroupClass,
-  toggleLabelClass,
-} from '../uiClasses'
+  Button,
+  Checkbox,
+  RadioButton,
+  RadioButtonGroup,
+} from '~/lib/carbon-forms'
+import { Accordion, AccordionItem } from '~/lib/carbon-feedback'
+import { Stack, Tag, Tile } from '~/lib/carbon-layout'
+import type { ChartDataPoint, LockedLimits } from '../types'
 
 export type AttributeChartType = 'p_chart' | 'np_chart' | 'c_chart' | 'u_chart'
 export type QuantChartType = 'imr' | 'xbar_r'
@@ -26,28 +21,42 @@ function ChartTypeToggle({
   override: QuantChartType | null
   onOverride: (value: QuantChartType | null) => void
 }) {
+  const effectiveType = override ?? chartType ?? 'imr'
+
   return (
-    <div role="radiogroup" aria-label="Chart type" className={toggleGroupClass}>
-      <span className={toggleLabelClass} aria-hidden="true">Chart type:</span>
-      {(['imr', 'xbar_r'] as const).map(type => (
-        <button
-          key={type}
-          role="radio"
-          aria-checked={(override ?? chartType) === type}
-          className={`${toggleButtonBaseClass} ${((override ?? chartType) === type) ? toggleButtonActiveClass : ''}`}
-          onClick={() => onOverride(type === chartType ? null : type)}
-          title={type === 'imr' ? 'Individuals + Moving Range' : 'X-bar + Range'}
-        >
-          {type === 'imr' ? 'I-MR' : 'X̄-R'}
-        </button>
-      ))}
-      {override && (
-        <button className={`${toggleButtonBaseClass} ${toggleButtonResetClass}`} onClick={() => onOverride(null)}>
-          Reset to auto
-        </button>
-      )}
-      {chartType && !override && <span className={toggleAutoClass}>auto-detected</span>}
-    </div>
+    <Stack gap={3}>
+      <RadioButtonGroup
+        legendText="Chart type"
+        name="spc-quant-chart-type"
+        orientation="vertical"
+        valueSelected={effectiveType}
+        onChange={(value) => onOverride(value === chartType ? null : (value as QuantChartType))}
+      >
+        <RadioButton
+          id="spc-quant-chart-imr"
+          value="imr"
+          labelText="I-MR"
+        />
+        <RadioButton
+          id="spc-quant-chart-xbar-r"
+          value="xbar_r"
+          labelText="X̄-R"
+        />
+      </RadioButtonGroup>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {override && (
+          <Button kind="ghost" size="sm" onClick={() => onOverride(null)}>
+            Reset to auto
+          </Button>
+        )}
+        {chartType && !override && (
+          <Tag type="cool-gray" size="sm">
+            auto-detected
+          </Tag>
+        )}
+      </div>
+    </Stack>
   )
 }
 
@@ -66,21 +75,23 @@ function AttributeChartTypeToggle({
   ]
 
   return (
-    <div role="radiogroup" aria-label="Attribute chart type" className={toggleGroupClass}>
-      <span className={toggleLabelClass} aria-hidden="true">Chart type:</span>
+    <RadioButtonGroup
+      legendText="Chart type"
+      name="spc-attribute-chart-type"
+      orientation="vertical"
+      valueSelected={attrChartType}
+      onChange={(value) => onSet(value as AttributeChartType)}
+    >
       {options.map(({ type, label, title }) => (
-        <button
+        <RadioButton
           key={type}
-          role="radio"
-          aria-checked={attrChartType === type}
-          className={`${toggleButtonBaseClass} ${attrChartType === type ? toggleButtonActiveClass : ''}`}
-          onClick={() => onSet(type)}
+          id={`spc-attribute-chart-${type}`}
+          value={type}
+          labelText={label}
           title={title}
-        >
-          {label}
-        </button>
+        />
       ))}
-    </div>
+    </RadioButtonGroup>
   )
 }
 
@@ -92,27 +103,26 @@ function RuleSetToggle({
   onSet: (value: 'weco' | 'nelson') => void
 }) {
   return (
-    <div role="radiogroup" aria-label="Rule set" className={toggleGroupClass}>
-      <span className={toggleLabelClass} aria-hidden="true">Rules:</span>
-      <button
-        role="radio"
-        aria-checked={ruleSet === 'weco'}
-        className={`${toggleButtonBaseClass} ${ruleSet === 'weco' ? toggleButtonActiveClass : ''}`}
-        onClick={() => onSet('weco')}
+    <RadioButtonGroup
+      legendText="Rule set"
+      name="spc-rule-set"
+      orientation="vertical"
+      valueSelected={ruleSet}
+      onChange={(value) => onSet(value as 'weco' | 'nelson')}
+    >
+      <RadioButton
+        id="spc-rule-set-weco"
+        value="weco"
+        labelText="WECO"
         title="Western Electric rules (4 tests)"
-      >
-        WECO
-      </button>
-      <button
-        role="radio"
-        aria-checked={ruleSet === 'nelson'}
-        className={`${toggleButtonBaseClass} ${ruleSet === 'nelson' ? toggleButtonActiveClass : ''}`}
-        onClick={() => onSet('nelson')}
+      />
+      <RadioButton
+        id="spc-rule-set-nelson"
+        value="nelson"
+        labelText="Nelson"
         title="Nelson rules (8 tests)"
-      >
-        Nelson
-      </button>
-    </div>
+      />
+    </RadioButtonGroup>
   )
 }
 
@@ -175,11 +185,21 @@ export default function ChartSettingsRail({
   )
 
   return (
-    <div className={settingsRailClass}>
-      <div className={settingsRailLabelClass}>Analysis controls</div>
+    <Tile>
+      <Stack gap={5}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--cds-text-secondary)',
+          }}
+        >
+          Analysis controls
+        </p>
 
-      {/* ── Always-visible: chart type ── */}
-      <div className={settingsRailRowClass}>
         {isAttributeChart ? (
           <AttributeChartTypeToggle attrChartType={attrChartType} onSet={onAttrChartTypeChange} />
         ) : (
@@ -189,74 +209,57 @@ export default function ChartSettingsRail({
             onOverride={onChartTypeOverride}
           />
         )}
-      </div>
 
-      {/* ── Always-visible: exclusion actions ── */}
-      {!isAttributeChart && (exclusionCount > 0 || canAutoClean) && (
-        <div className={settingsRailRowClass}>
-          {exclusionCount > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={exclusionsSaving}
-              onClick={onRestoreAll}
-            >
-              Clear {exclusionCount} exclusion{exclusionCount !== 1 ? 's' : ''}
-            </Button>
-          )}
-          {canAutoClean && (
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={exclusionsSaving}
-              onClick={onAutoClean}
-              title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
-            >
-              Auto-clean Phase I
-            </Button>
-          )}
-        </div>
-      )}
+        {!isAttributeChart && (exclusionCount > 0 || canAutoClean) && (
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {exclusionCount > 0 && (
+              <Button
+                kind="secondary"
+                size="sm"
+                disabled={exclusionsSaving}
+                onClick={onRestoreAll}
+              >
+                Clear {exclusionCount} exclusion{exclusionCount !== 1 ? 's' : ''}
+              </Button>
+            )}
+            {canAutoClean && (
+              <Button
+                kind="secondary"
+                size="sm"
+                disabled={exclusionsSaving}
+                onClick={onAutoClean}
+                title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
+              >
+                Auto-clean Phase I
+              </Button>
+            )}
+          </div>
+        )}
 
-      {/* ── Advanced settings disclosure ── */}
-      {(hasAdvancedContent || true) && (
-        <div className="border-t border-[var(--c-border)] pt-2">
-          <button
-            className="flex w-full items-center justify-between text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)] hover:text-[var(--c-text)] transition-colors"
-            aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen(v => !v)}
+        <Accordion align="start">
+          <AccordionItem
+            open={advancedOpen}
+            onHeadingClick={() => setAdvancedOpen((value) => !value)}
+            title={hasAdvancedContent ? 'Advanced settings' : 'Advanced settings (limited)'}
           >
-            Advanced settings
-            <svg
-              width="12" height="12" viewBox="0 0 12 12" fill="none"
-              className={`transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            >
-              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {advancedOpen && (
-            <div className="mt-2 space-y-2">
-              <div className={settingsRailRowClass}>
-                <RuleSetToggle ruleSet={ruleSet} onSet={onRuleSetChange} />
-              </div>
+            <Stack gap={5}>
+              <RuleSetToggle ruleSet={ruleSet} onSet={onRuleSetChange} />
 
               {!isAttributeChart && outlierCount > 0 && (
-                <div className={settingsRailRowClass}>
-                  <label className={checkboxLabelClass}>
-                    <input type="checkbox" checked={excludeOutliers} onChange={onToggleExcludeOutliers} />
-                    Exclude outliers ({outlierCount})
-                  </label>
-                </div>
+                <Checkbox
+                  id="spc-exclude-outliers"
+                  labelText={`Exclude outliers (${outlierCount})`}
+                  checked={excludeOutliers}
+                  onChange={onToggleExcludeOutliers}
+                />
               )}
 
               {!isAttributeChart && (
-                <div className={settingsRailRowClass}>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                   {lockedLimits && (
                     <Button
+                      kind={limitsMode === 'locked' ? 'primary' : 'secondary'}
                       size="sm"
-                      variant={limitsMode === 'locked' ? 'primary' : 'secondary'}
                       onClick={() => onLimitsMode(limitsMode === 'locked' ? 'live' : 'locked')}
                       title={`Locked ${lockedLimits.locked_at?.substring(0, 10) ?? ''} by ${lockedLimits.locked_by ?? 'unknown'}`}
                     >
@@ -265,8 +268,8 @@ export default function ChartSettingsRail({
                   )}
                   {canLockLimits && limitsMode === 'live' && (
                     <Button
+                      kind="secondary"
                       size="sm"
-                      variant="secondary"
                       onClick={onLockLimits}
                       title="Lock current control limits for Phase II monitoring"
                     >
@@ -275,8 +278,8 @@ export default function ChartSettingsRail({
                   )}
                   {lockedLimits && limitsMode === 'locked' && (
                     <Button
+                      kind="danger"
                       size="sm"
-                      variant="danger"
                       onClick={onDeleteLock}
                       title="Remove locked limits"
                     >
@@ -285,12 +288,12 @@ export default function ChartSettingsRail({
                   )}
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      )}
+            </Stack>
+          </AccordionItem>
+        </Accordion>
 
-      {extraContent}
-    </div>
+        {extraContent}
+      </Stack>
+    </Tile>
   )
 }

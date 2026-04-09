@@ -1,3 +1,6 @@
+import { Button } from '~/lib/carbon-forms'
+import { InlineNotification } from '~/lib/carbon-feedback'
+import { Stack, Tile } from '~/lib/carbon-layout'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface SPCErrorBoundaryProps {
@@ -26,25 +29,21 @@ export default class SPCErrorBoundary extends Component<SPCErrorBoundaryProps, S
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          role="alert"
-          className="rounded-xl border border-[var(--c-error-border)] bg-[var(--c-error-bg)] px-5 py-6 shadow-sm"
-        >
-          <div className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--c-error-text)]">
-            Analysis view unavailable
-          </div>
-          <p className="mt-2 text-sm leading-6 text-[var(--c-error-text)]">
-            This tab hit an unexpected rendering error. Your filters and selections are still
-            preserved, so you can retry the view without losing context.
-          </p>
-          <button
-            type="button"
-            onClick={this.handleRetry}
-            className="mt-4 inline-flex items-center rounded-full border border-[var(--c-error-border)] bg-white px-4 py-2 text-sm font-medium text-[var(--c-error-text)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-brand)] focus-visible:ring-offset-2"
-          >
-            Retry tab
-          </button>
-        </div>
+        <Tile role="alert">
+          <Stack gap={4}>
+            <InlineNotification
+              kind="error"
+              title="Analysis view unavailable"
+              subtitle="This tab hit an unexpected rendering error. Your filters and selections are still preserved, so you can retry without losing context."
+              hideCloseButton
+            />
+            <div>
+              <Button kind="secondary" size="sm" onClick={this.handleRetry}>
+                Retry tab
+              </Button>
+            </div>
+          </Stack>
+        </Tile>
       )
     }
 

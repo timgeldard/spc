@@ -1,6 +1,10 @@
 import type { ElementType } from 'react'
-import { SideNav, SideNavItems, SideNavLink } from '@carbon/react'
-import { Analytics, Dashboard, DataTable, Settings, TreeView } from '@carbon/icons-react'
+import { SideNav, SideNavItems, SideNavLink } from '~/lib/carbon-shell'
+import Analytics from '@carbon/icons-react/es/Analytics.js'
+import Dashboard from '@carbon/icons-react/es/Dashboard.js'
+import DataTable from '@carbon/icons-react/es/DataTable.js'
+import Settings from '@carbon/icons-react/es/Settings.js'
+import TreeView from '@carbon/icons-react/es/TreeView.js'
 
 interface SidebarItem {
   icon: ElementType
@@ -29,6 +33,10 @@ export function Sidebar({
   onSelectItem,
   isSideNavExpanded = false,
 }: SidebarProps) {
+  if (!items.length) {
+    return null
+  }
+
   const resolvedActive = activeItem ?? items[0]?.id
 
   return (

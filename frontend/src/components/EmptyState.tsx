@@ -1,12 +1,26 @@
+import { Stack, Tile } from '~/lib/carbon-layout'
+
 interface EmptyStateProps {
   message?: string
 }
 
 export default function EmptyState({ message = 'No data available for selected filters' }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-4 text-6xl" aria-hidden="true">[chart]</div>
-      <p className="max-w-xs text-gray-500 dark:text-gray-400">{message}</p>
-    </div>
+    <Tile>
+      <Stack
+        gap={4}
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '16rem',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: '3rem', color: 'var(--cds-icon-secondary)' }} aria-hidden="true">
+          [chart]
+        </div>
+        <p style={{ margin: 0, maxWidth: '18rem', color: 'var(--cds-text-secondary)' }}>{message}</p>
+      </Stack>
+    </Tile>
   )
 }

@@ -78,7 +78,7 @@ export function XbarRChart({
   embedded = false,
 }: IndustrialXbarRChartProps) {
   const header = (
-    <div className="flex items-start justify-between">
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
       {!embedded && <CardTitle>{title}</CardTitle>}
       <MetadataLabel>SUBGROUP MEAN + RANGE</MetadataLabel>
     </div>
@@ -86,7 +86,7 @@ export function XbarRChart({
 
   const body = (
     <>
-      <div className="h-[280px]">
+      <div style={{ height: '280px' }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 20, right: 30, left: 8, bottom: 10 }}>
             <CartesianGrid vertical={false} stroke={chartTheme.grid} />
@@ -101,7 +101,7 @@ export function XbarRChart({
         </ResponsiveContainer>
       </div>
 
-      <div className="h-[160px]">
+      <div style={{ height: '160px' }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 30, left: 8, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke={chartTheme.grid} />
@@ -120,7 +120,7 @@ export function XbarRChart({
 
   if (embedded) {
     return (
-      <div className="space-y-6">
+      <div style={{ display: 'grid', gap: '1.5rem' }}>
         {header}
         {body}
       </div>

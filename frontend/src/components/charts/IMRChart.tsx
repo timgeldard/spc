@@ -120,7 +120,7 @@ function PrimaryDot(props: {
       stroke={interactive && hovered ? chartTheme.primary : stroke}
       strokeWidth={interactive && hovered ? 2.4 : 1.6}
       style={{ transition: 'r 150ms ease, stroke-width 150ms ease' }}
-      className={interactive ? 'cursor-pointer' : undefined}
+      cursor={interactive ? 'pointer' : undefined}
     />
   )
 }
@@ -149,11 +149,11 @@ export function IMRChart({
   embedded = false,
 }: IndustrialIMRChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const hasInteractivePoints = onPointClick != null && data.some(d => d.onClickIndex != null)
+  const hasInteractivePoints = onPointClick != null && data.some((d) => d.onClickIndex != null)
   const { visible: hintVisible, dismiss: dismissHint } = useExclusionHint(hasInteractivePoints)
 
   const stratumColorMap = useMemo(() => {
-    const strata = [...new Set(data.map(d => d.stratifyValue).filter((v): v is string => v != null))]
+    const strata = [...new Set(data.map((d) => d.stratifyValue).filter((v): v is string => v != null))]
     return new Map(strata.map((s, i) => [s, STRATUM_PALETTE[i % STRATUM_PALETTE.length]]))
   }, [data])
   const isStratified = stratumColorMap.size > 0
@@ -163,15 +163,33 @@ export function IMRChart({
     .filter((point, index) => index > 0 && point.mr != null)
 
   const header = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex items-center gap-3">
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
         {!embedded && <CardTitle>{title}</CardTitle>}
         <MetadataLabel>INDIVIDUALS + MOVING RANGE</MetadataLabel>
       </div>
       {hintVisible && (
-        <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.375rem',
+            borderRadius: '999px',
+            border: '1px solid var(--cds-border-subtle-01)',
+            background: 'var(--cds-layer-accent-01)',
+            padding: '0.25rem 0.75rem',
+            fontSize: '0.75rem',
+            color: 'var(--cds-text-secondary)',
+          }}
+        >
           Click any point to exclude it
-          <button onClick={dismissHint} className="ml-1 hover:text-slate-700" aria-label="Dismiss hint">✕</button>
+          <button
+            onClick={dismissHint}
+            aria-label="Dismiss hint"
+            style={{ marginLeft: '0.25rem', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer' }}
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
@@ -179,7 +197,7 @@ export function IMRChart({
 
   const body = (
     <>
-      <div className="h-[280px]">
+      <div style={{ height: '280px' }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 20, right: 30, left: 8, bottom: 10 }}>
             <CartesianGrid vertical={false} stroke={chartTheme.grid} />
@@ -245,9 +263,18 @@ export function IMRChart({
       </div>
 
       {isStratified && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2 dark:border-slate-700">
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '0.25rem 1rem',
+            borderTop: '1px solid var(--cds-border-subtle-01)',
+            paddingTop: '0.5rem',
+          }}
+        >
           {[...stratumColorMap.entries()].map(([label, color]) => (
-            <span key={label} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                 <circle cx="5" cy="5" r="4.5" fill={color} />
               </svg>
@@ -257,7 +284,7 @@ export function IMRChart({
         </div>
       )}
 
-      <div className="h-[160px]">
+      <div style={{ height: '160px' }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={movingRangeData} margin={{ top: 8, right: 30, left: 8, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke={chartTheme.grid} />
@@ -283,7 +310,7 @@ export function IMRChart({
 
   if (embedded) {
     return (
-      <div className="space-y-6">
+      <div style={{ display: 'grid', gap: '1.5rem' }}>
         {header}
         {body}
       </div>

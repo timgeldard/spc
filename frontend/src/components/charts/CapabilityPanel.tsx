@@ -1,3 +1,4 @@
+import { Stack } from '~/lib/carbon-layout'
 import { Card, CardContent, MetadataLabel, StatusBadge } from '../ui'
 
 export const CAPABILITY_TIERS = [
@@ -36,13 +37,36 @@ function CapabilityMetric({
   const numericLabel = value == null ? 'Unavailable' : tier?.badgeLabel ?? 'Not Capable'
 
   return (
-    <div className={`rounded-xl border p-4 ${emphasis ? 'bg-slate-900 text-white border-slate-800 shadow-xl' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm'}`}>
-      <MetadataLabel className={emphasis ? 'text-slate-400' : undefined}>{label}</MetadataLabel>
-      <div className={`mt-2 text-4xl font-semibold tabular-nums ${emphasis ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+    <div
+      style={{
+        borderRadius: '0.75rem',
+        border: `1px solid ${emphasis ? 'var(--cds-border-inverse)' : 'var(--cds-border-subtle-01)'}`,
+        padding: '1rem',
+        background: emphasis ? 'var(--cds-layer-inverse)' : 'var(--cds-layer)',
+        color: emphasis ? 'var(--cds-text-inverse)' : 'var(--cds-text-primary)',
+        boxShadow: emphasis ? '0 12px 24px rgb(0 0 0 / 0.18)' : '0 1px 2px rgb(0 0 0 / 0.08)',
+      }}
+    >
+      <MetadataLabel className={undefined}>{label}</MetadataLabel>
+      <div
+        style={{
+          marginTop: '0.5rem',
+          fontSize: '2.25rem',
+          fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          color: emphasis ? 'var(--cds-text-inverse)' : 'var(--cds-text-primary)',
+        }}
+      >
         {value == null ? '—' : value.toFixed(2)}
       </div>
-      <div className="mt-3">
-        {tier ? <StatusBadge status={tier.status} label={numericLabel} /> : <span className="text-xs text-slate-500 dark:text-slate-400">{numericLabel}</span>}
+      <div style={{ marginTop: '0.75rem' }}>
+        {tier ? (
+          <StatusBadge status={tier.status} label={numericLabel} />
+        ) : (
+          <span style={{ fontSize: '0.75rem', color: emphasis ? 'var(--cds-text-inverse)' : 'var(--cds-text-secondary)' }}>
+            {numericLabel}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -51,11 +75,15 @@ function CapabilityMetric({
 export function CapabilityPanel({ cp, cpk, pp, ppk }: CapabilityPanelProps) {
   return (
     <Card>
-      <CardContent className="grid gap-4 md:grid-cols-2">
-        <CapabilityMetric label="Cp" value={cp} />
-        <CapabilityMetric label="Cpk" value={cpk} emphasis />
-        <CapabilityMetric label="Pp" value={pp} />
-        <CapabilityMetric label="Ppk" value={ppk} />
+      <CardContent>
+        <Stack gap={4}>
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))' }}>
+            <CapabilityMetric label="Cp" value={cp} />
+            <CapabilityMetric label="Cpk" value={cpk} emphasis />
+            <CapabilityMetric label="Pp" value={pp} />
+            <CapabilityMetric label="Ppk" value={ppk} />
+          </div>
+        </Stack>
       </CardContent>
     </Card>
   )

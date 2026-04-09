@@ -85,7 +85,7 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
     modelWarning,
     systemStabilityWarning,
   } = result
-  const { colorClass, verdict } = grrStatusClass(grrPct)
+  const { colorStyle, verdict } = grrStatusClass(grrPct)
 
   return (
     <div className={msaResultsClass}>
@@ -96,7 +96,7 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
       {modelWarning && <InfoBanner variant="warn">{modelWarning}</InfoBanner>}
       {systemStabilityWarning && <InfoBanner variant="warn">{systemStabilityWarning}</InfoBanner>}
 
-      <div className={`${msaVerdictClass} ${colorClass}`}>
+      <div className={msaVerdictClass} style={{ color: colorStyle }}>
         <span>{grrPct?.toFixed(1) ?? '—'}% GRR</span>
         <span>{verdict}</span>
         {grrPctTol != null && <span className="text-sm font-normal">({grrPctTol.toFixed(1)}% of tolerance)</span>}

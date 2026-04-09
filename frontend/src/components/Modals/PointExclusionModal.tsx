@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
-  InlineNotification,
-  Modal,
   Select,
   SelectItem,
-  Stack,
   TextArea,
   TextInput,
-} from '@carbon/react'
+} from '~/lib/carbon-forms'
+import { InlineNotification, Modal } from '~/lib/carbon-feedback'
+import { Stack } from '~/lib/carbon-layout'
 
 interface PointExclusionModalProps {
   isOpen: boolean

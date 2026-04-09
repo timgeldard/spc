@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Tile } from '@carbon/react'
+import { Tile } from '~/lib/carbon-layout'
 
 // Migration note: 'colorClass' (Tailwind string) is replaced by the typed 'tone' prop.
 // Update all call sites: colorClass="border-red-200 bg-red-50 text-red-700" → tone="error"

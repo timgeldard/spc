@@ -2,16 +2,11 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import '../charts/ensureEChartsTheme'
 import {
   Button,
-  Column,
-  ContentSwitcher,
-  DataTableSkeleton,
-  Grid,
-  InlineNotification,
-  Stack,
   Switch,
-  Tag,
-  Tile,
-} from '@carbon/react'
+} from '~/lib/carbon-forms'
+import { InlineNotification } from '~/lib/carbon-feedback'
+import { DataTableSkeleton } from '~/lib/carbon-data-table'
+import { Column, ContentSwitcher, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
 import type { ScorecardRow } from '../types'
@@ -177,6 +172,12 @@ export default function ScorecardView() {
     dispatch({ type: 'SET_MIC',        payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
+  const viewSwitches = [
+    <Switch key="table" name="table" text="Table" />,
+    ...(state.roleMode === 'engineer'
+      ? [<Switch key="matrix" name="matrix" text="Matrix" />]
+      : []),
+  ]
 
   useEffect(() => {
     if (state.roleMode === 'operator' && viewMode === 'matrix') setViewMode('table')
@@ -276,12 +277,11 @@ export default function ScorecardView() {
       <Stack orientation="horizontal" gap={2}>
         <ContentSwitcher
           selectedIndex={viewMode === 'table' ? 0 : 1}
-          onChange={({ index }: { index: number }) =>
-            setViewMode(index === 0 ? 'table' : 'matrix')
-          }
+          onChange={({ index }: { index?: number }) => {
+            setViewMode(index === 1 ? 'matrix' : 'table')
+          }}
         >
-          <Switch name="table" text="Table" />
-          {state.roleMode === 'engineer' && <Switch name="matrix" text="Matrix" />}
+          {viewSwitches}
         </ContentSwitcher>
       </Stack>
 

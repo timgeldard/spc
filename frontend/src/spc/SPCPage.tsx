@@ -1,36 +1,22 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  Activity,
-  BarChart2,
-  GitBranch,
-  Layers,
-  LayoutDashboard,
-  Microscope,
-  TrendingUp,
-  type LucideIcon,
-} from 'lucide-react'
-import { SPCHeader } from '../components/layout'
+import { Tab, TabList, Tabs } from '~/lib/carbon-shell'
+import { AppShell } from '../components/layout'
 import { SPCProvider, useSPC } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
-import SPCFilterBar from './SPCFilterBar'
-import SPCPageHeader from './SPCPageHeader'
 import { useSPCUrlSync } from './hooks/useSPCUrlSync'
 import { useSPCPreferences } from './hooks/useSPCPreferences'
 import type { SPCState } from './types'
-import { cn } from '../lib/utils'
-import { pageShellClass } from './uiClasses'
 
 type TabId = SPCState['activeTab']
-type PrimaryTabId = Extract<TabId, 'overview' | 'flow' | 'charts' | 'scorecard'>
-type AdvancedTabId = Extract<TabId, 'compare' | 'msa' | 'correlation'>
 
 interface TabDefinition {
   id: TabId
   label: string
-  Icon: LucideIcon
 }
 
+const SPCFilterBar = lazy(() => import('./SPCFilterBar'))
+const SPCPageHeader = lazy(() => import('./SPCPageHeader'))
 const OverviewPage = lazy(() => import('./overview/OverviewPage'))
 const ProcessFlowView = lazy(() => import('./flow/ProcessFlowView'))
 const ControlChartsView = lazy(() => import('./charts/ControlChartsView'))
@@ -40,16 +26,16 @@ const MSAView = lazy(() => import('./msa/MSAView'))
 const CorrelationView = lazy(() => import('./correlation/CorrelationView'))
 
 const PRIMARY_TABS: TabDefinition[] = [
-  { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
-  { id: 'flow', label: 'Process Flow', Icon: GitBranch },
-  { id: 'charts', label: 'Control Charts', Icon: Activity },
-  { id: 'scorecard', label: 'Scorecard', Icon: BarChart2 },
+  { id: 'overview', label: 'Overview' },
+  { id: 'flow', label: 'Process Flow' },
+  { id: 'charts', label: 'Control Charts' },
+  { id: 'scorecard', label: 'Scorecard' },
 ]
 
 const ADVANCED_TABS: TabDefinition[] = [
-  { id: 'compare', label: 'Compare', Icon: Layers },
-  { id: 'msa', label: 'MSA', Icon: Microscope },
-  { id: 'correlation', label: 'Correlation', Icon: TrendingUp },
+  { id: 'compare', label: 'Compare' },
+  { id: 'msa', label: 'MSA' },
+  { id: 'correlation', label: 'Correlation' },
 ]
 
 const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
@@ -64,8 +50,24 @@ const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
 
 function TabLoadingState() {
   return (
-    <div className="flex min-h-[320px] items-center justify-center rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)]/70 px-6 py-12 text-[var(--c-text-muted)] shadow-sm">
+    <div className="spc-page-shell__loading">
       Loading analysis view…
+    </div>
+  )
+}
+
+function FilterBarLoadingState() {
+  return (
+    <div className="spc-page-shell__loading">
+      Loading filters…
+    </div>
+  )
+}
+
+function HeaderLoadingState() {
+  return (
+    <div className="spc-page-shell__loading">
+      Loading workspace summary…
     </div>
   )
 }
@@ -84,83 +86,37 @@ function getTabUnavailableReason(tabId: TabId, state: SPCState): string | null {
   return null
 }
 
-function PrimaryTabNavigation() {
+function ModuleTabs() {
   const { state, dispatch } = useSPC()
+  const visibleTabs = state.roleMode === 'operator' ? PRIMARY_TABS : [...PRIMARY_TABS, ...ADVANCED_TABS]
+  const selectedIndex = Math.max(visibleTabs.findIndex(tab => tab.id === state.activeTab), 0)
 
   return (
-    <div role="tablist" aria-label="SPC analysis modules" className="flex flex-wrap items-center">
-      {PRIMARY_TABS.map(tab => {
-        const active = state.activeTab === tab.id
+    <Tabs
+      selectedIndex={selectedIndex}
+      onChange={({ selectedIndex: nextIndex }) => {
+        const nextTab = visibleTabs[nextIndex]
+        if (nextTab) {
+          dispatch({ type: 'SET_ACTIVE_TAB', payload: nextTab.id })
+        }
+      }}
+    >
+      <TabList aria-label="SPC analysis modules" contained>
+      {visibleTabs.map(tab => {
         const unavailableReason = getTabUnavailableReason(tab.id, state)
-        const Icon = tab.Icon
-        const disabled = Boolean(unavailableReason) && !active
+        const disabled = Boolean(unavailableReason) && state.activeTab !== tab.id
         return (
-          <button
+          <Tab
             key={tab.id}
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-selected={active}
-            aria-controls={`tabpanel-${tab.id}`}
             title={unavailableReason ?? undefined}
             disabled={disabled}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id as PrimaryTabId })}
-            className={cn(
-              'inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors',
-              active
-                ? 'border-[var(--c-brand)] text-[var(--c-brand)]'
-                : disabled
-                  ? 'cursor-not-allowed border-transparent text-[var(--c-text-muted)] opacity-40'
-                  : 'border-transparent text-[var(--c-text-muted)] hover:border-[var(--c-border)] hover:text-[var(--c-text)]',
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function AdvancedModuleRail() {
-  const { state, dispatch } = useSPC()
-
-  if (state.roleMode === 'operator') {
-    return null
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
-        Advanced
-      </span>
-      {ADVANCED_TABS.map(tab => {
-        const active = state.activeTab === tab.id
-        const unavailableReason = getTabUnavailableReason(tab.id, state)
-        const disabled = Boolean(unavailableReason) && !active
-        return (
-          <button
-            key={tab.id}
-            id={`tab-${tab.id}`}
-            type="button"
-            title={unavailableReason ?? undefined}
-            aria-pressed={active}
-            disabled={disabled}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id as AdvancedTabId })}
-            className={cn(
-              'border-b-2 px-3 py-2 text-xs font-medium transition-colors',
-              active
-                ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
-                : disabled
-                  ? 'cursor-not-allowed border-transparent text-[var(--c-text-muted)] opacity-40'
-                  : 'border-transparent text-[var(--c-text-muted)] hover:border-[var(--c-border)] hover:text-[var(--c-text)]',
-            )}
           >
             {tab.label}
-          </button>
+          </Tab>
         )
       })}
-    </div>
+      </TabList>
+    </Tabs>
   )
 }
 
@@ -169,51 +125,43 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
   useSPCUrlSync()
   useSPCPreferences()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
+  const filterBar = (
+    <Suspense fallback={<FilterBarLoadingState />}>
+      <SPCFilterBar embedded />
+    </Suspense>
+  )
 
   return (
-    <div className="min-h-screen bg-[var(--c-bg)]">
-      <SPCHeader dark={dark} onToggleDark={onToggleDark} />
-
-      <div className="px-4 pt-16 sm:px-6">
-        <div className="sticky top-16 z-40 -mx-4 border-b border-[var(--c-border)] bg-[var(--c-bg)]/95 backdrop-blur sm:-mx-6">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6">
-            <SPCFilterBar embedded />
-          </div>
-          <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 border-t border-[var(--c-border)] px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-            <PrimaryTabNavigation />
-            <AdvancedModuleRail />
+    <AppShell dark={dark} onToggleDark={onToggleDark} filterBar={filterBar}>
+      <div className="spc-page-shell">
+        <div className="spc-page-shell__tabs">
+          <div className="spc-page-shell__tabs-body">
+            <ModuleTabs />
           </div>
         </div>
 
-        <main className="mx-auto w-full max-w-screen-2xl py-6">
-          <div className={`${pageShellClass} min-h-0 gap-5 bg-transparent`}>
-            <SPCPageHeader />
-            <div
-              role="tabpanel"
-              id={`tabpanel-${state.activeTab}`}
-              aria-labelledby={`tab-${state.activeTab}`}
-              className="rounded-sm border border-[var(--c-border)] bg-[var(--c-surface)]/70 shadow-sm"
-            >
-              <SPCErrorBoundary key={state.activeTab}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={state.activeTab}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                  >
-                    <Suspense fallback={<TabLoadingState />}>
-                      <ActiveView />
-                    </Suspense>
-                  </motion.div>
-                </AnimatePresence>
-              </SPCErrorBoundary>
-            </div>
-          </div>
-        </main>
+        <Suspense fallback={<HeaderLoadingState />}>
+          <SPCPageHeader />
+        </Suspense>
+        <div className="spc-page-shell__panel">
+          <SPCErrorBoundary key={state.activeTab}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={state.activeTab}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                <Suspense fallback={<TabLoadingState />}>
+                  <ActiveView />
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </SPCErrorBoundary>
+        </div>
       </div>
-    </div>
+    </AppShell>
   )
 }
 

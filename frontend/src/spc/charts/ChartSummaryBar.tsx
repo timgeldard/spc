@@ -1,24 +1,8 @@
+import { Button } from '~/lib/carbon-forms'
+import { Column, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import type { ReactNode } from 'react'
 
 import type { NormalityResult } from '../types'
-import {
-  badgeAmberClass,
-  badgeBlueClass,
-  badgeGreenClass,
-  badgeSlateClass,
-  chartsHeaderClass,
-  chartsHeaderRightClass,
-  chartsHeaderTopClass,
-  chartsMaterialClass,
-  chartsMicMetaClass,
-  chartsTitleClass,
-  metricCardClass,
-  metricCardLabelClass,
-  metricCardMetaClass,
-  metricCardValueClass,
-  metricGridClass,
-  statusChipClass,
-} from '../uiClasses'
 
 type StatusTone = 'slate' | 'amber' | 'green' | 'blue'
 type SummaryTone = 'slate' | 'green' | 'amber' | 'red'
@@ -31,15 +15,15 @@ interface SummaryMetricProps {
 }
 
 export function StatusChip({ children, tone = 'slate' }: { children: ReactNode; tone?: StatusTone }) {
-  const toneClass = tone === 'amber'
-    ? badgeAmberClass
+  const type = tone === 'amber'
+    ? 'warm-gray'
     : tone === 'green'
-      ? badgeGreenClass
+      ? 'green'
       : tone === 'blue'
-        ? badgeBlueClass
-        : badgeSlateClass
+        ? 'blue'
+        : 'cool-gray'
 
-  return <span className={`${statusChipClass} ${toneClass}`}>{children}</span>
+  return <Tag type={type} size="sm">{children}</Tag>
 }
 
 export function SummaryMetric({
@@ -48,20 +32,22 @@ export function SummaryMetric({
   meta,
   tone = 'slate',
 }: SummaryMetricProps) {
-  const toneClass = tone === 'green'
-    ? 'border-[var(--c-status-ok-border)] bg-[var(--c-status-ok-bg)]'
+  const toneStyle = tone === 'green'
+    ? { border: '1px solid var(--cds-support-success)', background: 'color-mix(in srgb, var(--cds-support-success) 10%, var(--cds-layer) 90%)' }
     : tone === 'amber'
-      ? 'border-[var(--c-status-warn-border)] bg-[var(--c-status-warn-bg)]'
+      ? { border: '1px solid var(--cds-support-warning)', background: 'color-mix(in srgb, var(--cds-support-warning) 12%, var(--cds-layer) 88%)' }
       : tone === 'red'
-        ? 'border-[var(--c-status-bad-border)] bg-[var(--c-status-bad-bg)]'
-        : 'border-[var(--c-border)] bg-[var(--c-status-neutral-bg)]'
+        ? { border: '1px solid var(--cds-support-error)', background: 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer) 90%)' }
+        : { border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer-accent-01)' }
 
   return (
-    <div className={`${metricCardClass} ${toneClass}`}>
-      <div className={metricCardLabelClass}>{label}</div>
-      <div className={metricCardValueClass}>{value}</div>
-      <div className={metricCardMetaClass}>{meta}</div>
-    </div>
+    <Tile style={toneStyle}>
+      <Stack gap={2}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>{label}</div>
+        <div style={{ fontSize: '1.75rem', fontWeight: 700, lineHeight: 1, color: 'var(--cds-text-primary)' }}>{value}</div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>{meta}</div>
+      </Stack>
+    </Tile>
   )
 }
 
@@ -101,76 +87,89 @@ export default function ChartSummaryBar({
   onExclusionClick,
 }: ChartSummaryBarProps) {
   return (
-    <div className={chartsHeaderClass}>
-      <div className={chartsHeaderTopClass}>
-        <div>
-          <span className={chartsTitleClass}>{title}</span>
-          <span className={chartsMaterialClass}> · {materialName}</span>
-          {inspectionMethod && (
-            <div className={chartsMicMetaClass}>
-              <span>Method: {inspectionMethod}</span>
+    <Tile>
+      <Stack gap={5}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>{title}</span>
+              <span style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>· {materialName}</span>
             </div>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusChip tone="blue">{chartFamilyLabel}</StatusChip>
-            <StatusChip tone={totalSignals > 0 ? 'amber' : 'green'}>
-              {totalSignals > 0 ? `${totalSignals} active signal${totalSignals === 1 ? '' : 's'}` : 'No active signals'}
-            </StatusChip>
-            {capabilityHeadline != null && (
-              <StatusChip tone={capabilityHeadline >= 1.33 ? 'green' : capabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
-                Headline {capabilityHeadlineLabel ?? 'Capability'} {capabilityHeadline.toFixed(2)}
+            {inspectionMethod && (
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--cds-text-secondary)', marginTop: '0.5rem' }}>
+                <span>Method: {inspectionMethod}</span>
+              </div>
+            )}
+            <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <StatusChip tone="blue">{chartFamilyLabel}</StatusChip>
+              <StatusChip tone={totalSignals > 0 ? 'amber' : 'green'}>
+                {totalSignals > 0 ? `${totalSignals} active signal${totalSignals === 1 ? '' : 's'}` : 'No active signals'}
               </StatusChip>
-            )}
-            {stratifyLabel && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}
-            {exclusionCount > 0 && (
-              onExclusionClick
-                ? (
-                  <button
-                    onClick={onExclusionClick}
-                    className={`${statusChipClass} ${badgeAmberClass} hover:opacity-80 transition-opacity`}
-                    title="Click to view excluded points"
-                  >
-                    {exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}
-                  </button>
-                )
-                : <StatusChip tone="amber">{exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}</StatusChip>
-            )}
-            {limitsMode === 'locked' && lockedLimits && (
-              <StatusChip tone="blue">
-                🔒 Limits locked{lockedLimits.locked_at ? ` · ${lockedLimits.locked_at.substring(0, 10)}` : ''}
-              </StatusChip>
-            )}
-            {quantNormality?.is_normal === false && <StatusChip tone="amber">Non-normal capability override</StatusChip>}
+              {capabilityHeadline != null && (
+                <StatusChip tone={capabilityHeadline >= 1.33 ? 'green' : capabilityHeadline >= 1.0 ? 'amber' : 'slate'}>
+                  Headline {capabilityHeadlineLabel ?? 'Capability'} {capabilityHeadline.toFixed(2)}
+                </StatusChip>
+              )}
+              {stratifyLabel && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}
+              {exclusionCount > 0 && (
+                onExclusionClick
+                  ? (
+                    <Button
+                      kind="ghost"
+                      size="sm"
+                      onClick={onExclusionClick}
+                      title="Click to view excluded points"
+                    >
+                      {exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}
+                    </Button>
+                  )
+                  : <StatusChip tone="amber">{exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}</StatusChip>
+              )}
+              {limitsMode === 'locked' && lockedLimits && (
+                <StatusChip tone="blue">
+                  Limits locked{lockedLimits.locked_at ? ` · ${lockedLimits.locked_at.substring(0, 10)}` : ''}
+                </StatusChip>
+              )}
+              {quantNormality?.is_normal === false && <StatusChip tone="amber">Non-normal capability override</StatusChip>}
+            </div>
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>{actionRail}</div>
         </div>
-        <div className={chartsHeaderRightClass}>{actionRail}</div>
-      </div>
 
-      <div className={metricGridClass}>
-        <SummaryMetric
-          label="Signals"
-          value={String(totalSignals)}
-          meta={totalSignals > 0 ? 'Investigate assignable causes before interpreting capability' : 'No current signal breaches'}
-          tone={totalSignals > 0 ? 'amber' : 'green'}
-        />
-        <SummaryMetric
-          label="Excluded points"
-          value={String(exclusionCount)}
-          meta={exclusionCount > 0 ? 'Persisted with justification and limits snapshot' : 'No active exclusions'}
-          tone={exclusionCount > 0 ? 'amber' : 'slate'}
-        />
-        <SummaryMetric
-          label="Rule set"
-          value={ruleSet === 'nelson' ? 'Nelson 8' : 'WECO'}
-          meta="Signal interpretation stays separate from capability evidence"
-        />
-        <SummaryMetric
-          label="Capability mode"
-          value={quantNormality?.is_normal === false ? 'Empirical' : 'Parametric'}
-          meta={quantNormality?.is_normal === false ? 'Non-normal percentiles are active' : 'Standard sigma-based capability'}
-          tone={quantNormality?.is_normal === false ? 'amber' : 'green'}
-        />
-      </div>
-    </div>
+        <Grid condensed>
+          <Column sm={4} md={4} lg={4}>
+            <SummaryMetric
+              label="Signals"
+              value={String(totalSignals)}
+              meta={totalSignals > 0 ? 'Investigate assignable causes before interpreting capability' : 'No current signal breaches'}
+              tone={totalSignals > 0 ? 'amber' : 'green'}
+            />
+          </Column>
+          <Column sm={4} md={4} lg={4}>
+            <SummaryMetric
+              label="Excluded points"
+              value={String(exclusionCount)}
+              meta={exclusionCount > 0 ? 'Persisted with justification and limits snapshot' : 'No active exclusions'}
+              tone={exclusionCount > 0 ? 'amber' : 'slate'}
+            />
+          </Column>
+          <Column sm={4} md={4} lg={4}>
+            <SummaryMetric
+              label="Rule set"
+              value={ruleSet === 'nelson' ? 'Nelson 8' : 'WECO'}
+              meta="Signal interpretation stays separate from capability evidence"
+            />
+          </Column>
+          <Column sm={4} md={4} lg={4}>
+            <SummaryMetric
+              label="Capability mode"
+              value={quantNormality?.is_normal === false ? 'Empirical' : 'Parametric'}
+              meta={quantNormality?.is_normal === false ? 'Non-normal percentiles are active' : 'Standard sigma-based capability'}
+              tone={quantNormality?.is_normal === false ? 'amber' : 'green'}
+            />
+          </Column>
+        </Grid>
+      </Stack>
+    </Tile>
   )
 }

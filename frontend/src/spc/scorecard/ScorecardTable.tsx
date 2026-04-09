@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
-  Button,
   DataTable,
   OverflowMenuItem,
   Pagination,
@@ -15,8 +14,9 @@ import {
   TableToolbarContent,
   TableToolbarMenu,
   TableToolbarSearch,
-  Tag,
-} from '@carbon/react'
+} from '~/lib/carbon-data-table'
+import { Button } from '~/lib/carbon-forms'
+import { Tag } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
@@ -265,8 +265,8 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
               {/* Characteristic-name search — drives the external filteredRows state */}
               <TableToolbarSearch
                 placeholder="Filter by characteristic name…"
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setSearchTerm(e.target.value)
+                onChange={(_event, value) => {
+                  setSearchTerm(value ?? '')
                   setPage(1)
                 }}
                 persistent
@@ -317,8 +317,9 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
             <TableBody>
               {dtRows.map(row => {
                 const original = rowLookup.get(row.id)
+                const { key: _rowKey, ...rowProps } = getRowProps({ row })
                 return (
-                  <TableRow key={row.id} {...getRowProps({ row })}>
+                  <TableRow key={row.id} {...rowProps}>
                     {row.cells.map(cell => (
                       <TableCell
                         key={cell.id}

@@ -1,7 +1,7 @@
+import { Column, Grid, Stack, Tile } from '~/lib/carbon-layout'
 import type { ReactNode } from 'react'
 
 import type { SPCComputationResult } from '../types'
-import { chartsMainClass, comparisonGridClass, strataSectionClass, strataSectionHeaderClass, strataSectionMetaClass, strataSectionTitleClass } from '../uiClasses'
 import { StatusChip, SummaryMetric } from './ChartSummaryBar'
 
 export interface StratumSection {
@@ -38,70 +38,77 @@ export default function StratificationPanel({
   if (sections.length <= 1) return null
 
   return (
-    <div className="flex flex-col gap-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {sections.map(section => {
         const stratumSignalCount = (section.spc?.signals?.length ?? 0) + (section.spc?.mrSignals?.length ?? 0)
         const stratumCapabilityHeadline = getCapabilityHeadline(section.spc)
 
         return (
-          <section
+          <Tile
             key={section.label}
-            className={strataSectionClass}
             role="region"
             aria-label={`Stratum analysis for ${section.label}`}
           >
-            <div className={strataSectionHeaderClass}>
-              <div>
-                <div className={strataSectionTitleClass}>
-                  {micLabel} · {section.label}
+            <Stack gap={5}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap', paddingBottom: '0.75rem', borderBottom: '1px solid var(--cds-border-subtle-01)' }}>
+                <div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+                    {micLabel} · {section.label}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                    Stratified by {stratifyBy.replace(/_/g, ' ')} · {section.pointCount} point{section.pointCount !== 1 ? 's' : ''}
+                  </div>
                 </div>
-                <div className={strataSectionMetaClass}>
-                  Stratified by {stratifyBy.replace(/_/g, ' ')} · {section.pointCount} point{section.pointCount !== 1 ? 's' : ''}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <StatusChip tone={stratumSignalCount > 0 ? 'amber' : 'green'}>
-                  {stratumSignalCount > 0 ? `${stratumSignalCount} signal${stratumSignalCount === 1 ? '' : 's'}` : 'No active signals'}
-                </StatusChip>
-                {stratumCapabilityHeadline != null && (
-                  <StatusChip tone={stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'slate'}>
-                    Headline {stratumCapabilityHeadline.label} {stratumCapabilityHeadline.value.toFixed(2)}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <StatusChip tone={stratumSignalCount > 0 ? 'amber' : 'green'}>
+                    {stratumSignalCount > 0 ? `${stratumSignalCount} signal${stratumSignalCount === 1 ? '' : 's'}` : 'No active signals'}
                   </StatusChip>
-                )}
-              </div>
-            </div>
-
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <SummaryMetric
-                label="Points"
-                value={String(section.pointCount)}
-                meta="Data included after the current exclusion and outlier rules"
-                tone="slate"
-              />
-              <SummaryMetric
-                label="Signals"
-                value={String(stratumSignalCount)}
-                meta={stratumSignalCount > 0 ? 'Assignable-cause review still required' : 'No active rule breaches'}
-                tone={stratumSignalCount > 0 ? 'amber' : 'green'}
-              />
-              <SummaryMetric
-                label="Capability"
-                value={stratumCapabilityHeadline != null ? stratumCapabilityHeadline.value.toFixed(2) : '—'}
-                meta={section.spc?.capability?.capabilityMethod === 'non_parametric' ? 'Empirical percentile method active' : 'Short-term and long-term evidence available'}
-                tone={stratumCapabilityHeadline == null ? 'slate' : stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'red'}
-              />
-            </div>
-
-            {section.spc && (
-              <>
-                <div className={chartsMainClass}>{renderChart(section.spc)}</div>
-                <div className={`mt-5 ${comparisonGridClass}`}>
-                  {renderSignals(section.spc)}
-                  <div className="flex flex-col gap-4">{renderCapability(section.spc)}</div>
+                  {stratumCapabilityHeadline != null && (
+                    <StatusChip tone={stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'slate'}>
+                      Headline {stratumCapabilityHeadline.label} {stratumCapabilityHeadline.value.toFixed(2)}
+                    </StatusChip>
+                  )}
                 </div>
-              </>
-            )}
-          </section>
+              </div>
+
+              <Grid condensed>
+                <Column sm={4} md={3} lg={5}>
+                  <SummaryMetric
+                    label="Points"
+                    value={String(section.pointCount)}
+                    meta="Data included after the current exclusion and outlier rules"
+                    tone="slate"
+                  />
+                </Column>
+                <Column sm={4} md={3} lg={5}>
+                  <SummaryMetric
+                    label="Signals"
+                    value={String(stratumSignalCount)}
+                    meta={stratumSignalCount > 0 ? 'Assignable-cause review still required' : 'No active rule breaches'}
+                    tone={stratumSignalCount > 0 ? 'amber' : 'green'}
+                  />
+                </Column>
+                <Column sm={4} md={2} lg={6}>
+                  <SummaryMetric
+                    label="Capability"
+                    value={stratumCapabilityHeadline != null ? stratumCapabilityHeadline.value.toFixed(2) : '—'}
+                    meta={section.spc?.capability?.capabilityMethod === 'non_parametric' ? 'Empirical percentile method active' : 'Short-term and long-term evidence available'}
+                    tone={stratumCapabilityHeadline == null ? 'slate' : stratumCapabilityHeadline.value >= 1.33 ? 'green' : stratumCapabilityHeadline.value >= 1.0 ? 'amber' : 'red'}
+                  />
+                </Column>
+              </Grid>
+
+              {section.spc && (
+                <>
+                  <div style={{ border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer)', padding: '1rem' }}>{renderChart(section.spc)}</div>
+                  <div style={{ marginTop: '1.25rem', display: 'grid', gap: '1rem' }}>
+                    {renderSignals(section.spc)}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>{renderCapability(section.spc)}</div>
+                  </div>
+                </>
+              )}
+            </Stack>
+          </Tile>
         )
       })}
     </div>
