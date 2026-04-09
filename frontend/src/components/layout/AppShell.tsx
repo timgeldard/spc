@@ -1,7 +1,8 @@
 import type { ElementType, ReactNode } from 'react'
-import { Sidebar } from './Sidebar'
-import { Header } from './Header'
+import { Content, HeaderContainer } from '@carbon/react'
 import { GlobalFilterBar } from './GlobalFilterBar'
+import { SPCHeader } from './SPCHeader'
+import { Sidebar } from './Sidebar'
 
 interface SidebarItem {
   icon: ElementType
@@ -29,15 +30,28 @@ export function AppShell({
   filterBar,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex overflow-hidden">
-      <Sidebar items={sidebarItems} activeItem={activeItem} onSelectItem={onSelectItem} />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header dark={dark} onToggleDark={onToggleDark} />
-        <GlobalFilterBar>{filterBar}</GlobalFilterBar>
-
-        <main className="flex-1 overflow-auto p-6">{children}</main>
-      </div>
-    </div>
+    <HeaderContainer
+      render={({ isSideNavExpanded, onClickSideNavExpand }) => (
+        <>
+          <SPCHeader
+            dark={dark}
+            onToggleDark={onToggleDark}
+            isSideNavExpanded={isSideNavExpanded}
+            onClickSideNavExpand={onClickSideNavExpand}
+          />
+          <Sidebar
+            items={sidebarItems}
+            activeItem={activeItem}
+            onSelectItem={onSelectItem}
+            isSideNavExpanded={isSideNavExpanded}
+          />
+          <Content>
+            {/* GlobalFilterBar: migrate to Carbon Select/TextInput/DatePicker in Phase 2 */}
+            <GlobalFilterBar>{filterBar}</GlobalFilterBar>
+            {children}
+          </Content>
+        </>
+      )}
+    />
   )
 }

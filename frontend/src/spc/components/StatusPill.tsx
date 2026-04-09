@@ -1,73 +1,73 @@
 import type { ReactNode } from 'react'
-import { CheckCircle2, AlertTriangle, XCircle, AlertOctagon, Minus } from 'lucide-react'
+import { Tag } from '@carbon/react'
+// Verify icon names against your installed @carbon/icons-react version:
+// https://carbondesignsystem.com/elements/icons/library/
+import {
+  CheckmarkFilled,
+  Misuse,           // out-of-control-high
+  SubtractFilled,   // unknown
+  WarningAltFilled, // warning
+  WarningFilled,    // out-of-control
+} from '@carbon/icons-react'
 
 export type StatusPillStatus =
-  | 'in-control'          // No SPC violations AND Cpk >= threshold
-  | 'warning'             // No SPC violations BUT Cpk < threshold
-  | 'out-of-control'      // SPC violation present
-  | 'out-of-control-high' // Violation AND Cpk < threshold
-  | 'unknown'             // Insufficient data to determine
+  | 'in-control'           // No SPC violations AND Cpk >= threshold
+  | 'warning'              // No SPC violations BUT Cpk < threshold
+  | 'out-of-control'       // SPC violation present
+  | 'out-of-control-high'  // Violation AND Cpk < threshold
+  | 'unknown'              // Insufficient data
 
 interface StatusPillProps {
   status: StatusPillStatus
   /** Override the default label */
   label?: string
-  /** Show a compact icon-only variant */
+  /** Show a compact (sm) tag — label remains in aria-label */
   compact?: boolean
 }
 
-// Kerry semantic colors: Jade=success, Sunrise=warning, Sunset=critical
-const STATUS_CONFIG: Record<StatusPillStatus, { label: string; icon: React.ReactNode; className: string }> = {
-  'in-control': {
-    label: 'In Control',
-    icon: <CheckCircle2 className="h-3 w-3" aria-hidden="true" />,
-    className: 'bg-[var(--c-status-ok-bg)] text-[var(--c-status-ok-text)] border-[var(--c-status-ok-border)]',
-  },
-  warning: {
-    label: 'Warning',
-    icon: <AlertTriangle className="h-3 w-3" aria-hidden="true" />,
-    className: 'bg-[var(--c-status-warn-bg)] text-[var(--c-status-warn-text)] border-[var(--c-status-warn-border)]',
-  },
-  'out-of-control': {
-    label: 'Out of Control',
-    icon: <XCircle className="h-3 w-3" aria-hidden="true" />,
-    className: 'bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)] border-[var(--c-status-bad-border)]',
-  },
-  'out-of-control-high': {
-    label: 'Critical — Out of Control',
-    icon: <AlertOctagon className="h-3 w-3" aria-hidden="true" />,
-    className: 'bg-[var(--c-status-bad-bg)] text-[var(--c-status-bad-text)] border-[var(--c-status-bad-strong-border)]',
-  },
-  unknown: {
-    label: 'Unknown',
-    icon: <Minus className="h-3 w-3" aria-hidden="true" />,
-    className: 'bg-[var(--c-status-neutral-bg)] text-[var(--c-status-neutral-text)] border-[var(--c-status-neutral-border)]',
-  },
+// Carbon Tag type mapping for SPC statuses.
+// Color is never the sole differentiator — icon + label always present (WCAG 1.4.1).
+const STATUS_CONFIG: Record<
+  StatusPillStatus,
+  { type: 'green' | 'warm-gray' | 'red' | 'gray' | 'high-contrast'; defaultLabel: string; icon: React.ComponentType<{ size?: number }> }
+> = {
+  'in-control':          { type: 'green',          defaultLabel: 'In Control',              icon: CheckmarkFilled    },
+  'warning':             { type: 'warm-gray',       defaultLabel: 'Warning',                 icon: WarningAltFilled   },
+  'out-of-control':      { type: 'red',             defaultLabel: 'Out of Control',          icon: WarningFilled      },
+  'out-of-control-high': { type: 'high-contrast',   defaultLabel: 'Critical — Out of Control', icon: Misuse           },
+  'unknown':             { type: 'gray',            defaultLabel: 'Unknown',                 icon: SubtractFilled     },
 }
 
-/**
- * Combination status pill applying SPC + capability logic.
- * Status semantics are never color-only: icon + label always present.
- *
- * Combination logic:
- *   in-control           = no SPC violations AND Cpk ≥ threshold
- *   warning              = no SPC violations AND Cpk < threshold
- *   out-of-control       = SPC violation present
- *   out-of-control-high  = violation AND Cpk < threshold (high confidence)
- */
 export default function StatusPill({ status, label, compact = false }: StatusPillProps) {
-  const { label: defaultLabel, icon, className } = STATUS_CONFIG[status]
+  const { type, defaultLabel, icon: Icon } = STATUS_CONFIG[status]
   const displayLabel = label ?? defaultLabel
 
+  if (compact) {
+    // Icon-only variant — full label moved to aria-label for screen readers
+    return (
+      <Tag
+        type={type}
+        size="sm"
+        renderIcon={() => <Icon size={12} />}
+        title={displayLabel}
+        aria-label={displayLabel}
+        style={{ paddingInline: '0.25rem' }}
+      >
+        {/* Zero-width hidden text preserves accessible label without visual clutter */}
+        <span className="sr-only">{displayLabel}</span>
+      </Tag>
+    )
+  }
+
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${className}`}
+    <Tag
+      type={type}
+      size="md"
+      renderIcon={() => <Icon size={14} />}
       title={displayLabel}
     >
-      {icon}
-      {!compact && <span>{displayLabel}</span>}
-      {compact && <span className="sr-only">{displayLabel}</span>}
-    </span>
+      {displayLabel}
+    </Tag>
   )
 }
 
@@ -80,20 +80,21 @@ export function deriveStatus(
   if (cpk == null) return hasViolations ? 'out-of-control' : 'unknown'
   const capable = cpk >= cpkThreshold
   if (hasViolations && !capable) return 'out-of-control-high'
-  if (hasViolations) return 'out-of-control'
-  if (!capable) return 'warning'
+  if (hasViolations)             return 'out-of-control'
+  if (!capable)                  return 'warning'
   return 'in-control'
 }
 
-/** Helper: derive a text-color class from GRR percentage for MSA verdicts */
-export function grrStatusClass(grrPct: number | null | undefined): { colorClass: string; verdict: string } {
-  if (grrPct == null) return { colorClass: 'text-slate-400', verdict: 'Unknown' }
-  if (grrPct < 10) return { colorClass: 'text-[#143700]', verdict: 'Acceptable' }         /* Forest on Jade bg */
-  if (grrPct < 30) return { colorClass: 'text-[#005776]', verdict: 'Conditionally Acceptable' } /* Slate on Sunrise bg */
-  return { colorClass: 'text-[#F24A00]', verdict: 'Not Acceptable' }                       /* Sunset */
+/** Helper: derive a text-color class from GRR percentage for MSA verdicts.
+ *  NOTE: This returns Carbon CSS custom property values, not Tailwind classes. */
+export function grrStatusClass(grrPct: number | null | undefined): { colorStyle: string; verdict: string } {
+  if (grrPct == null) return { colorStyle: 'var(--cds-text-secondary)', verdict: 'Unknown'                  }
+  if (grrPct < 10)    return { colorStyle: 'var(--cds-support-success)', verdict: 'Acceptable'              }
+  if (grrPct < 30)    return { colorStyle: 'var(--cds-support-warning)', verdict: 'Conditionally Acceptable' }
+  return                     { colorStyle: 'var(--cds-support-error)',   verdict: 'Not Acceptable'           }
 }
 
-/** Shared ReactNode rendering a StatusPill alongside explanatory children */
+/** Shared composition — StatusPill alongside explanatory children */
 export function StatusPillWithReason({
   status,
   children,
@@ -102,9 +103,13 @@ export function StatusPillWithReason({
   children?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
       <StatusPill status={status} />
-      {children && <span className="text-sm text-[var(--c-text-muted)]">{children}</span>}
+      {children && (
+        <span style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+          {children}
+        </span>
+      )}
     </div>
   )
 }

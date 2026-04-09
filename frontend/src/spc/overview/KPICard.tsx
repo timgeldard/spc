@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import type { ComponentType } from 'react'
+import { Tile } from '@carbon/react'
 
 interface KPICardProps {
   title: string
@@ -7,37 +7,97 @@ interface KPICardProps {
   unit?: string
   change?: string
   status: 'good' | 'warning' | 'bad' | 'neutral'
-  icon: LucideIcon
+  // Accepts any icon component with a size prop (Carbon icons, Lucide, etc.)
+  icon: ComponentType<{ size?: number; style?: React.CSSProperties }>
 }
 
-const statusColors = {
-  good:    'text-[var(--c-status-ok-text)] border-[var(--c-status-ok-border)] bg-[var(--c-status-ok-bg)]',
-  warning: 'text-[var(--c-status-warn-text)] border-[var(--c-status-warn-border)] bg-[var(--c-status-warn-bg)]',
-  bad:     'text-[var(--c-status-bad-text)] border-[var(--c-status-bad-border)] bg-[var(--c-status-bad-bg)]',
-  neutral: 'text-[var(--c-text-muted)] border-[var(--c-border)] bg-[var(--c-surface)]',
+// Maps semantic status to Carbon's design token layer for borders and icon colour.
+// Background always stays on var(--cds-layer) so tiles remain readable in both themes.
+const statusToken = {
+  good:    'var(--cds-support-success)',
+  warning: 'var(--cds-support-warning)',
+  bad:     'var(--cds-support-error)',
+  neutral: 'var(--cds-border-subtle-01)',
 } as const
 
 export default function KPICard({ title, value, unit, change, status, icon: Icon }: KPICardProps) {
+  const accentColor = statusToken[status]
+
   return (
-    <div className={cn('rounded-sm border p-5 transition-all', statusColors[status])}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">{title}</p>
-          <p className="mt-2 font-mono text-4xl font-semibold tabular-nums text-[var(--c-text)]">
-            {value}
-            {unit && <span className="ml-1 text-2xl font-normal text-[var(--c-text)]">{unit}</span>}
-          </p>
-        </div>
-        <Icon className="h-6 w-6 opacity-60" />
+    <Tile
+      style={{
+        borderLeft: `4px solid ${accentColor}`,
+        height: '100%',
+        padding: '1.25rem',
+      }}
+    >
+      {/* Header row: label + icon */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <p
+          style={{
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--cds-text-secondary)',
+            margin: 0,
+          }}
+        >
+          {title}
+        </p>
+        <Icon size={20} style={{ color: accentColor, opacity: 0.8, flexShrink: 0 }} />
       </div>
+
+      {/* Primary value */}
+      <p
+        style={{
+          marginTop: '0.75rem',
+          fontFamily: 'var(--cds-code-02-font-family, "IBM Plex Mono", monospace)',
+          fontSize: '2.25rem',
+          fontWeight: 600,
+          lineHeight: 1,
+          color: 'var(--cds-text-primary)',
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {value}
+        {unit && (
+          <span
+            style={{
+              marginLeft: '0.25rem',
+              fontSize: '1.25rem',
+              fontWeight: 400,
+              color: 'var(--cds-text-secondary)',
+            }}
+          >
+            {unit}
+          </span>
+        )}
+      </p>
+
+      {/* Optional period-over-period change */}
       {change && (
-        <p className="mt-4 flex items-center gap-1 text-xs">
-          <span className={change.startsWith('+') ? 'text-[var(--c-status-ok-text)]' : 'text-[var(--c-status-bad-text)]'}>
+        <p
+          style={{
+            marginTop: '0.75rem',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+          }}
+        >
+          <span
+            style={{
+              color: change.startsWith('+')
+                ? 'var(--cds-support-success)'
+                : 'var(--cds-support-error)',
+            }}
+          >
             {change}
           </span>
-          <span className="text-[var(--c-text-muted)]">from last shift</span>
+          <span style={{ color: 'var(--cds-text-secondary)' }}>from last shift</span>
         </p>
       )}
-    </div>
+    </Tile>
   )
 }

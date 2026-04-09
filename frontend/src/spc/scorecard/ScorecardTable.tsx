@@ -1,237 +1,355 @@
 import { useCallback, useMemo, useState } from 'react'
+import {
+  Button,
+  DataTable,
+  OverflowMenuItem,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarMenu,
+  TableToolbarSearch,
+  Tag,
+} from '@carbon/react'
 import { useSPC } from '../SPCContext'
 import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
-import {
-  buttonBaseClass,
-  buttonPrimaryClass,
-  buttonSecondaryClass,
-  buttonSmClass,
-  pillValueClass,
-  scorecardCountClass,
-  scorecardTableHeaderClass,
-  scorecardTableWrapClass,
-  statusPillClass,
-} from '../uiClasses'
 
-const STATUS_CONFIG = {
-  excellent: { label: 'Excellent', icon: '✓✓', color: '#059669', bg: '#d1fae5' },
-  good: { label: 'Capable', icon: '✓', color: '#10b981', bg: '#ecfdf5' },
-  marginal: { label: 'Marginal', icon: '⚠', color: '#d97706', bg: '#fffbeb' },
-  poor: { label: 'Poor', icon: '✕', color: '#dc2626', bg: '#fef2f2' },
-  out_of_spec_mean: { label: 'Mean OOS', icon: '✕✕', color: '#991b1b', bg: '#fee2e2' },
-  grey: { label: 'No Data', icon: '—', color: '#9ca3af', bg: '#f9fafb' },
-} as const
+// ── Column definitions ─────────────────────────────────────────────────────
 
-type StatusKey = keyof typeof STATUS_CONFIG
-type SortMetric = 'ppk' | 'cpk' | 'ooc_rate'
+const HEADERS = [
+  { key: 'mic_name',          header: 'Characteristic' },
+  { key: 'batch_count',       header: 'Batches'        },
+  { key: 'mean_value',        header: 'Mean'           },
+  { key: 'stddev_overall',    header: 'Std Dev'        },
+  { key: 'nominal_target',    header: 'Target'         },
+  { key: 'pp',                header: 'Pp'             },
+  { key: 'cpk',               header: 'Cpk'            },
+  { key: 'ppk',               header: 'Ppk'            },
+  { key: 'ooc_rate',          header: 'OOC Rate'       },
+  { key: 'capability_status', header: 'Status'         },
+] as const
 
-interface ScorecardTableProps {
-  rows: ScorecardRow[]
-}
+type HeaderKey = (typeof HEADERS)[number]['key']
+type SortDirection = 'ASC' | 'DESC' | 'NONE'
 
-interface ColumnSpec {
-  key: string
-  label: string
-  value: (row: ScorecardRow) => string | number
-}
+// Numeric columns receive right-aligned text
+const NUMERIC_COLS = new Set<HeaderKey>([
+  'batch_count', 'mean_value', 'stddev_overall',
+  'nominal_target', 'pp', 'cpk', 'ppk', 'ooc_rate',
+])
+
+// ── CSV export (unchanged logic, no uiClasses dependency) ─────────────────
+
+interface ColumnSpec { key: string; label: string; value: (row: ScorecardRow) => string | number }
 
 const CSV_COLUMNS: ColumnSpec[] = [
-  { key: 'mic_name', label: 'Characteristic', value: row => row.mic_name },
-  { key: 'batch_count', label: 'Batches', value: row => row.batch_count },
-  { key: 'mean_value', label: 'Mean', value: row => row.mean_value ?? '' },
-  { key: 'stddev_overall', label: 'Std Dev', value: row => row.stddev_overall ?? '' },
-  { key: 'nominal_target', label: 'Target', value: row => row.nominal_target ?? '' },
-  { key: 'pp', label: 'Pp', value: row => row.pp ?? '' },
-  { key: 'cpk', label: 'Cpk', value: row => row.cpk ?? '' },
-  { key: 'ppk', label: 'Ppk', value: row => row.ppk ?? '' },
-  { key: 'ooc_rate', label: 'OOC Rate', value: row => row.ooc_rate ?? '' },
-  { key: 'capability_status', label: 'Status', value: row => row.capability_status ?? '' },
+  { key: 'mic_name',          label: 'Characteristic', value: r => r.mic_name            },
+  { key: 'batch_count',       label: 'Batches',         value: r => r.batch_count         },
+  { key: 'mean_value',        label: 'Mean',            value: r => r.mean_value    ?? '' },
+  { key: 'stddev_overall',    label: 'Std Dev',         value: r => r.stddev_overall ?? '' },
+  { key: 'nominal_target',    label: 'Target',          value: r => r.nominal_target ?? '' },
+  { key: 'pp',                label: 'Pp',              value: r => r.pp            ?? '' },
+  { key: 'cpk',               label: 'Cpk',             value: r => r.cpk           ?? '' },
+  { key: 'ppk',               label: 'Ppk',             value: r => r.ppk           ?? '' },
+  { key: 'ooc_rate',          label: 'OOC Rate',        value: r => r.ooc_rate      ?? '' },
+  { key: 'capability_status', label: 'Status',          value: r => r.capability_status ?? '' },
 ]
-
-function formatFixed(value: number | null | undefined, digits: number) {
-  if (value == null) return '—'
-  return value.toFixed(digits)
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value == null) return '—'
-  return `${(value * 100).toFixed(1)}%`
-}
 
 function downloadCsv(filename: string, columns: ColumnSpec[], rows: ScorecardRow[]) {
   const escapeCell = (value: string | number) => {
     const text = String(value ?? '')
-    const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
-    if (/[",\r\n]/.test(safeText)) return `"${safeText.replace(/"/g, '""')}"`
-    return safeText
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+    if (/[",\r\n]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`
+    return safe
   }
-
   const lines = [
-    columns.map(column => escapeCell(column.label)).join(','),
-    ...rows.map(row => columns.map(column => escapeCell(column.value(row))).join(',')),
+    columns.map(c => escapeCell(c.label)).join(','),
+    ...rows.map(row => columns.map(c => escapeCell(c.value(row))).join(',')),
   ]
-
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
   URL.revokeObjectURL(url)
 }
 
-function CapabilityValue({ value }: { value: number | null | undefined }) {
-  if (value == null) return <span aria-label="No data">—</span>
-  const status: StatusKey = value >= 1.67 ? 'excellent' : value >= 1.33 ? 'good' : value >= 1.0 ? 'marginal' : 'poor'
-  const { color, bg, label } = STATUS_CONFIG[status]
-  return (
-    <span className={pillValueClass} style={{ color, background: bg }} title={label}>
-      {value.toFixed(2)}
-    </span>
-  )
+function fmt(value: number | null | undefined, digits: number): string {
+  return value == null ? '—' : value.toFixed(digits)
 }
 
-function OOCValue({ value }: { value: number | null | undefined }) {
+// ── Carbon Tag cell renderers ──────────────────────────────────────────────
+
+// Cpk / Ppk / Pp — threshold-coloured Tag with numeric label
+function CapabilityTag({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span aria-label="No data">—</span>
+  const { type, title } = value >= 1.67
+    ? { type: 'green'     as const, title: 'Excellent' }
+    : value >= 1.33
+    ? { type: 'teal'      as const, title: 'Capable'   }
+    : value >= 1.0
+    ? { type: 'warm-gray' as const, title: 'Marginal'  }
+    : { type: 'red'       as const, title: 'Poor'      }
+  return <Tag type={type} size="sm" title={title}>{value.toFixed(2)}</Tag>
+}
+
+// OOC Rate — severity-coloured Tag
+function OOCTag({ value }: { value: number | null | undefined }) {
   if (value == null) return <span aria-label="No data">—</span>
   const pct = (value * 100).toFixed(1)
-  const isHigh = value > 0.1
-  const isMedium = !isHigh && value > 0.02
-  const color = isHigh ? '#dc2626' : isMedium ? '#d97706' : '#10b981'
-  const label = isHigh ? 'High OOC rate' : isMedium ? 'Elevated OOC rate' : 'Low OOC rate'
-  return (
-    <span style={{ color, fontWeight: value > 0 ? 600 : 400 }} title={label}>
-      {isHigh && <span aria-hidden="true">⚠ </span>}
-      <span>{pct}%</span>
-      <span className="sr-only"> ({label})</span>
-    </span>
-  )
+  if (value > 0.1)  return <Tag type="red"       size="sm" title="High OOC rate">⚠ {pct}%</Tag>
+  if (value > 0.02) return <Tag type="warm-gray"  size="sm" title="Elevated OOC rate">{pct}%</Tag>
+  return               <Tag type="green"      size="sm" title="Low OOC rate">{pct}%</Tag>
 }
 
-function StatusValue({ value }: { value: ScorecardRow['capability_status'] }) {
-  const cfg = STATUS_CONFIG[(value as StatusKey) ?? 'grey'] ?? STATUS_CONFIG.grey
-  return (
-    <span className={statusPillClass} style={{ color: cfg.color, background: cfg.bg }}>
-      <span aria-hidden="true">{cfg.icon} </span>
-      {cfg.label}
-    </span>
-  )
+// Capability status — named semantic Tag
+const STATUS_TAG: Record<string, { type: 'green' | 'teal' | 'warm-gray' | 'red' | 'gray'; label: string }> = {
+  excellent:        { type: 'green',     label: 'Excellent' },
+  good:             { type: 'teal',      label: 'Capable'   },
+  marginal:         { type: 'warm-gray', label: 'Marginal'  },
+  poor:             { type: 'red',       label: 'Poor'      },
+  out_of_spec_mean: { type: 'red',       label: 'Mean OOS'  },
+  grey:             { type: 'gray',      label: 'No Data'   },
 }
+
+function StatusTag({ value }: { value: string | null | undefined }) {
+  const cfg = STATUS_TAG[value ?? 'grey'] ?? STATUS_TAG.grey
+  return <Tag type={cfg.type} size="sm">{cfg.label}</Tag>
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
+
+interface ScorecardTableProps { rows: ScorecardRow[] }
 
 export default function ScorecardTable({ rows }: ScorecardTableProps) {
   const { state, dispatch } = useSPC()
   const { exportData, exporting } = useExport()
-  const [sortMetric, setSortMetric] = useState<SortMetric>('ppk')
 
+  const [sortKey,       setSortKey]       = useState<HeaderKey>('cpk')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('ASC')
+  const [searchTerm,    setSearchTerm]    = useState('')
+  const [page,          setPage]          = useState(1)
+  const [pageSize,      setPageSize]      = useState(10)
+
+  // ── Navigation ───────────────────────────────────────────────────────────
   const openChart = useCallback((row: ScorecardRow) => {
-    dispatch({ type: 'SET_MIC', payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
+    dispatch({ type: 'SET_MIC',        payload: { mic_id: row.mic_id, mic_name: row.mic_name, chart_type: 'imr' } })
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
 
+  // ── Export ───────────────────────────────────────────────────────────────
   const exportExcel = useCallback(() => {
     void exportData({
-      export_type: 'excel',
+      export_type:  'excel',
       export_scope: 'scorecard',
-      material_id: state.selectedMaterial?.material_id,
-      plant_id: state.selectedPlant?.plant_id ?? null,
-      date_from: state.dateFrom || null,
-      date_to: state.dateTo || null,
+      material_id:  state.selectedMaterial?.material_id,
+      plant_id:     state.selectedPlant?.plant_id ?? null,
+      date_from:    state.dateFrom || null,
+      date_to:      state.dateTo  || null,
     })
-  }, [exportData, state.dateFrom, state.dateTo, state.selectedMaterial?.material_id, state.selectedPlant?.plant_id])
+  }, [exportData, state.dateFrom, state.dateTo, state.selectedMaterial, state.selectedPlant])
+
+  // ── External sort (applies across all pages before slicing) ──────────────
+  const handleSort = useCallback((key: HeaderKey) => {
+    if (sortKey === key) {
+      setSortDirection(d => d === 'ASC' ? 'DESC' : d === 'DESC' ? 'NONE' : 'ASC')
+    } else {
+      setSortKey(key)
+      setSortDirection('ASC')
+    }
+    setPage(1)
+  }, [sortKey])
 
   const sortedRows = useMemo(() => {
-    const next = [...rows]
-    next.sort((a, b) => {
-      const aValue = a[sortMetric]
-      const bValue = b[sortMetric]
-      if (sortMetric === 'ooc_rate') return (bValue ?? -1) - (aValue ?? -1)
-      return (aValue ?? Number.POSITIVE_INFINITY) - (bValue ?? Number.POSITIVE_INFINITY)
+    if (sortDirection === 'NONE') return [...rows]
+    return [...rows].sort((a, b) => {
+      const av = a[sortKey as keyof ScorecardRow] as number | string | null | undefined
+      const bv = b[sortKey as keyof ScorecardRow] as number | string | null | undefined
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      const mul = sortDirection === 'ASC' ? 1 : -1
+      if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv) * mul
+      return ((av as number) - (bv as number)) * mul
     })
-    return next
-  }, [rows, sortMetric])
+  }, [rows, sortKey, sortDirection])
 
-  const exportCSV = useCallback(() => {
-    downloadCsv('spc_scorecard.csv', CSV_COLUMNS, sortedRows)
-  }, [sortedRows])
+  // ── Filter by mic_name ────────────────────────────────────────────────────
+  const filteredRows = useMemo(() => {
+    if (!searchTerm.trim()) return sortedRows
+    const lower = searchTerm.toLowerCase()
+    return sortedRows.filter(r => r.mic_name.toLowerCase().includes(lower))
+  }, [sortedRows, searchTerm])
 
+  // ── Pagination slice ──────────────────────────────────────────────────────
+  const pageStart = (page - 1) * pageSize
+  const pageRows  = filteredRows.slice(pageStart, pageStart + pageSize)
+
+  // ── Transform to Carbon DataTable row format ──────────────────────────────
+  const tableRows = useMemo(() =>
+    pageRows.map(r => ({
+      id:                r.mic_id,
+      mic_name:          r.mic_name,
+      batch_count:       r.batch_count,
+      mean_value:        r.mean_value         ?? null,
+      stddev_overall:    r.stddev_overall     ?? null,
+      nominal_target:    r.nominal_target     ?? null,
+      pp:                r.pp                 ?? null,
+      cpk:               r.cpk                ?? null,
+      ppk:               r.ppk                ?? null,
+      ooc_rate:          r.ooc_rate           ?? null,
+      capability_status: r.capability_status  ?? null,
+    })),
+  [pageRows])
+
+  // Lookup original ScorecardRow by mic_id for the openChart handler
+  const rowLookup = useMemo(() => new Map(rows.map(r => [r.mic_id, r])), [rows])
+
+  const exportCSV = useCallback(() => downloadCsv('spc_scorecard.csv', CSV_COLUMNS, filteredRows), [filteredRows])
+
+  // ── Custom cell renderer ──────────────────────────────────────────────────
+  function renderCell(
+    cell: { value: unknown; info: { header: string } },
+    original: ScorecardRow | undefined,
+  ) {
+    const key = cell.info.header as HeaderKey
+    const val = cell.value
+
+    switch (key) {
+      case 'mic_name':
+        return (
+          <Button
+            kind="ghost"
+            size="sm"
+            onClick={() => original && openChart(original)}
+            style={{ padding: 0, textAlign: 'left', minHeight: 'unset', lineHeight: 'inherit' }}
+          >
+            {val as string}
+          </Button>
+        )
+      case 'cpk':
+      case 'ppk':
+      case 'pp':
+        return <CapabilityTag value={val as number | null} />
+      case 'ooc_rate':
+        return <OOCTag value={val as number | null} />
+      case 'capability_status':
+        return <StatusTag value={val as string | null} />
+      case 'mean_value':
+      case 'stddev_overall':
+      case 'nominal_target':
+        return fmt(val as number | null, 4)
+      default:
+        return val != null ? String(val) : '—'
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className={scorecardTableWrapClass}>
-      <div className={scorecardTableHeaderClass}>
-        <span className={scorecardCountClass}>{rows.length} characteristic{rows.length !== 1 ? 's' : ''}</span>
-        <div className="mr-auto flex flex-wrap items-center gap-1 text-xs text-[var(--c-text-muted)]">
-          <span>Worst first:</span>
-          {(['ppk', 'cpk', 'ooc_rate'] as const).map(metric => (
-            <button
-              key={metric}
-              className={`${buttonBaseClass} ${buttonSmClass} ${sortMetric === metric ? buttonPrimaryClass : buttonSecondaryClass}`}
-              onClick={() => setSortMetric(metric)}
-              aria-pressed={sortMetric === metric}
-            >
-              {metric === 'ooc_rate' ? 'OOC Rate' : metric.toUpperCase()}
-            </button>
-          ))}
-        </div>
-        <button
-          className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-          onClick={exportCSV}
-          aria-label="Export scorecard table as CSV"
-        >
-          Export CSV
-        </button>
-        <button
-          className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-          disabled={exporting}
-          onClick={exportExcel}
-          aria-label="Export scorecard table as Excel"
-        >
-          {exporting ? 'Exporting…' : 'Export Excel'}
-        </button>
-      </div>
+    // DataTable manages its own internal selection/expansion state;
+    // sort is disabled (isSortable absent) — handled externally above.
+    <DataTable rows={tableRows} headers={[...HEADERS]}>
+      {({ rows: dtRows, headers, getTableProps, getRowProps, getTableContainerProps }) => (
+        <TableContainer {...getTableContainerProps()}>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <table className="min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-950/70">
-            <tr>
-              <th className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-400">
-                Characteristic
-              </th>
-              {['Batches', 'Mean', 'Std Dev', 'Target', 'Pp', 'Cpk', 'Ppk', 'OOC Rate', 'Status'].map(label => (
-                <th
-                  key={label}
-                  className="border-b border-slate-200 px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.05em] text-slate-500 dark:border-slate-700 dark:text-slate-400"
-                >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map(row => (
-              <tr key={row.mic_id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => openChart(row)}
-                    className="rounded-md text-left text-inherit transition-colors hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:hover:text-white"
-                    aria-label={`Open control chart for ${row.mic_name}`}
+          <TableToolbar>
+            <TableToolbarContent>
+              {/* Characteristic-name search — drives the external filteredRows state */}
+              <TableToolbarSearch
+                placeholder="Filter by characteristic name…"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setSearchTerm(e.target.value)
+                  setPage(1)
+                }}
+                persistent
+              />
+
+              {/* Row count indicator */}
+              <span
+                style={{
+                  alignSelf: 'center',
+                  padding: '0 0.75rem',
+                  fontSize: '0.75rem',
+                  color: 'var(--cds-text-secondary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {filteredRows.length} characteristic{filteredRows.length !== 1 ? 's' : ''}
+              </span>
+
+              {/* Export overflow menu */}
+              <TableToolbarMenu iconDescription="Export options">
+                <OverflowMenuItem itemText="Export CSV"   onClick={exportCSV} />
+                <OverflowMenuItem itemText="Export Excel" onClick={exportExcel} disabled={exporting} />
+              </TableToolbarMenu>
+            </TableToolbarContent>
+          </TableToolbar>
+
+          <Table {...getTableProps()} size="md" useZebraStyles>
+            <TableHead>
+              <TableRow>
+                {headers.map(header => (
+                  <TableHeader
+                    key={header.key}
+                    onClick={() => handleSort(header.key as HeaderKey)}
+                    isSortHeader={sortKey === header.key}
+                    sortDirection={sortKey === header.key ? sortDirection : 'NONE'}
+                    style={
+                      NUMERIC_COLS.has(header.key as HeaderKey)
+                        ? { textAlign: 'right' }
+                        : undefined
+                    }
                   >
-                    {row.mic_name}
-                  </button>
-                </td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{row.batch_count}</td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.mean_value, 4)}</td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.stddev_overall, 4)}</td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.nominal_target, 4)}</td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300">{formatFixed(row.pp, 2)}</td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.cpk} /></td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><CapabilityValue value={row.ppk} /></td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums text-slate-700 dark:border-slate-800 dark:text-slate-300"><OOCValue value={row.ooc_rate} /></td>
-                <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-800"><StatusValue value={row.capability_status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                    {header.header}
+                  </TableHeader>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {dtRows.map(row => {
+                const original = rowLookup.get(row.id)
+                return (
+                  <TableRow key={row.id} {...getRowProps({ row })}>
+                    {row.cells.map(cell => (
+                      <TableCell
+                        key={cell.id}
+                        style={
+                          NUMERIC_COLS.has(cell.info.header as HeaderKey)
+                            ? { textAlign: 'right' }
+                            : undefined
+                        }
+                      >
+                        {renderCell(cell, original)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Pagination operates on the globally sorted+filtered set */}
+          <Pagination
+            totalItems={filteredRows.length}
+            pageSize={pageSize}
+            pageSizes={[10, 25, 50]}
+            page={page}
+            onChange={({ page: p, pageSize: ps }) => {
+              setPage(p)
+              setPageSize(ps)
+            }}
+          />
+        </TableContainer>
+      )}
+    </DataTable>
   )
 }

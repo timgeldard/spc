@@ -1,4 +1,7 @@
-import { AlertTriangle, ArrowRight } from 'lucide-react'
+import { Button, Tile } from '@carbon/react'
+// Verify icon names against your installed @carbon/icons-react version:
+// https://carbondesignsystem.com/elements/icons/library/
+import { ArrowRight, WarningFilled } from '@carbon/icons-react'
 import EmptyState from '../../components/EmptyState'
 import { useSPC } from '../SPCContext'
 
@@ -6,40 +9,97 @@ export default function RecentViolations() {
   const { state, dispatch } = useSPC()
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-      <div className="mb-6 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
-          <AlertTriangle className="h-5 w-5 text-amber-500" />
+    <Tile style={{ height: '100%', padding: '1.5rem' }}>
+      {/* Tile header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1.25rem',
+        }}
+      >
+        <h3
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            margin: 0,
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            color: 'var(--cds-text-primary)',
+          }}
+        >
+          <WarningFilled size={20} style={{ color: 'var(--cds-support-warning)' }} />
           Recent Violations
         </h3>
-        <button
-          type="button"
+
+        <Button
+          kind="ghost"
+          size="sm"
+          renderIcon={ArrowRight}
+          iconDescription="View all violations"
           onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })}
-          className="flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
         >
-          View All <ArrowRight className="h-4 w-4" />
-        </button>
+          View All
+        </Button>
       </div>
+
+      {/* Violation list */}
       {state.selectedMaterial && state.recentViolations.length > 0 ? (
-        <div className="space-y-4">
-          {state.recentViolations.map(violation => (
-            <div
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+          {state.recentViolations.map((violation, index) => (
+            <li
               key={violation.id}
-              className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 0',
+                borderBottom:
+                  index < state.recentViolations.length - 1
+                    ? '1px solid var(--cds-border-subtle-01)'
+                    : 'none',
+              }}
             >
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{violation.rule}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {violation.chart} {' • '} {violation.value}
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    color: 'var(--cds-text-primary)',
+                  }}
+                >
+                  {violation.rule}
+                </p>
+                <p
+                  style={{
+                    margin: '0.125rem 0 0',
+                    fontSize: '0.75rem',
+                    color: 'var(--cds-text-secondary)',
+                  }}
+                >
+                  {violation.chart} · {violation.value}
                 </p>
               </div>
-              <div className="text-right text-xs text-gray-500 dark:text-gray-400">{violation.time}</div>
-            </div>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--cds-text-secondary)',
+                  textAlign: 'right',
+                  flexShrink: 0,
+                  marginLeft: '0.5rem',
+                }}
+              >
+                {violation.time}
+              </span>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <EmptyState message="Recent SPC violations will appear here once signals are available for the selected scope." />
       )}
-    </div>
+    </Tile>
   )
 }

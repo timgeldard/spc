@@ -1,8 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { AlertTriangle, CircleHelp, Download, Edit3 } from 'lucide-react'
+import {
+  Button,
+  DefinitionTooltip,
+  Tag,
+  Tile,
+} from '@carbon/react'
+// Verify icon names against your installed @carbon/icons-react version
+import { Download, Edit, Flag } from '@carbon/icons-react'
 import PointExclusionModal from '../../components/Modals/PointExclusionModal'
-import { Tooltip } from '../../components/ui'
-import { cn } from '../../lib/utils'
 
 interface ChartCardProps {
   title: string
@@ -14,8 +19,13 @@ interface ChartCardProps {
   onExport?: () => void
   onAnnotate?: () => void
   exportLabel?: string
-  className?: string
-  bodyClassName?: string
+}
+
+// Cpk thresholds → Carbon Tag type
+function cpkTagType(cpk: number): 'green' | 'warm-gray' | 'red' {
+  if (cpk >= 1.33) return 'green'
+  if (cpk >= 1.0)  return 'warm-gray'
+  return 'red'
 }
 
 export default function ChartCard({
@@ -28,99 +38,151 @@ export default function ChartCard({
   onExport,
   onAnnotate,
   exportLabel = 'Export',
-  className,
-  bodyClassName,
 }: ChartCardProps) {
   const [showExclusionModal, setShowExclusionModal] = useState(false)
 
-  const status = cpk != null
-    ? cpk >= 1.33
-      ? 'good'
-      : cpk >= 1.0
-        ? 'warning'
-        : 'bad'
-    : 'neutral'
-
   return (
     <>
-      <div className={cn('overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900', className)}>
-      <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 pb-4 pt-6 dark:border-gray-800">
-        <div className="min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
+      <Tile style={{ padding: 0, overflow: 'hidden' }}>
+
+        {/* Card header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            padding: '1.25rem 1.5rem 1rem',
+            borderBottom: '1px solid var(--cds-border-subtle-01)',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'var(--cds-text-primary)',
+              }}
+            >
+              {title}
+            </h3>
+            {subtitle && (
+              <p
+                style={{
+                  margin: '0.125rem 0 0',
+                  fontSize: '0.75rem',
+                  color: 'var(--cds-text-secondary)',
+                }}
+              >
+                {subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* Cpk badge with definition tooltip */}
+          {cpk != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <Tag type={cpkTagType(cpk)} size="md">
+                Cpk {cpk.toFixed(2)}
+              </Tag>
+              <DefinitionTooltip
+                definition="Cpk ≥ 1.33 is generally healthy, 1.00–1.32 needs attention, below 1.00 is high risk."
+                openOnHover
+                align="bottom-right"
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '1.25rem',
+                    height: '1.25rem',
+                    borderRadius: '50%',
+                    border: '1px solid var(--cds-border-subtle-01)',
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--cds-text-secondary)',
+                    cursor: 'default',
+                  }}
+                  aria-label="About capability index"
+                >
+                  ?
+                </span>
+              </DefinitionTooltip>
+            </div>
+          )}
         </div>
 
-        {cpk != null && (
-          <div className="flex shrink-0 items-center gap-2">
-            <div
-              className={cn(
-                'rounded-full px-3 py-1 text-sm font-medium',
-                status === 'good' && 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-                status === 'warning' && 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-                status === 'bad' && 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-              )}
-            >
-              Cpk {cpk.toFixed(2)}
-            </div>
-            <Tooltip
-              side="left"
-              content="Cpk above 1.33 is generally healthy, 1.00 to 1.32 needs attention, and below 1.00 is high risk."
-            >
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 transition hover:border-gray-300 hover:text-gray-600 dark:border-gray-700 dark:text-gray-500 dark:hover:border-gray-600 dark:hover:text-gray-300"
-                aria-label="About capability index"
-              >
-                <CircleHelp className="h-4 w-4" />
-              </button>
-            </Tooltip>
+        {/* Chart body — ECharts canvas renders here, untouched */}
+        <div style={{ padding: '1rem' }}>{children}</div>
+
+        {/* Optional action note */}
+        {note && (
+          <div
+            style={{
+              padding: '0.625rem 1.5rem',
+              fontSize: '0.875rem',
+              color: 'var(--cds-text-secondary)',
+              borderTop: '1px solid var(--cds-border-subtle-01)',
+            }}
+          >
+            {note}
           </div>
         )}
-      </div>
 
-      <div className={cn('p-4', bodyClassName)}>{children}</div>
+        {/* Action footer */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            padding: '0.75rem 1rem',
+            borderTop: '1px solid var(--cds-border-subtle-01)',
+          }}
+        >
+          <Button
+            kind="tertiary"
+            size="sm"
+            renderIcon={Edit}
+            iconDescription="Exclude a data point"
+            onClick={() => setShowExclusionModal(true)}
+          >
+            Exclude Point
+          </Button>
 
-      {note && (
-        <div className="border-t border-gray-100 px-6 py-3 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          {note}
+          <Button
+            kind="tertiary"
+            size="sm"
+            renderIcon={Download}
+            iconDescription={exportLabel}
+            disabled={!onExport}
+            onClick={onExport}
+          >
+            {exportLabel}
+          </Button>
+
+          <Button
+            kind="ghost"
+            size="sm"
+            renderIcon={Flag}
+            iconDescription="Add annotation"
+            hasIconOnly
+            disabled={!onAnnotate}
+            onClick={onAnnotate}
+            aria-label="Add annotation"
+          />
         </div>
-      )}
-
-      <div className="flex flex-wrap gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800">
-        <button
-          type="button"
-          onClick={() => setShowExclusionModal(true)}
-          className="flex min-w-[150px] flex-1 items-center justify-center gap-2 rounded-2xl border border-gray-300 py-2.5 text-sm font-medium transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-        >
-          <Edit3 className="h-4 w-4" />
-          Exclude Point
-        </button>
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={!onExport}
-          className="flex min-w-[150px] flex-1 items-center justify-center gap-2 rounded-2xl border border-gray-300 py-2.5 text-sm font-medium transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
-        >
-          <Download className="h-4 w-4" />
-          {exportLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onAnnotate}
-          disabled={!onAnnotate}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-5 py-2.5 text-sm font-medium transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
-          aria-label="Annotation action"
-        >
-          <AlertTriangle className="h-4 w-4" />
-        </button>
-      </div>
-      </div>
+      </Tile>
 
       <PointExclusionModal
         isOpen={showExclusionModal}
         onClose={() => setShowExclusionModal(false)}
         chartTitle={title}
-        onConfirm={() => onExcludePoint?.()}
+        onConfirm={() => {
+          setShowExclusionModal(false)
+          onExcludePoint?.()
+        }}
       />
     </>
   )

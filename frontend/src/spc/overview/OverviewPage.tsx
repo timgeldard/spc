@@ -1,5 +1,15 @@
 import { useEffect, useMemo } from 'react'
-import { AlertCircle, ArrowRight, Target, TrendingUp, Users } from 'lucide-react'
+import {
+  Button,
+  ClickableTile,
+  Column,
+  Grid,
+  SkeletonPlaceholder,
+  Tile,
+} from '@carbon/react'
+// Verify icon names against your installed @carbon/icons-react version:
+// https://carbondesignsystem.com/elements/icons/library/
+import { Analytics, ArrowRight, Group, Growth, WarningFilled } from '@carbon/icons-react'
 import EmptyState from '../../components/EmptyState'
 import { useSPC } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'
@@ -10,11 +20,17 @@ import RecentViolations from './RecentViolations'
 export default function OverviewPage() {
   const { state, dispatch } = useSPC()
 
-  const materialLabel = state.selectedMaterial?.material_name || state.selectedMaterial?.material_id || 'No material selected'
-  const plantLabel = state.selectedPlant?.plant_name || state.selectedPlant?.plant_id || 'All plants'
-  const characteristicLabel = state.selectedMIC?.mic_name || state.selectedMIC?.mic_id || 'No characteristic selected'
+  const materialLabel =
+    state.selectedMaterial?.material_name ||
+    state.selectedMaterial?.material_id ||
+    'No material selected'
+  const plantLabel =
+    state.selectedPlant?.plant_name || state.selectedPlant?.plant_id || 'All plants'
+  const characteristicLabel =
+    state.selectedMIC?.mic_name || state.selectedMIC?.mic_id || 'No characteristic selected'
   const hasScope = Boolean(state.selectedMaterial)
   const hasCharacteristic = Boolean(state.selectedMIC)
+
   const { scorecard, loading: scorecardLoading } = useSPCScorecard(
     state.selectedMaterial?.material_id,
     state.dateFrom,
@@ -36,18 +52,23 @@ export default function OverviewPage() {
       .map(row => row.cpk ?? row.ppk)
       .filter((value): value is number => value != null)
 
-    const healthyCharacteristics = scorecard.filter(row => (
-      (row.cpk ?? row.ppk ?? 0) >= 1.33 && (row.ooc_rate ?? 0) <= 0.02
-    )).length
+    const healthyCharacteristics = scorecard.filter(
+      row => (row.cpk ?? row.ppk ?? 0) >= 1.33 && (row.ooc_rate ?? 0) <= 0.02,
+    ).length
 
     const processHealth = Math.round((healthyCharacteristics / scorecard.length) * 100)
     const avgCpk = capabilityValues.length
-      ? Number((capabilityValues.reduce((sum, value) => sum + value, 0) / capabilityValues.length).toFixed(2))
+      ? Number(
+          (
+            capabilityValues.reduce((sum, value) => sum + value, 0) / capabilityValues.length
+          ).toFixed(2),
+        )
       : 0
     const oocPoints = scorecard.filter(row => (row.ooc_rate ?? 0) > 0).length
-    const affectedBatches = scorecard.reduce((sum, row) => (
-      sum + Math.max(0, Math.round((row.batch_count ?? 0) * (row.ooc_rate ?? 0)))
-    ), 0)
+    const affectedBatches = scorecard.reduce(
+      (sum, row) => sum + Math.max(0, Math.round((row.batch_count ?? 0) * (row.ooc_rate ?? 0))),
+      0,
+    )
 
     return { processHealth, avgCpk, oocPoints, affectedBatches }
   }, [scorecard])
@@ -56,8 +77,10 @@ export default function OverviewPage() {
     const flowViolations = (flowData?.nodes ?? [])
       .filter(node => {
         const inferredSignal = Boolean(node.last_ooc || node.has_ooc_signal)
-        const weakCapability = typeof node.estimated_cpk === 'number' && node.estimated_cpk < 1
-        const elevatedRejection = typeof node.rejection_rate_pct === 'number' && node.rejection_rate_pct >= 2
+        const weakCapability =
+          typeof node.estimated_cpk === 'number' && node.estimated_cpk < 1
+        const elevatedRejection =
+          typeof node.rejection_rate_pct === 'number' && node.rejection_rate_pct >= 2
         return inferredSignal || weakCapability || elevatedRejection
       })
       .slice()
@@ -68,30 +91,34 @@ export default function OverviewPage() {
         time: node.last_ooc ? String(node.last_ooc) : 'In scope',
         rule: node.has_ooc_signal || node.last_ooc ? 'OOC signal present' : 'Capability below target',
         chart: node.material_name ?? node.material_id,
-        value: typeof node.rejection_rate_pct === 'number'
-          ? `${node.rejection_rate_pct.toFixed(1)}% rejection`
-          : node.estimated_cpk != null
-            ? `Cpk ${node.estimated_cpk.toFixed(2)}`
-            : 'Review node details',
+        value:
+          typeof node.rejection_rate_pct === 'number'
+            ? `${node.rejection_rate_pct.toFixed(1)}% rejection`
+            : node.estimated_cpk != null
+              ? `Cpk ${node.estimated_cpk.toFixed(2)}`
+              : 'Review node details',
       }))
 
-    if (flowViolations.length > 0) {
-      return flowViolations
-    }
+    if (flowViolations.length > 0) return flowViolations
 
     return scorecard
       .filter(row => (row.ooc_rate ?? 0) > 0 || (row.cpk ?? row.ppk ?? 999) < 1.33)
       .slice()
-      .sort((a, b) => ((b.ooc_rate ?? 0) - (a.ooc_rate ?? 0)) || ((a.cpk ?? a.ppk ?? 999) - (b.cpk ?? b.ppk ?? 999)))
+      .sort(
+        (a, b) =>
+          (b.ooc_rate ?? 0) - (a.ooc_rate ?? 0) ||
+          (a.cpk ?? a.ppk ?? 999) - (b.cpk ?? b.ppk ?? 999),
+      )
       .slice(0, 5)
       .map((row, index) => ({
         id: index + 1,
         time: `${row.batch_count} batches`,
         rule: (row.ooc_rate ?? 0) > 0.02 ? 'Elevated OOC rate' : 'Capability below target',
         chart: row.mic_name,
-        value: (row.ooc_rate ?? 0) > 0
-          ? `${((row.ooc_rate ?? 0) * 100).toFixed(1)}% OOC`
-          : `Cpk ${(row.cpk ?? row.ppk ?? 0).toFixed(2)}`,
+        value:
+          (row.ooc_rate ?? 0) > 0
+            ? `${((row.ooc_rate ?? 0) * 100).toFixed(1)}% OOC`
+            : `Cpk ${(row.cpk ?? row.ppk ?? 0).toFixed(2)}`,
       }))
   }, [flowData?.nodes, scorecard])
 
@@ -105,7 +132,6 @@ export default function OverviewPage() {
       dispatch({ type: 'SET_RECENT_VIOLATIONS', payload: [] })
       return
     }
-
     dispatch({ type: 'SET_KPIS', payload: derivedKpis })
     dispatch({ type: 'SET_RECENT_VIOLATIONS', payload: derivedViolations })
   }, [derivedKpis, derivedViolations, dispatch, hasScope])
@@ -115,22 +141,24 @@ export default function OverviewPage() {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'flow' })
   }
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (state.isLoading) {
     return (
-      <div className="space-y-8 p-5">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3].map(index => (
-            <div
-              key={index}
-              className="h-40 animate-pulse rounded-2xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-800"
-            />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-          <div className="h-80 animate-pulse rounded-2xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-800 lg:col-span-3" />
-          <div className="h-80 animate-pulse rounded-2xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-800 lg:col-span-2" />
-        </div>
-      </div>
+      <Grid>
+        {/* KPI row skeletons */}
+        {[0, 1, 2, 3].map(i => (
+          <Column key={i} sm={4} md={4} lg={4}>
+            <SkeletonPlaceholder style={{ width: '100%', height: '10rem' }} />
+          </Column>
+        ))}
+        {/* Main content row skeletons */}
+        <Column sm={4} md={8} lg={10}>
+          <SkeletonPlaceholder style={{ width: '100%', height: '22rem' }} />
+        </Column>
+        <Column sm={4} md={8} lg={6}>
+          <SkeletonPlaceholder style={{ width: '100%', height: '22rem' }} />
+        </Column>
+      </Grid>
     )
   }
 
@@ -138,107 +166,177 @@ export default function OverviewPage() {
     return <EmptyState message="No process data available for the selected filters" />
   }
 
+  // ── Main layout ───────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 p-5">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <Grid>
+      {/* Row 1: KPI Cards — 4-up on lg (4/16), 2-up on md (4/8), full-width on sm */}
+      <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Process Health"
           value={hasScope ? `${state.kpis.processHealth}%` : '—'}
-          status={hasScope ? (state.kpis.processHealth >= 85 ? 'good' : state.kpis.processHealth >= 65 ? 'warning' : 'bad') : 'neutral'}
-          icon={TrendingUp}
+          status={
+            hasScope
+              ? state.kpis.processHealth >= 85
+                ? 'good'
+                : state.kpis.processHealth >= 65
+                  ? 'warning'
+                  : 'bad'
+              : 'neutral'
+          }
+          icon={Growth}
         />
+      </Column>
+
+      <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Avg Cpk"
-          value={hasCharacteristic || hasScope ? (state.kpis.avgCpk || '—') : '—'}
-          status={hasScope ? (state.kpis.avgCpk >= 1.33 ? 'good' : state.kpis.avgCpk >= 1 ? 'warning' : 'bad') : 'neutral'}
-          icon={Target}
+          value={hasCharacteristic || hasScope ? state.kpis.avgCpk || '—' : '—'}
+          status={
+            hasScope
+              ? state.kpis.avgCpk >= 1.33
+                ? 'good'
+                : state.kpis.avgCpk >= 1
+                  ? 'warning'
+                  : 'bad'
+              : 'neutral'
+          }
+          icon={Analytics}
         />
+      </Column>
+
+      <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Out of Control"
           value={hasScope ? state.kpis.oocPoints : '—'}
           unit={hasScope ? 'points' : undefined}
           status={hasScope ? (state.kpis.oocPoints > 0 ? 'warning' : 'good') : 'neutral'}
-          icon={AlertCircle}
+          icon={WarningFilled}
         />
+      </Column>
+
+      <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Affected Batches"
           value={hasScope ? state.kpis.affectedBatches : '—'}
-          status={hasScope ? (state.kpis.affectedBatches > 0 ? 'bad' : 'good') : 'neutral'}
-          icon={Users}
+          status={
+            hasScope ? (state.kpis.affectedBatches > 0 ? 'bad' : 'good') : 'neutral'
+          }
+          icon={Group}
         />
-      </div>
+      </Column>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div
-          role="button"
-          tabIndex={hasScope ? 0 : -1}
+      {/* Row 2: Process Flow preview (10/16) + Recent Violations (6/16) */}
+      <Column sm={4} md={8} lg={10}>
+        {/*
+         * ClickableTile is the Carbon equivalent of role="button" div.
+         * It renders a <button>, so no nested interactive elements are allowed.
+         * The "Open Full Flow" intent is communicated via the tile's secondary text.
+         */}
+        <ClickableTile
           onClick={openFlow}
-          onKeyDown={event => {
-            if ((event.key === 'Enter' || event.key === ' ') && hasScope) {
-              event.preventDefault()
-              openFlow()
-            }
-          }}
-          className="rounded-2xl border border-gray-200 bg-white p-6 transition hover:shadow-md dark:border-gray-800 dark:bg-gray-900 lg:col-span-3"
+          disabled={!hasScope}
+          style={{ height: '100%', padding: '1.5rem' }}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+            }}
+          >
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Process Flow Overview</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Current scope: {materialLabel} {' • '} {plantLabel}
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--cds-text-primary)',
+                }}
+              >
+                Process Flow Overview
+              </p>
+              <p
+                style={{
+                  margin: '0.25rem 0 0',
+                  fontSize: '0.75rem',
+                  color: 'var(--cds-text-secondary)',
+                }}
+              >
+                {materialLabel} · {plantLabel}
+                {hasScope && ' — click to open full flow'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={event => {
-                event.stopPropagation()
-                openFlow()
-              }}
-              disabled={!hasScope}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:underline disabled:cursor-not-allowed disabled:text-blue-300 disabled:no-underline dark:text-blue-400 dark:disabled:text-blue-900/60"
-            >
-              Open Full Flow <ArrowRight className="h-4 w-4" />
-            </button>
+            <ArrowRight size={16} style={{ color: 'var(--cds-text-secondary)', flexShrink: 0 }} />
           </div>
-          <div className="flex h-80 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-100 dark:border-gray-700 dark:bg-gray-800">
+
+          {/* Mini-map placeholder — replace with embedded XYFlow in a future phase */}
+          <div
+            style={{
+              height: '20rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px dashed var(--cds-border-subtle-01)',
+              background: 'var(--cds-layer-02)',
+            }}
+          >
             {hasScope ? (
-              <div className="max-w-sm px-6 text-center">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              <div style={{ maxWidth: '24rem', padding: '1.5rem', textAlign: 'center' }}>
+                <p
+                  style={{
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    color: 'var(--cds-text-primary)',
+                    margin: 0,
+                  }}
+                >
                   Mini XYFlow Process Map
                 </p>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Click to open the full process map. The selected characteristic is {characteristicLabel.toLowerCase()}.
+                <p
+                  style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.875rem',
+                    color: 'var(--cds-text-secondary)',
+                  }}
+                >
+                  Selected characteristic: {characteristicLabel.toLowerCase()}
                 </p>
               </div>
             ) : (
               <EmptyState message="Select a material from the filter bar to load KPI context, flow preview, and investigation shortcuts." />
             )}
           </div>
-        </div>
+        </ClickableTile>
+      </Column>
 
-        <div className="lg:col-span-2">
-          <RecentViolations />
-        </div>
-      </div>
+      <Column sm={4} md={8} lg={6}>
+        <RecentViolations />
+      </Column>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })}
+      {/* Row 3: CTA Buttons */}
+      <Column sm={4} md={4} lg={8}>
+        <Button
+          kind="primary"
           disabled={!hasCharacteristic}
-          className="rounded-2xl bg-blue-600 py-4 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:hover:bg-blue-300 dark:disabled:bg-blue-900/50"
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })}
+          style={{ width: '100%', maxWidth: '100%' }}
         >
           Investigate Latest OOC Signal
-        </button>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'scorecard' })}
+        </Button>
+      </Column>
+
+      <Column sm={4} md={4} lg={8}>
+        <Button
+          kind="tertiary"
           disabled={!hasScope}
-          className="rounded-2xl border border-gray-300 py-4 font-medium transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:border-gray-700 dark:hover:bg-gray-900 dark:disabled:text-gray-500"
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'scorecard' })}
+          style={{ width: '100%', maxWidth: '100%' }}
         >
           Generate Shift Report
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Column>
+    </Grid>
   )
 }
