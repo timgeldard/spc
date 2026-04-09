@@ -1,0 +1,1 @@
+import{j as s}from"./process-flow-BOU-rqOV.js";import{z as a,x as e,y as o,w as t}from"./index-DDbf-dUf.js";const i={error:t,warn:o,info:e,neutral:a};function u({variant:r="neutral",children:n}){return s.jsx("div",{className:i[r],role:r==="error"?"alert":"status","aria-live":r==="error"?"assertive":"polite",children:n})}export{u as I};

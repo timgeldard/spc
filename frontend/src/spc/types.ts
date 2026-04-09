@@ -460,6 +460,7 @@ export interface IMRChartProps {
   excludedIndices: Set<number>
   onPointClick?: (index: number) => void
   externalLimits?: LockedLimits | null
+  embedded?: boolean
 }
 
 export interface XbarRChartProps {
@@ -467,6 +468,7 @@ export interface XbarRChartProps {
   signals?: SPCSignal[]
   mrSignals?: SPCSignal[]
   externalLimits?: LockedLimits | null
+  embedded?: boolean
 }
 
 export interface ProcessFlowNodeData extends Record<string, unknown> {
@@ -475,10 +477,13 @@ export interface ProcessFlowNodeData extends Record<string, unknown> {
   plant_name?: string | null
   total_batches?: number | null
   rejected_batches?: number | null
+  rejection_rate_pct?: number | null
   mic_count?: number | null
   mean_value?: number | null
   stddev_value?: number | null
   estimated_cpk?: number | null
+  has_ooc_signal?: boolean | null
+  last_ooc?: string | null
   status?: 'green' | 'amber' | 'red' | 'grey' | string | null
   is_root?: boolean
   sparkline_values?: number[]
@@ -519,13 +524,36 @@ export interface MSAResult {
   [key: string]: unknown
 }
 
+export type SPCTabId = 'overview' | 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation'
+
+export interface OverviewKpis {
+  processHealth: number
+  avgCpk: number
+  oocPoints: number
+  affectedBatches: number
+}
+
+export interface RecentViolationItem {
+  id: number
+  time: string
+  rule: string
+  chart: string
+  value: string
+}
+
 export interface SPCState {
   selectedMaterial: MaterialRef | null
   selectedPlant: PlantRef | null
   selectedMIC: MicRef | null
   dateFrom: string
   dateTo: string
-  activeTab: 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation'
+  activeTab: SPCTabId
+  globalSearch: string
+  isLoading: boolean
+  savedViews: SavedView[]
+  roleMode: 'operator' | 'engineer'
+  kpis: OverviewKpis
+  recentViolations: RecentViolationItem[]
   chartTypeOverride: 'imr' | 'xbar_r' | null
   excludedIndices: Set<number>
   ruleSet: 'weco' | 'nelson'
@@ -536,12 +564,33 @@ export interface SPCState {
   exclusionDialog: ExclusionDialogState | null
 }
 
+export interface SavedView {
+  id: string
+  name: string
+  savedAt: string
+  activeTab: SPCTabId
+  globalSearch: string
+  selectedMaterial: MaterialRef | null
+  selectedPlant: PlantRef | null
+  selectedMIC: MicRef | null
+  dateFrom: string
+  dateTo: string
+  stratifyBy: StratifyByKey | null
+}
+
 export type SPCAction =
   | { type: 'SET_MATERIAL'; payload: MaterialRef | null }
   | { type: 'SET_PLANT'; payload: PlantRef | null }
   | { type: 'SET_MIC'; payload: MicRef | null }
   | { type: 'SET_DATE_FROM'; payload: string }
   | { type: 'SET_DATE_TO'; payload: string }
+  | { type: 'SET_GLOBAL_SEARCH'; payload: string }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ROLE_MODE'; payload: SPCState['roleMode'] }
+  | { type: 'SET_KPIS'; payload: OverviewKpis }
+  | { type: 'SET_RECENT_VIOLATIONS'; payload: RecentViolationItem[] }
+  | { type: 'ADD_SAVED_VIEW'; payload: SavedView }
+  | { type: 'APPLY_SAVED_VIEW'; payload: SavedView }
   | { type: 'SET_ACTIVE_TAB'; payload: SPCState['activeTab'] }
   | { type: 'SET_CHART_TYPE_OVERRIDE'; payload: SPCState['chartTypeOverride'] }
   | { type: 'TOGGLE_EXCLUDE_INDEX'; payload: number }

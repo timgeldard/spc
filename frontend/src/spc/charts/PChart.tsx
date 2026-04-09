@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { PChart as IndustrialPChart } from '../../components/charts'
 import { computePChart } from '../calculations'
 import { chartHintClass, chartNClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
-import type { ChartPaneProps, EventParamLike } from '../types'
+import type { ChartPaneProps } from '../types'
 
 interface PChartSubgroupStat {
   batch_id?: string | null
@@ -22,7 +22,11 @@ interface PChartResult {
   subgroupStats: PChartSubgroupStat[]
 }
 
-export default function PChart({ points }: ChartPaneProps) {
+interface PChartViewProps extends ChartPaneProps {
+  embedded?: boolean
+}
+
+export default function PChart({ points, embedded = false }: PChartViewProps) {
   const pChart = useMemo(
     () =>
       computePChart(
@@ -49,7 +53,16 @@ export default function PChart({ points }: ChartPaneProps) {
     batchId: stat.batch_id,
     nInspected: stat.n_inspected,
     nNonconforming: stat.n_nonconforming,
+    isSignal: stat.p > stat.ucl || stat.p < stat.lcl,
+    signalSummary: stat.p > stat.ucl || stat.p < stat.lcl ? 'Point beyond control limits' : null,
+    detailSummary: `Inspected ${stat.n_inspected}, nonconforming ${stat.n_nonconforming}`,
   }))
+
+  const chart = (
+    <IndustrialPChart data={chartData} embedded={embedded} />
+  )
+
+  if (embedded) return chart
 
   return (
     <div className={chartPaneClass}>
@@ -60,7 +73,7 @@ export default function PChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <IndustrialPChart data={chartData} />
+      {chart}
       <p className={chartHintClass}>
         p̄ = {(pChart.pBar * 100).toFixed(2)}% overall nonconforming · Variable control limits shown per batch size
       </p>

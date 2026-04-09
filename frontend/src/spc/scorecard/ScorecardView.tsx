@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import '../charts/ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
@@ -171,6 +171,12 @@ export default function ScorecardView() {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: 'charts' })
   }, [dispatch])
 
+  useEffect(() => {
+    if (state.roleMode === 'operator' && viewMode === 'matrix') {
+      setViewMode('table')
+    }
+  }, [state.roleMode, viewMode])
+
   if (!state.selectedMaterial) {
     return (
       <ModuleEmptyState
@@ -235,13 +241,15 @@ export default function ScorecardView() {
         >
           Table
         </button>
-        <button
-          className={`${buttonBaseClass} ${buttonSmClass} ${viewMode === 'matrix' ? buttonPrimaryClass : buttonSecondaryClass}`}
-          onClick={() => setViewMode('matrix')}
-          aria-pressed={viewMode === 'matrix'}
-        >
-          Matrix
-        </button>
+        {state.roleMode === 'engineer' && (
+          <button
+            className={`${buttonBaseClass} ${buttonSmClass} ${viewMode === 'matrix' ? buttonPrimaryClass : buttonSecondaryClass}`}
+            onClick={() => setViewMode('matrix')}
+            aria-pressed={viewMode === 'matrix'}
+          >
+            Matrix
+          </button>
+        )}
       </div>
 
       {viewMode === 'table' && (
@@ -266,34 +274,36 @@ export default function ScorecardView() {
               <ScorecardTable rows={scorecard} />
             </Suspense>
           </div>
-          <aside className={scorecardSidebarClass}>
-            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Decision support</div>
-            <div className="space-y-3 text-sm text-[var(--c-text-muted)]">
-              <p>Start with the priority triage panel — those are the fastest path to meaningful intervention.</p>
-              <p>Use Ppk to judge long-run performance drift, but only after the control chart shows stability.</p>
-              <p>
-                In the table, use{' '}
-                <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">↑↓</kbd>{' '}
-                to navigate rows and{' '}
-                <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">Enter</kbd>{' '}
-                to open the chart.
-              </p>
-            </div>
-            <div className={metricGridClass}>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)]">Primary sort</div>
-                <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">Cpk → Ppk</div>
+          {state.roleMode === 'engineer' && (
+            <aside className={scorecardSidebarClass}>
+              <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Decision support</div>
+              <div className="space-y-3 text-sm text-[var(--c-text-muted)]">
+                <p>Start with the priority triage panel — those are the fastest path to meaningful intervention.</p>
+                <p>Use Ppk to judge long-run performance drift, but only after the control chart shows stability.</p>
+                <p>
+                  In the table, use{' '}
+                  <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">↑↓</kbd>{' '}
+                  to navigate rows and{' '}
+                  <kbd className="rounded border border-[var(--c-border)] bg-slate-100 px-1 py-0.5 text-[0.65rem] font-mono">Enter</kbd>{' '}
+                  to open the chart.
+                </p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)]">Best use</div>
-                <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">Portfolio triage</div>
+              <div className={metricGridClass}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)]">Primary sort</div>
+                  <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">Cpk → Ppk</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)]">Best use</div>
+                  <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">Portfolio triage</div>
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
+          )}
         </div>
       )}
 
-      {viewMode === 'matrix' && (
+      {state.roleMode === 'engineer' && viewMode === 'matrix' && (
         <Suspense fallback={<LoadingSkeleton minHeight="280px" message="Loading view…" />}>
           <CapabilityMatrix rows={scorecard} />
         </Suspense>

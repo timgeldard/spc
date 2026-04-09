@@ -18,7 +18,11 @@ interface CChartResult {
   signals?: unknown[]
 }
 
-export default function CChart({ points }: ChartPaneProps) {
+interface CChartViewProps extends ChartPaneProps {
+  embedded?: boolean
+}
+
+export default function CChart({ points, embedded = false }: CChartViewProps) {
   const chart = useMemo(
     () => computeCChart(points as unknown as CChartPoint[]) as CChartResult | null,
     [points],
@@ -79,16 +83,24 @@ export default function CChart({ points }: ChartPaneProps) {
             value: s.c,
             itemStyle: { color: (s.c > ucl || s.c < lcl) ? '#ef4444' : '#1B3A4B' },
           })),
-          lineStyle: { color: '#1B3A4B', width: 2 },
+          lineStyle: { color: '#1B3A4B', width: 2.4 },
           showSymbol: true,
-          symbolSize: 5,
+          symbolSize: 6,
+          markPoint: {
+            symbol: 'circle',
+            symbolSize: 12,
+            itemStyle: { color: '#ef4444' },
+            data: subgroupStats
+              .map((s, index) => (s.c > ucl || s.c < lcl ? { coord: [categories[index], s.c], value: s.c } : null))
+              .filter(Boolean),
+          },
           markLine: {
             silent: true,
             symbol: ['none', 'none'],
             data: [
-              { yAxis: cBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `c̄ ${cBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
-              { yAxis: ucl,  lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
-              { yAxis: Math.max(0, lcl), lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
+              { yAxis: cBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2.2 }, label: { formatter: `c̄ ${cBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
+              { yAxis: ucl,  lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
+              { yAxis: Math.max(0, lcl), lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
             ],
           },
         },
@@ -100,6 +112,10 @@ export default function CChart({ points }: ChartPaneProps) {
 
   const oocCount = chart.signals?.length ?? 0
 
+  const chartNode = <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="C chart — count of defects per unit" />
+
+  if (embedded) return chartNode
+
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>
@@ -108,7 +124,7 @@ export default function CChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="C chart — count of defects per unit" />
+      {chartNode}
       <p className={chartHintClass}>
         c̄ = {chart.cBar.toFixed(3)} · UCL = {chart.ucl.toFixed(3)} · LCL = {Math.max(0, chart.lcl).toFixed(3)}
       </p>

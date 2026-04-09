@@ -1,7 +1,7 @@
 import { usePChartData } from './usePChartData'
 import { useSPCChartData } from './useSPCChartData'
 import { useCountChartData } from './useCountChartData'
-import type { AttributeChartPoint, ChartDataPoint, NormalityResult } from '../types'
+import type { AttributeChartPoint, ChartDataPoint, NormalityResult, StratifyByKey } from '../types'
 import type { AttributeChartType, QuantChartType } from '../charts/ChartSettingsRail'
 
 function isQuantChartType(value: string | null | undefined): value is QuantChartType {
@@ -42,7 +42,7 @@ export function useChartData(
   dateFrom: string,
   dateTo: string,
   plantId: string | null | undefined,
-  stratifyBy: string | null,
+  stratifyBy: StratifyByKey | null,
 ): ChartDataResult {
   const isAttributeMIC = micChartType === 'p_chart'
   const isAttributeChart = isAttributeMIC

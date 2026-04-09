@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import SparklineMini from './SparklineMini'
+import NodeTooltip from './NodeTooltip'
 import type { ProcessFlowNodeData } from '../types'
 
 // Labels reflect rejection-rate semantics, matching the flow legend
@@ -18,6 +19,8 @@ type ProcessFlowGraphNode = Node<ProcessFlowNodeData, 'processNode'>
 function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
   const statusKey = (data.status ?? 'grey') as ProcessNodeStatus
   const s = STATUS[statusKey] ?? STATUS.grey
+  const rejectionRate = data.rejection_rate_pct
+  const hasSignal = Boolean(data.has_ooc_signal || data.last_ooc)
 
   const shortName = data.material_name && data.material_name.length > 22
     ? data.material_name.substring(0, 21) + '…'
@@ -31,15 +34,22 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}
+      className="group"
       style={{
         background: s.bg,
         border: `1.5px solid ${selected ? s.dot : s.border}`,
-        borderRadius: 10,
-        width: 160,
-        boxShadow: selected ? `0 0 0 3px ${s.dot}40` : '0 1px 4px rgba(0,0,0,0.08)',
+        borderRadius: 18,
+        width: 184,
+        boxShadow: hasSignal
+          ? '0 14px 32px rgba(109,40,217,0.18)'
+          : selected
+            ? `0 0 0 3px ${s.dot}40`
+            : '0 10px 24px rgba(15,23,42,0.08)',
         position: 'relative',
-        padding: '10px 12px 8px',
-        fontFamily: "'Inter', system-ui, sans-serif",
+        padding: '12px 14px 10px',
+        fontFamily: "'Noto Sans', system-ui, sans-serif",
+        transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+        transform: selected ? 'translateY(-1px)' : 'none',
       }}
     >
       <Handle type="target" position={Position.Left} style={{ background: s.dot }} />
@@ -60,7 +70,7 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
         title={s.label}
       />
 
-      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#111827', paddingRight: 14, lineHeight: 1.3 }}
+      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#111827', paddingRight: 20, lineHeight: 1.3 }}
         title={data.material_name || String(data.material_id)}>
         {shortName}
       </div>
@@ -100,8 +110,26 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
         </div>
       )}
 
+      {hasSignal && (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          marginTop: 6,
+          borderRadius: 999,
+          padding: '2px 7px',
+          fontSize: '0.625rem',
+          fontWeight: 700,
+          color: '#6d28d9',
+          background: '#f5f3ff',
+          border: '1px solid #ddd6fe',
+          letterSpacing: '0.04em',
+        }}>
+          OOC
+        </div>
+      )}
+
       <div style={{ margin: '6px 0 4px' }}>
-        <SparklineMini values={data.sparkline_values ?? []} width={136} height={28} />
+        <SparklineMini values={data.sparkline_values ?? []} width={156} height={30} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
@@ -124,6 +152,23 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
           )}
         </span>
       </div>
+
+      {rejectionRate != null && (
+        <div style={{ marginTop: 6, fontSize: '0.68rem', fontWeight: 600, color: s.text }}>
+          Rejection {rejectionRate.toFixed(1)}%
+        </div>
+      )}
+
+      <NodeTooltip
+        label={fullName}
+        plantName={data.plant_name}
+        rejectionRate={rejectionRate}
+        cpk={data.estimated_cpk}
+        totalBatches={data.total_batches}
+        rejectedBatches={data.rejected_batches}
+        lastOoc={data.last_ooc}
+        hasSignal={hasSignal}
+      />
 
       <Handle type="source" position={Position.Right} style={{ background: s.dot }} />
     </div>

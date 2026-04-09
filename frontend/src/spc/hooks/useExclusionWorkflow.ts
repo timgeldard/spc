@@ -7,6 +7,7 @@ import type {
   ExcludedPoint,
   ExclusionAuditSnapshot,
   ExclusionDialogState,
+  StratifyByKey,
   SPCComputationResult,
   NormalityResult,
 } from '../types'
@@ -38,7 +39,7 @@ interface UseExclusionWorkflowArgs {
   quantPoints: ChartDataPoint[]
   ruleSet: 'weco' | 'nelson'
   quantNormality: NormalityResult | null
-  stratifyBy: string | null
+  stratifyBy: StratifyByKey | null
   dateFrom: string
   dateTo: string
   spc: SPCComputationResult | null

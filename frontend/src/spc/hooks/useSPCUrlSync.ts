@@ -5,7 +5,7 @@ import { useSPC } from '../SPCContext'
  * Keeps window.location.search in sync with the active analysis context.
  *
  * URL params written:
- *   tab        — active module (omitted when 'flow', the default)
+ *   tab        — active module (omitted when 'overview', the default)
  *   mat        — selected material ID
  *   mat_n      — material display name (optional, for breadcrumbs before data loads)
  *   plant      — selected plant ID
@@ -31,7 +31,7 @@ export function useSPCUrlSync(): void {
       const params = new URLSearchParams()
 
       // Tab — omit default so bare URLs stay clean
-      if (activeTab !== 'flow') params.set('tab', activeTab)
+      if (activeTab !== 'overview') params.set('tab', activeTab)
 
       // Material
       if (selectedMaterial?.material_id) {

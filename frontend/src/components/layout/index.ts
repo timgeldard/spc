@@ -1,4 +1,5 @@
 export { Sidebar } from './Sidebar'
 export { Header } from './Header'
+export { SPCHeader } from './SPCHeader'
 export { GlobalFilterBar } from './GlobalFilterBar'
 export { AppShell } from './AppShell'

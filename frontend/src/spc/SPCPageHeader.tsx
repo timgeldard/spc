@@ -18,6 +18,7 @@ import {
 } from './uiClasses'
 
 const TAB_LABELS = {
+  overview: 'Overview',
   flow: 'Process Flow',
   charts: 'Control Charts',
   scorecard: 'Scorecard',

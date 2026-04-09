@@ -24,7 +24,11 @@ interface NPChartResult {
   signals?: unknown[]
 }
 
-export default function NPChart({ points }: ChartPaneProps) {
+interface NPChartViewProps extends ChartPaneProps {
+  embedded?: boolean
+}
+
+export default function NPChart({ points, embedded = false }: NPChartViewProps) {
   const chart = useMemo(() => computeNPChart(points as unknown as NPChartPoint[]) as NPChartResult | null, [points])
 
   const subgroupStats = useMemo(
@@ -82,16 +86,24 @@ export default function NPChart({ points }: ChartPaneProps) {
             value: s.np,
             itemStyle: { color: (s.np > ucl || s.np < lcl) ? '#ef4444' : '#1B3A4B' },
           })),
-          lineStyle: { color: '#1B3A4B', width: 2 },
+          lineStyle: { color: '#1B3A4B', width: 2.4 },
           showSymbol: true,
-          symbolSize: 5,
+          symbolSize: 6,
+          markPoint: {
+            symbol: 'circle',
+            symbolSize: 12,
+            itemStyle: { color: '#ef4444' },
+            data: subgroupStats
+              .map((s, index) => (s.np > ucl || s.np < lcl ? { coord: [categories[index], s.np], value: s.np } : null))
+              .filter(Boolean),
+          },
           markLine: {
             silent: true,
             symbol: ['none', 'none'],
             data: [
-              { yAxis: npBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `n̄p̄ ${npBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
-              { yAxis: ucl,  lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
-              { yAxis: Math.max(0, lcl), lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
+              { yAxis: npBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2.2 }, label: { formatter: `n̄p̄ ${npBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
+              { yAxis: ucl,  lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
+              { yAxis: Math.max(0, lcl), lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
             ],
           },
         },
@@ -103,6 +115,10 @@ export default function NPChart({ points }: ChartPaneProps) {
 
   const oocCount = chart.signals?.length ?? 0
 
+  const chartNode = <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="NP chart — number nonconforming" />
+
+  if (embedded) return chartNode
+
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>
@@ -111,7 +127,7 @@ export default function NPChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="NP chart — number nonconforming" />
+      {chartNode}
       <p className={chartHintClass}>
         n̄p̄ = {chart.npBar.toFixed(2)} · UCL = {chart.ucl.toFixed(2)} · LCL = {Math.max(0, chart.lcl).toFixed(2)}
       </p>

@@ -1,10 +1,9 @@
-import { Suspense, lazy, useRef } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import './ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
 import { useControlChartsController } from '../hooks/useControlChartsController'
 import type { LockedLimits, SPCComputationResult } from '../types'
-import type { QuantChartType } from './ChartSettingsRail'
 import {
   autoCleanHeaderClass,
   autoCleanIterClass,
@@ -13,24 +12,13 @@ import {
   badgeGreenClass,
   buttonBaseClass,
   buttonGhostClass,
-  buttonSecondaryClass,
   buttonSmClass,
-  chartsBottomClass,
-  chartsLayoutClass,
-  chartsMainClass,
-  chartsWorkspaceClass,
-  evidenceRailClass,
   heroCardDenseClass,
-  rollingHeaderClass,
-  rollingPanelClass,
-  rollingTitleClass,
-  rollingWindowInputClass,
-  rollingWindowLabelClass,
-  sideStackClass,
 } from '../uiClasses'
 import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import ModuleEmptyState from '../components/ModuleEmptyState'
+import ChartCard from './ChartCard'
 import ChartInfoBanners from './ChartInfoBanners'
 import ChartSettingsRail from './ChartSettingsRail'
 import ChartSummaryBar from './ChartSummaryBar'
@@ -48,13 +36,16 @@ const ExcludedPointsPanel = lazy(() => import('./ExcludedPointsPanel'))
 const ExclusionJustificationModal = lazy(() => import('./ExclusionJustificationModal'))
 const SignalsPanel = lazy(() => import('./SignalsPanel'))
 
-// ── Chart stage ──────────────────────────────────────────────────────────────
+type PanelId = 'primary' | 'capability' | 'signals' | 'trend' | 'exclusions' | 'stratification'
+
+const DEFAULT_VISIBLE_PANELS: PanelId[] = ['primary', 'capability', 'signals', 'trend', 'exclusions', 'stratification']
 
 function renderQuantitativeChart(
   spcResult: SPCComputationResult,
   limits: LockedLimits | null,
   excludedSet: Set<number>,
   onPointClick?: (index: number) => void,
+  embedded = false,
 ) {
   return (
     <Suspense fallback={<LoadingSkeleton minHeight="520px" message="Loading chart…" />}>
@@ -67,6 +58,7 @@ function renderQuantitativeChart(
           excludedIndices={excludedSet}
           onPointClick={onPointClick}
           externalLimits={limits}
+          embedded={embedded}
         />
       ) : (
         <XbarRChart
@@ -74,21 +66,124 @@ function renderQuantitativeChart(
           signals={spcResult.signals}
           mrSignals={spcResult.mrSignals}
           externalLimits={limits}
+          embedded={embedded}
         />
       )}
     </Suspense>
   )
 }
 
-// ── Main view ────────────────────────────────────────────────────────────────
+function PanelSelector({
+  availablePanels,
+  visiblePanels,
+  onToggle,
+  stratifyLabel,
+}: {
+  availablePanels: Array<{ id: PanelId; label: string; description: string; disabled?: boolean }>
+  visiblePanels: PanelId[]
+  onToggle: (panelId: PanelId) => void
+  stratifyLabel: string | null
+}) {
+  return (
+    <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <h3 className="font-semibold text-gray-900 dark:text-white">Display Panels</h3>
+      <div className="mt-4 space-y-3">
+        {availablePanels.map(panel => (
+          <label
+            key={panel.id}
+            className={`flex cursor-pointer items-start gap-3 ${panel.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+          >
+            <input
+              type="checkbox"
+              checked={visiblePanels.includes(panel.id)}
+              onChange={() => !panel.disabled && onToggle(panel.id)}
+              disabled={panel.disabled}
+              className="mt-1 h-4 w-4 accent-blue-600"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900 dark:text-white">{panel.label}</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">{panel.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
+        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Stratification</h4>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {stratifyLabel
+            ? `Current view is stratified by ${stratifyLabel}.`
+            : 'Line, shift, lot, and plant context are inherited from the top filter bar.'}
+        </p>
+      </div>
+    </div>
+  )
+}
 
 export default function ControlChartsView() {
   const { state, dispatch } = useSPC()
   const { selectedMaterial, selectedMIC, selectedPlant, dateFrom, dateTo, excludedIndices, exclusionDialog, limitsMode } = state
   const ctrl = useControlChartsController()
   const excludedPanelRef = useRef<HTMLDivElement>(null)
+  const [visiblePanels, setVisiblePanels] = useState<PanelId[]>(DEFAULT_VISIBLE_PANELS)
+  const [actionNote, setActionNote] = useState<string | null>(null)
 
-  // ── Guard states ───────────────────────────────────────────────────────
+  useEffect(() => {
+    setActionNote(null)
+  }, [selectedMIC?.mic_id, ctrl.attrChartType, ctrl.effectiveChartType])
+
+  useEffect(() => {
+    if (state.roleMode === 'operator') {
+      setVisiblePanels(current => current.filter(panelId => panelId === 'primary'))
+    }
+  }, [state.roleMode])
+
+  const togglePanel = (panelId: PanelId) => {
+    setVisiblePanels(current => (
+      current.includes(panelId)
+        ? current.filter(id => id !== panelId)
+        : [...current, panelId]
+    ))
+  }
+
+  const isVisible = (panelId: PanelId) => visiblePanels.includes(panelId)
+
+  const exportPayload = {
+    export_type: 'excel',
+    export_scope: ctrl.isAttributeChart ? 'attribute_chart' : 'chart_data',
+    material_id: selectedMaterial?.material_id ?? null,
+    mic_id: selectedMIC?.mic_id ?? null,
+    plant_id: selectedPlant?.plant_id ?? null,
+    date_from: dateFrom || null,
+    date_to: dateTo || null,
+  }
+
+  const availablePanels = useMemo<Array<{ id: PanelId; label: string; description: string; disabled?: boolean }>>(() => [
+    { id: 'primary', label: 'Primary chart', description: 'Main control chart with live signals and limits.' },
+    { id: 'capability', label: 'Capability panel', description: 'Capability metrics and spec interpretation.', disabled: ctrl.isAttributeChart || state.roleMode === 'operator' },
+    { id: 'signals', label: 'Signal queue', description: 'Ordered rule violations and supporting evidence.', disabled: ctrl.isAttributeChart || state.roleMode === 'operator' },
+    { id: 'trend', label: 'Capability trend', description: 'Rolling capability storyline over time.', disabled: ctrl.isAttributeChart || state.roleMode === 'operator' },
+    { id: 'exclusions', label: 'Exclusions', description: 'Audited exclusions and restore actions.', disabled: ctrl.isAttributeChart || state.roleMode === 'operator' },
+    { id: 'stratification', label: 'Stratification', description: 'Split the chart into comparison strata.', disabled: ctrl.stratumSections.length === 0 || state.roleMode === 'operator' },
+  ], [ctrl.isAttributeChart, ctrl.stratumSections.length, state.roleMode])
+
+  const primarySubtitle = ctrl.isAttributeChart
+    ? `${ctrl.chartFamilyLabel} · ${selectedMaterial?.material_name ?? selectedMaterial?.material_id ?? ''}`
+    : `${ctrl.chartFamilyLabel}${ctrl.stratifyLabel ? ` · Stratified by ${ctrl.stratifyLabel}` : ''}`
+
+  const primaryCapability = ctrl.capabilityHeadline?.value ?? null
+
+  const handleExcludeAssist = () => {
+    setActionNote(
+      ctrl.isAttributeChart
+        ? 'Exclusion request recorded. Attribute-chart point removal will connect to the backend audit workflow in the next iteration.'
+        : 'Exclusion request recorded. Click any chart point to exclude or restore it, and the audit trail will carry the justification you just entered.',
+    )
+  }
+
+  const handleAnnotate = () => {
+    setActionNote('Annotation threads are staged for the next iteration. For now, use the exclusion audit trail and exported evidence package.')
+  }
 
   if (!selectedMaterial) {
     return (
@@ -139,73 +234,8 @@ export default function ControlChartsView() {
     )
   }
 
-  // ── Action rail (export buttons) ───────────────────────────────────────
-
-  const actionRail = ctrl.isAttributeChart ? null : (
-    <>
-      <button
-        className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-        disabled={ctrl.exporting}
-        onClick={() => ctrl.exportData({
-          export_type: 'excel',
-          export_scope: 'chart_data',
-          material_id: selectedMaterial.material_id,
-          mic_id: selectedMIC.mic_id,
-          plant_id: selectedPlant?.plant_id ?? null,
-          date_from: dateFrom || null,
-          date_to: dateTo || null,
-        })}
-        aria-label="Export current chart analysis to Excel"
-      >
-        {ctrl.exporting ? 'Exporting…' : 'Export Excel'}
-      </button>
-      <button
-        className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-        onClick={() => window.print()}
-        aria-label="Print the current chart view or save as PDF"
-      >
-        Print / PDF
-      </button>
-    </>
-  )
-
-  // ── Attribute chart layout ─────────────────────────────────────────────
-
-  if (ctrl.isAttributeChart) {
-    return (
-      <div className={chartsLayoutClass}>
-        <ChartSummaryBar
-          title={selectedMIC.mic_name || selectedMIC.mic_id}
-          materialName={selectedMaterial.material_name || selectedMaterial.material_id}
-          inspectionMethod={selectedMIC.inspection_method}
-          chartFamilyLabel={ctrl.chartFamilyLabel}
-          totalSignals={0}
-          exclusionCount={0}
-          capabilityHeadline={null}
-          capabilityHeadlineLabel={null}
-          stratifyLabel={ctrl.stratifyLabel}
-          quantNormality={null}
-          ruleSet={state.ruleSet}
-          actionRail={null}
-        />
-        <div className={chartsMainClass}>
-          <Suspense fallback={<LoadingSkeleton minHeight="520px" message="Loading chart…" />}>
-            {ctrl.attrChartType === 'p_chart' && <PChart points={ctrl.attrPoints} />}
-            {ctrl.attrChartType === 'c_chart' && <CChart points={ctrl.countPoints} />}
-            {ctrl.attrChartType === 'u_chart' && <UChart points={ctrl.countPoints} />}
-            {ctrl.attrChartType === 'np_chart' && <NPChart points={ctrl.countPoints} />}
-          </Suspense>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Quantitative chart layout ──────────────────────────────────────────
-
   return (
-    <div className={chartsLayoutClass} aria-live="polite" aria-busy="false">
-
-      {/* ── Scope summary bar ── */}
+    <div className="space-y-6" aria-live="polite" aria-busy="false">
       <ChartSummaryBar
         title={selectedMIC.mic_name || selectedMIC.mic_id}
         materialName={selectedMaterial.material_name || selectedMaterial.material_id}
@@ -216,9 +246,9 @@ export default function ControlChartsView() {
         capabilityHeadline={ctrl.capabilityHeadline?.value ?? null}
         capabilityHeadlineLabel={ctrl.capabilityHeadline?.label ?? null}
         stratifyLabel={ctrl.stratifyLabel}
-        quantNormality={ctrl.quantNormality}
+        quantNormality={ctrl.isAttributeChart ? null : ctrl.quantNormality}
         ruleSet={state.ruleSet}
-        actionRail={actionRail}
+        actionRail={null}
         lockedLimits={ctrl.lockedLimits}
         limitsMode={limitsMode}
         onExclusionClick={ctrl.exclusionCount > 0
@@ -226,7 +256,6 @@ export default function ControlChartsView() {
           : undefined}
       />
 
-      {/* ── Contextual banners ── */}
       <ChartInfoBanners
         lockedLimitsError={ctrl.lockedLimitsError}
         exclusionsError={ctrl.exclusionsError}
@@ -235,126 +264,179 @@ export default function ControlChartsView() {
         exclusionAudit={state.exclusionAudit}
       />
 
-      {/* ── Chart workspace: settings rail + main chart + evidence rail ── */}
-      <div className={chartsWorkspaceClass}>
-        <div className={sideStackClass}>
-          <ChartSettingsRail
-            ruleSet={state.ruleSet}
-            onRuleSetChange={value => dispatch({ type: 'SET_RULE_SET', payload: value })}
-            selectedMicChartType={selectedMIC.chart_type}
-            chartTypeOverride={state.chartTypeOverride}
-            onChartTypeOverride={value => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: value })}
-            attrChartType={ctrl.attrChartType}
-            onAttrChartTypeChange={ctrl.setAttrChartType}
-            isAttributeChart={false}
-            lockedLimits={ctrl.lockedLimits}
-            limitsMode={limitsMode}
-            onLimitsMode={value => dispatch({ type: 'SET_LIMITS_MODE', payload: value })}
-            canLockLimits={ctrl.canLockLimits}
-            onLockLimits={ctrl.handleLockLimits}
-            onDeleteLock={ctrl.handleDeleteLock}
-            quantPoints={ctrl.quantPoints}
-            excludeOutliers={state.excludeOutliers}
-            onToggleExcludeOutliers={() => dispatch({ type: 'TOGGLE_EXCLUDE_OUTLIERS' })}
-            exclusionCount={ctrl.exclusionCount}
-            exclusionsSaving={ctrl.exclusionsSaving}
-            onRestoreAll={ctrl.handleRestoreAll}
-            canAutoClean={(ctrl.spc?.indexedPoints?.length ?? 0) > 0}
-            onAutoClean={ctrl.handleAutoClean}
+      <div className="flex flex-col gap-6 xl:flex-row">
+        <aside className="w-full shrink-0 space-y-4 xl:sticky xl:top-24 xl:w-72 xl:self-start">
+          <PanelSelector
+            availablePanels={availablePanels}
+            visiblePanels={visiblePanels}
+            onToggle={togglePanel}
+            stratifyLabel={ctrl.stratifyLabel}
           />
-          <div className={chartsMainClass}>
-            {ctrl.spc
-              ? renderQuantitativeChart(ctrl.spc, ctrl.externalLimits, excludedIndices, ctrl.handlePointClick)
-              : null}
-          </div>
-        </div>
 
-        {/* ── Evidence rail ── */}
-        <div className={evidenceRailClass}>
-          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-            <CapabilityPanel spc={ctrl.spc} />
-          </Suspense>
-          <div ref={excludedPanelRef}>
-            <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-              <ExcludedPointsPanel
-                snapshot={ctrl.exclusionsSnapshot ?? state.exclusionAudit}
-                currentPoints={ctrl.currentExcludedPoints}
-                onRestorePoint={ctrl.handleRestorePoint}
-                onRestoreAll={ctrl.handleRestoreAll}
-                saving={ctrl.exclusionsSaving}
-              />
-            </Suspense>
-          </div>
-          <div className={heroCardDenseClass}>
-            <div className={rollingHeaderClass}>
-              <div className={rollingTitleClass}>Interpretation guide</div>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
-              Establish stability first, then interpret capability. Signals point to assignable causes;
-              exclusions and locked limits are preserved as audit evidence for the active chart scope.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom row: signals + rolling capability ── */}
-      <div className={chartsBottomClass}>
-        <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-          <SignalsPanel
-            signals={ctrl.spc?.signals}
-            mrSignals={ctrl.spc?.mrSignals}
-            indexedPoints={ctrl.spc?.indexedPoints}
-            ruleSet={state.ruleSet}
-          />
-        </Suspense>
-        <div className={rollingPanelClass}>
-          <div className={rollingHeaderClass}>
-            <div className={rollingTitleClass}>Capability storyline</div>
-            <label className={rollingWindowLabelClass}>
-              Window
-              <input
-                type="number"
-                min={5}
-                max={Math.max(5, ctrl.spc?.sorted?.length ?? 5)}
-                value={ctrl.rollingWindowSize}
-                className={rollingWindowInputClass}
-                onChange={event => {
-                  const next = Number(event.target.value)
-                  if (Number.isFinite(next) && next >= 5) ctrl.setRollingWindowSize(next)
-                }}
-              />
-            </label>
-          </div>
-          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-            <CapabilityTrendChart trendData={ctrl.trendData} windowSize={ctrl.rollingWindowSize} />
-          </Suspense>
-        </div>
-      </div>
-
-      {/* ── Stratification panels ── */}
-      <StratificationPanel
-        micLabel={selectedMIC.mic_name || selectedMIC.mic_id}
-        stratifyBy={state.stratifyBy ?? ''}
-        sections={ctrl.stratumSections}
-        renderChart={sectionSpc => renderQuantitativeChart(sectionSpc, null, new Set<number>())}
-        renderSignals={sectionSpc => (
-          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-            <SignalsPanel
-              signals={sectionSpc.signals}
-              mrSignals={sectionSpc.mrSignals}
-              indexedPoints={sectionSpc.indexedPoints}
+          {state.roleMode === 'engineer' ? (
+            <ChartSettingsRail
               ruleSet={state.ruleSet}
+              onRuleSetChange={value => dispatch({ type: 'SET_RULE_SET', payload: value })}
+              selectedMicChartType={selectedMIC.chart_type}
+              chartTypeOverride={state.chartTypeOverride}
+              onChartTypeOverride={value => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: value })}
+              attrChartType={ctrl.attrChartType}
+              onAttrChartTypeChange={ctrl.setAttrChartType}
+              isAttributeChart={ctrl.isAttributeChart}
+              lockedLimits={ctrl.lockedLimits}
+              limitsMode={limitsMode}
+              onLimitsMode={value => dispatch({ type: 'SET_LIMITS_MODE', payload: value })}
+              canLockLimits={ctrl.canLockLimits}
+              onLockLimits={ctrl.handleLockLimits}
+              onDeleteLock={ctrl.handleDeleteLock}
+              quantPoints={ctrl.quantPoints}
+              excludeOutliers={state.excludeOutliers}
+              onToggleExcludeOutliers={() => dispatch({ type: 'TOGGLE_EXCLUDE_OUTLIERS' })}
+              exclusionCount={ctrl.exclusionCount}
+              exclusionsSaving={ctrl.exclusionsSaving}
+              onRestoreAll={ctrl.handleRestoreAll}
+              canAutoClean={(ctrl.spc?.indexedPoints?.length ?? 0) > 0}
+              onAutoClean={ctrl.handleAutoClean}
             />
-          </Suspense>
-        )}
-        renderCapability={sectionSpc => (
-          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-            <CapabilityPanel spc={sectionSpc} />
-          </Suspense>
-        )}
-      />
+          ) : (
+            <div className="rounded-3xl border border-gray-200 bg-white p-5 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+              Operator mode keeps this view focused on live monitoring. Switch back to Engineer mode in the header to unlock rule tuning, limit controls, and the audit panels.
+            </div>
+          )}
+        </aside>
 
-      {/* ── Auto-clean log ── */}
+        <div className="min-w-0 flex-1 space-y-6">
+          {isVisible('primary') && (
+            <ChartCard
+              title={selectedMIC.mic_name || selectedMIC.mic_id}
+              subtitle={primarySubtitle}
+              cpk={primaryCapability}
+              note={actionNote}
+              onExcludePoint={handleExcludeAssist}
+              onExport={() => ctrl.exportData(exportPayload)}
+              onAnnotate={handleAnnotate}
+              exportLabel="Export Data"
+            >
+              {ctrl.isAttributeChart ? (
+                <Suspense fallback={<LoadingSkeleton minHeight="420px" message="Loading chart…" />}>
+                  {ctrl.attrChartType === 'p_chart' && <PChart points={ctrl.attrPoints} embedded />}
+                  {ctrl.attrChartType === 'c_chart' && <CChart points={ctrl.countPoints} embedded />}
+                  {ctrl.attrChartType === 'u_chart' && <UChart points={ctrl.countPoints} embedded />}
+                  {ctrl.attrChartType === 'np_chart' && <NPChart points={ctrl.countPoints} embedded />}
+                </Suspense>
+              ) : (
+                ctrl.spc
+                  ? renderQuantitativeChart(ctrl.spc, ctrl.externalLimits, excludedIndices, ctrl.handlePointClick, true)
+                  : null
+              )}
+            </ChartCard>
+          )}
+
+          {!ctrl.isAttributeChart && (
+            <>
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
+                {isVisible('capability') && (
+                  <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+                    <CapabilityPanel spc={ctrl.spc} />
+                  </Suspense>
+                )}
+
+                {isVisible('exclusions') && (
+                  <div ref={excludedPanelRef}>
+                    <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+                      <ExcludedPointsPanel
+                        snapshot={ctrl.exclusionsSnapshot ?? state.exclusionAudit}
+                        currentPoints={ctrl.currentExcludedPoints}
+                        onRestorePoint={ctrl.handleRestorePoint}
+                        onRestoreAll={ctrl.handleRestoreAll}
+                        saving={ctrl.exclusionsSaving}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+              </div>
+
+              {(!isVisible('capability') && !isVisible('exclusions')) && (
+                <div className={heroCardDenseClass}>
+                  <div className="text-sm font-semibold text-[var(--c-text)]">Interpretation guide</div>
+                  <p className="mt-2 text-sm leading-6 text-[var(--c-text-muted)]">
+                    Establish stability first, then interpret capability. Signals point to assignable causes, while exclusions and locked limits preserve the audit trail for this chart scope.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                {isVisible('signals') && (
+                  <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+                    <SignalsPanel
+                      signals={ctrl.spc?.signals}
+                      mrSignals={ctrl.spc?.mrSignals}
+                      indexedPoints={ctrl.spc?.indexedPoints}
+                      ruleSet={state.ruleSet}
+                    />
+                  </Suspense>
+                )}
+
+                {isVisible('trend') && (
+                  <ChartCard
+                    title="Capability Storyline"
+                    subtitle={`Rolling window ${ctrl.rollingWindowSize} observations`}
+                    cpk={primaryCapability}
+                    onExport={() => ctrl.exportData(exportPayload)}
+                    onAnnotate={handleAnnotate}
+                    exportLabel="Export Data"
+                  >
+                    <div className="mb-4 flex items-center justify-end">
+                      <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        Window
+                        <input
+                          type="number"
+                          min={5}
+                          max={Math.max(5, ctrl.spc?.sorted?.length ?? 5)}
+                          value={ctrl.rollingWindowSize}
+                          className="w-20 rounded-xl border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                          onChange={event => {
+                            const next = Number(event.target.value)
+                            if (Number.isFinite(next) && next >= 5) ctrl.setRollingWindowSize(next)
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <Suspense fallback={<LoadingSkeleton minHeight="220px" message="Loading panel…" />}>
+                      <CapabilityTrendChart trendData={ctrl.trendData} windowSize={ctrl.rollingWindowSize} />
+                    </Suspense>
+                  </ChartCard>
+                )}
+              </div>
+
+              {isVisible('stratification') && ctrl.stratumSections.length > 0 && (
+                <StratificationPanel
+                  micLabel={selectedMIC.mic_name || selectedMIC.mic_id}
+                  stratifyBy={state.stratifyBy ?? ''}
+                  sections={ctrl.stratumSections}
+                  renderChart={sectionSpc => renderQuantitativeChart(sectionSpc, null, new Set<number>(), undefined, true)}
+                  renderSignals={sectionSpc => (
+                    <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+                      <SignalsPanel
+                        signals={sectionSpc.signals}
+                        mrSignals={sectionSpc.mrSignals}
+                        indexedPoints={sectionSpc.indexedPoints}
+                        ruleSet={state.ruleSet}
+                      />
+                    </Suspense>
+                  )}
+                  renderCapability={sectionSpc => (
+                    <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+                      <CapabilityPanel spc={sectionSpc} />
+                    </Suspense>
+                  )}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
       {ctrl.autoCleanLog && (
         <div className={autoCleanLogClass}>
           <div className={autoCleanHeaderClass}>
@@ -383,7 +465,6 @@ export default function ControlChartsView() {
         </div>
       )}
 
-      {/* ── Exclusion justification modal ── */}
       <Suspense fallback={null}>
         <ExclusionJustificationModal
           dialog={exclusionDialog}

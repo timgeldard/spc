@@ -2,23 +2,31 @@ import { useMemo } from 'react'
 import { XbarRChart as IndustrialXbarRChart } from '../../components/charts'
 import type { XbarRChartProps } from '../types'
 
-export default function XbarRChart({ spc, signals = [], mrSignals = [], externalLimits }: XbarRChartProps) {
+export default function XbarRChart({ spc, signals = [], mrSignals = [], externalLimits, embedded = false }: XbarRChartProps) {
   const xbarR = spc?.xbarR
 
-  const signalIndexSet = useMemo(() => {
-    const set = new Set<number>()
+  const signalMap = useMemo(() => {
+    const map = new Map<number, string[]>()
     for (const signal of signals) {
-      for (const idx of signal.indices) set.add(idx)
+      for (const idx of signal.indices) {
+        const entries = map.get(idx) ?? []
+        entries.push(`Rule ${signal.rule}: ${signal.description ?? 'Signal detected'}`)
+        map.set(idx, entries)
+      }
     }
-    return set
+    return map
   }, [signals])
 
-  const mrSignalIndexSet = useMemo(() => {
-    const set = new Set<number>()
+  const mrSignalMap = useMemo(() => {
+    const map = new Map<number, string[]>()
     for (const signal of mrSignals) {
-      for (const idx of signal.indices) set.add(idx)
+      for (const idx of signal.indices) {
+        const entries = map.get(idx) ?? []
+        entries.push(`Range Rule ${signal.rule}: ${signal.description ?? 'Range signal detected'}`)
+        map.set(idx, entries)
+      }
     }
-    return set
+    return map
   }, [mrSignals])
 
   const chartData = useMemo(() => {
@@ -29,12 +37,14 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
       range: stat.range,
       batchId: stat.batchId,
       subgroupSize: stat.n,
-      isSignal: signalIndexSet.has(index),
-      isRangeSignal: mrSignalIndexSet.has(index),
+      isSignal: signalMap.has(index),
+      isRangeSignal: mrSignalMap.has(index),
+      signalSummary: signalMap.get(index)?.join(' • ') ?? mrSignalMap.get(index)?.join(' • ') ?? null,
+      detailSummary: `Subgroup size ${stat.n}${stat.batchId ? ` • ${stat.batchId}` : ''}`,
       uclX: stat.ucl_x,
       lclX: stat.lcl_x,
     }))
-  }, [mrSignalIndexSet, signalIndexSet, xbarR])
+  }, [mrSignalMap, signalMap, xbarR])
 
   if (!xbarR || !chartData.length) return null
 
@@ -48,6 +58,7 @@ export default function XbarRChart({ spc, signals = [], mrSignals = [], external
       rangeLcl={externalLimits?.lcl_r ?? xbarR.lcl_r}
       rangeTarget={xbarR.rBar}
       title="X-bar & R Chart"
+      embedded={embedded}
     />
   )
 }

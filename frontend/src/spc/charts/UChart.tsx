@@ -29,7 +29,11 @@ interface UChartResult {
   signals?: unknown[]
 }
 
-export default function UChart({ points }: ChartPaneProps) {
+interface UChartViewProps extends ChartPaneProps {
+  embedded?: boolean
+}
+
+export default function UChart({ points, embedded = false }: UChartViewProps) {
   const mappedPoints = useMemo(
     () =>
       points.map(p => ({
@@ -91,14 +95,22 @@ export default function UChart({ points }: ChartPaneProps) {
             value: s.u,
             itemStyle: { color: (s.u > s.ucl || s.u < s.lcl) ? '#ef4444' : '#1B3A4B' },
           })),
-          lineStyle: { color: '#1B3A4B', width: 2 },
+          lineStyle: { color: '#1B3A4B', width: 2.4 },
           showSymbol: true,
-          symbolSize: 5,
+          symbolSize: 6,
+          markPoint: {
+            symbol: 'circle',
+            symbolSize: 12,
+            itemStyle: { color: '#ef4444' },
+            data: subgroupStats
+              .map((s, index) => (s.u > s.ucl || s.u < s.lcl ? { coord: [categories[index], s.u], value: s.u } : null))
+              .filter(Boolean),
+          },
           markLine: {
             silent: true,
             symbol: ['none', 'none'],
             data: [
-              { yAxis: uBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `ū ${uBar.toFixed(3)}`, position: 'end', fontSize: 10 } },
+              { yAxis: uBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2.2 }, label: { formatter: `ū ${uBar.toFixed(3)}`, position: 'end', fontSize: 10 } },
             ],
           },
         },
@@ -106,7 +118,7 @@ export default function UChart({ points }: ChartPaneProps) {
           name: 'UCL',
           type: 'line',
           data: subgroupStats.map(s => +(s.ucl.toFixed(4))),
-          lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 },
+          lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 },
           symbol: 'none',
           tooltip: { show: false },
         },
@@ -114,7 +126,7 @@ export default function UChart({ points }: ChartPaneProps) {
           name: 'LCL',
           type: 'line',
           data: subgroupStats.map(s => +(Math.max(0, s.lcl).toFixed(4))),
-          lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 },
+          lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 },
           symbol: 'none',
           tooltip: { show: false },
         },
@@ -126,6 +138,10 @@ export default function UChart({ points }: ChartPaneProps) {
 
   const oocCount = chart.signals?.length ?? 0
 
+  const chartNode = <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="U chart — defects per unit" />
+
+  if (embedded) return chartNode
+
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>
@@ -134,7 +150,7 @@ export default function UChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="U chart — defects per unit" />
+      {chartNode}
       <p className={chartHintClass}>
         ū = {chart.uBar.toFixed(4)} · Variable limits per inspection unit count
       </p>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer } from 'react'
+import { createContext, useContext, useEffect, useReducer } from 'react'
 import type { SPCAction, SPCContextValue, SPCProviderProps, SPCState } from './types'
 
 const SPCContext = createContext<SPCContextValue | null>(null)
@@ -7,9 +7,11 @@ const SPCContext = createContext<SPCContextValue | null>(null)
 const PREF_RULE_SET = 'spc_rule_set'
 const PREF_EXCLUDE_OUTLIERS = 'spc_exclude_outliers'
 const PREF_LIMITS_MODE = 'spc_limits_mode'
+const PREF_ROLE_MODE = 'spc_role_mode'
+const PREF_SAVED_VIEWS = 'spc_saved_views'
 
 // ── URL param keys ────────────────────────────────────────────────────────────
-const VALID_TABS = ['flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation'] as const
+const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation'] as const
 
 function getPref(key: string): string | null {
   try { return localStorage.getItem(key) } catch { return null }
@@ -38,7 +40,13 @@ function buildInitialState(): SPCState {
     selectedMIC: null,
     dateFrom,
     dateTo,
-    activeTab: 'flow',
+    activeTab: 'overview',
+    globalSearch: '',
+    isLoading: false,
+    savedViews: [],
+    roleMode: 'engineer',
+    kpis: { processHealth: 0, avgCpk: 0, oocPoints: 0, affectedBatches: 0 },
+    recentViolations: [],
     chartTypeOverride: null,
     excludedIndices: new Set<number>(),
     ruleSet: 'weco',
@@ -56,6 +64,17 @@ function buildInitialState(): SPCState {
   if (excludeOutliers !== null) state.excludeOutliers = excludeOutliers === 'true'
   const limitsMode = getPref(PREF_LIMITS_MODE)
   if (limitsMode === 'live' || limitsMode === 'locked') state.limitsMode = limitsMode
+  const roleMode = getPref(PREF_ROLE_MODE)
+  if (roleMode === 'operator' || roleMode === 'engineer') state.roleMode = roleMode
+  const savedViews = getPref(PREF_SAVED_VIEWS)
+  if (savedViews) {
+    try {
+      const parsed = JSON.parse(savedViews)
+      if (Array.isArray(parsed)) state.savedViews = parsed
+    } catch {
+      state.savedViews = []
+    }
+  }
 
   // Apply URL-encoded analysis context
   try {
@@ -97,6 +116,10 @@ function buildInitialState(): SPCState {
     if (to) state.dateTo = to
   } catch { /* no window.location (e.g., test environment) */ }
 
+  if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation'].includes(state.activeTab)) {
+    state.activeTab = 'overview'
+  }
+
   return state
 }
 
@@ -107,7 +130,13 @@ export const initialState: SPCState = {
   selectedMIC: null,
   dateFrom: '',
   dateTo: '',
-  activeTab: 'flow',
+  activeTab: 'overview',
+  globalSearch: '',
+  isLoading: false,
+  savedViews: [],
+  roleMode: 'engineer',
+  kpis: { processHealth: 0, avgCpk: 0, oocPoints: 0, affectedBatches: 0 },
+  recentViolations: [],
   chartTypeOverride: null,
   excludedIndices: new Set<number>(),
   ruleSet: 'weco',
@@ -161,6 +190,44 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         exclusionAudit: null,
         exclusionDialog: null,
       }
+    case 'SET_GLOBAL_SEARCH':
+      return { ...state, globalSearch: action.payload }
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload }
+    case 'SET_ROLE_MODE': {
+      const nextTab = action.payload === 'operator' && ['compare', 'msa', 'correlation'].includes(state.activeTab)
+        ? 'overview'
+        : state.activeTab
+      return { ...state, roleMode: action.payload, activeTab: nextTab }
+    }
+    case 'SET_KPIS':
+      return { ...state, kpis: action.payload }
+    case 'SET_RECENT_VIOLATIONS':
+      return { ...state, recentViolations: action.payload }
+    case 'ADD_SAVED_VIEW':
+      return {
+        ...state,
+        savedViews: [action.payload, ...state.savedViews.filter(view => view.id !== action.payload.id)].slice(0, 8),
+      }
+    case 'APPLY_SAVED_VIEW': {
+      const nextTab = state.roleMode === 'operator' && ['compare', 'msa', 'correlation'].includes(action.payload.activeTab)
+        ? 'overview'
+        : action.payload.activeTab
+      return {
+        ...state,
+        selectedMaterial: action.payload.selectedMaterial,
+        selectedPlant: action.payload.selectedPlant,
+        selectedMIC: action.payload.selectedMIC,
+        dateFrom: action.payload.dateFrom,
+        dateTo: action.payload.dateTo,
+        activeTab: nextTab,
+        globalSearch: action.payload.globalSearch,
+        stratifyBy: action.payload.stratifyBy,
+        excludedIndices: new Set<number>(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
+    }
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload }
     case 'SET_CHART_TYPE_OVERRIDE':
@@ -226,6 +293,16 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
 
 export function SPCProvider({ children }: SPCProviderProps) {
   const [state, dispatch] = useReducer(reducer, null, buildInitialState)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREF_ROLE_MODE, state.roleMode)
+      localStorage.setItem(PREF_SAVED_VIEWS, JSON.stringify(state.savedViews))
+    } catch {
+      // Ignore localStorage persistence errors in constrained environments.
+    }
+  }, [state.roleMode, state.savedViews])
+
   return (
     <SPCContext.Provider value={{ state, dispatch }}>
       {children}
@@ -240,4 +317,4 @@ export function useSPC(): SPCContextValue {
 }
 
 // ── Preference key constants (used by useSPCPreferences hook) ────────────────
-export { PREF_RULE_SET, PREF_EXCLUDE_OUTLIERS, PREF_LIMITS_MODE }
+export { PREF_RULE_SET, PREF_EXCLUDE_OUTLIERS, PREF_LIMITS_MODE, PREF_ROLE_MODE, PREF_SAVED_VIEWS }
