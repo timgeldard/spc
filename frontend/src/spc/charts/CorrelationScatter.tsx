@@ -118,7 +118,7 @@ export default function CorrelationScatter({ result, loading, error }: Correlati
 
   return (
     <div className={surfacePanelClass}>
-      <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge ariaLabel="Scatter plot for selected characteristic pair" />
     </div>
   )
 }

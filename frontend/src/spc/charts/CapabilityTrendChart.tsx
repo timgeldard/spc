@@ -87,5 +87,5 @@ export default function CapabilityTrendChart({ trendData, windowSize }: Capabili
     )
   }
 
-  return <EChart option={option} style={{ height: 220, width: '100%' }} theme="spc" />
+  return <EChart option={option} style={{ height: 220, width: '100%' }} theme="spc" ariaLabel="Capability trend chart — Ppk over rolling time windows" />
 }

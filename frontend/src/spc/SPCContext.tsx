@@ -188,7 +188,13 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
     case 'CLEAR_EXCLUSION_AUDIT':
       return { ...state, exclusionAudit: null }
     case 'SET_RULE_SET':
-      return { ...state, ruleSet: action.payload, exclusionDialog: null }
+      return {
+        ...state,
+        ruleSet: action.payload,
+        excludedIndices: new Set<number>(),
+        exclusionAudit: null,
+        exclusionDialog: null,
+      }
     case 'TOGGLE_EXCLUDE_OUTLIERS':
       return { ...state, excludeOutliers: !state.excludeOutliers }
     case 'SET_EXCLUSIONS':

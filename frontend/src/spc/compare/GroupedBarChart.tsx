@@ -97,5 +97,5 @@ export default function GroupedBarChart({ materials, commonMics }: GroupedBarCha
 
   if (!option) return <div className={emptyCardClass}><p>No common characteristics to compare.</p></div>
 
-  return <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge />
+  return <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge ariaLabel="Grouped comparison bar chart — capability across materials" />
 }

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import { useSPC } from '../SPCContext'
-import { chartHintClass, emptyStateClass, surfacePanelClass } from '../uiClasses'
+import { chartHintClass, surfacePanelClass } from '../uiClasses'
 import type { CapabilityMatrixDatum, CapabilityMatrixProps, EventParamLike, ScorecardRow } from '../types'
+import ModuleEmptyState from '../components/ModuleEmptyState'
 
 /**
  * Bubble chart: X = Ppk, Y = stability (1 - ooc_rate), size = batch_count.
@@ -124,12 +125,12 @@ export default function CapabilityMatrix({ rows }: CapabilityMatrixProps) {
   }), [dispatch])
 
   if (!data.length || !option) {
-    return <div className={emptyStateClass}><p>No capability data available for matrix view.</p></div>
+    return <ModuleEmptyState icon="⬡" title="No data" description="No capability data available for matrix view." />
   }
 
   return (
     <div className={surfacePanelClass}>
-      <EChart option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge />
+      <EChart option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge ariaLabel="Capability matrix — bubble size represents batch count, colour represents Ppk" />
       <p className={chartHintClass}>
         Bubble size = batch count · Click a bubble to open the control chart · Green = Capable &amp; Stable
       </p>

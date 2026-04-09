@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useSPC } from './SPCContext'
 import { useValidateMaterial } from './hooks/useMaterials'
 import { usePlants } from './hooks/usePlants'
@@ -21,8 +21,6 @@ import {
   filterSectionClass,
   filterStepBodyClass,
   filterStepClass,
-  filterStepNumClass,
-  filterStepNumInactiveClass,
   filterValueClass,
   selectClass,
 } from './uiClasses'
@@ -36,15 +34,20 @@ function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'mic_name'> | null | undef
   return JSON.stringify({ mic_id: mic.mic_id, mic_name: mic.mic_name ?? null })
 }
 
+/** YYYY-MM-DD in local time (avoids toISOString UTC shift in negative-offset timezones) */
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 /** Default date range: last 12 months from today */
 function defaultDateRange(): { from: string; to: string } {
   const to = new Date()
   const from = new Date(to)
   from.setFullYear(from.getFullYear() - 1)
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  }
+  return { from: toLocalDateString(from), to: toLocalDateString(to) }
 }
 
 export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
@@ -55,6 +58,8 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
     state.selectedMaterial?.material_id,
     state.selectedPlant?.plant_id,
   )
+  const [collapsed, setCollapsed] = useState(false)
+  const prevMICRef = useRef<string | null>(null)
 
   const allCharacteristics = useMemo(
     () =>
@@ -107,6 +112,15 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       dispatch({ type: 'SET_MIC', payload: null })
     }
   }, [allCharacteristics, charsLoading, dispatch, state.selectedMIC])
+
+  // Auto-collapse when a MIC is freshly selected
+  useEffect(() => {
+    const micId = state.selectedMIC?.mic_id ?? null
+    if (micId && micId !== prevMICRef.current) {
+      setCollapsed(true)
+    }
+    prevMICRef.current = micId
+  }, [state.selectedMIC?.mic_id])
 
   const handleValidate = async () => {
     const trimmed = inputValue.trim()
@@ -161,6 +175,43 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   const scopeReady = Boolean(state.selectedMaterial)
   const timeReady = Boolean(state.dateFrom || state.dateTo)
 
+  const canCollapse = Boolean(state.selectedMaterial && state.selectedMIC)
+
+  if (canCollapse && collapsed) {
+    const micLabel = state.selectedMIC?.mic_name || state.selectedMIC?.mic_id || ''
+    const matLabel = state.selectedMaterial?.material_name || state.selectedMaterial?.material_id || ''
+    const plantLabel = state.selectedPlant ? ` · ${state.selectedPlant.plant_name || state.selectedPlant.plant_id}` : ''
+    const dateLabel = state.dateFrom && state.dateTo
+      ? ` · ${state.dateFrom} → ${state.dateTo}`
+      : state.dateFrom
+        ? ` · From ${state.dateFrom}`
+        : ''
+    return (
+      <div
+        className={embedded ? '' : 'border-b border-[var(--c-border)] bg-[var(--c-surface)] px-6 py-2'}
+        aria-label="SPC analysis filters (collapsed)"
+      >
+        <button
+          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[var(--c-text-muted)] hover:bg-slate-50 hover:text-[var(--c-text)] transition-colors text-left"
+          onClick={() => setCollapsed(false)}
+          aria-label="Edit analysis filters"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="shrink-0 text-[var(--c-brand)]">
+            <path d="M1 3h12M3 7h8M5 11h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span className="font-medium text-[var(--c-text)]">{matLabel}</span>
+          <span className="text-[var(--c-border)]">·</span>
+          <span>{micLabel}</span>
+          {plantLabel && <><span className="text-[var(--c-border)]">·</span><span>{state.selectedPlant?.plant_name || state.selectedPlant?.plant_id}</span></>}
+          {dateLabel && <span className="text-xs opacity-70">{dateLabel}</span>}
+          <span className="ml-auto shrink-0 rounded border border-[var(--c-border)] px-2 py-0.5 text-xs hover:border-[var(--c-brand)] hover:text-[var(--c-brand)] transition-colors">
+            Edit
+          </span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div
       className={embedded ? 'grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]' : filterBarClass}
@@ -169,7 +220,6 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       <div className={filterSectionClass}>
         <div className={filterCardClass}>
           <div className={filterStepClass}>
-            <span className={filterStepNumClass} aria-hidden="true">1</span>
             <div className={filterStepBodyClass}>
               <div className={filterGroupClass}>
                 <label className={filterLabelClass} htmlFor="spc-material">Material</label>
@@ -243,7 +293,6 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
         {/* ── Step 2: Scope (Plant + MIC) ─────────────────────────── */}
         <div className={filterCardClass}>
           <div className={filterStepClass}>
-            <span className={scopeReady ? filterStepNumClass : filterStepNumInactiveClass} aria-hidden="true">2</span>
             <div className={filterStepBodyClass}>
               <div className={filterGroupClass}>
                 <label className={filterLabelClass} htmlFor="spc-plant">Plant</label>
@@ -284,7 +333,6 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
 
         <div className={filterCardClass}>
           <div className={filterStepClass}>
-            <span className={scopeReady ? filterStepNumClass : filterStepNumInactiveClass} aria-hidden="true">3</span>
             <div className={filterStepBodyClass}>
               <div className={filterGroupClass}>
                 <label className={filterLabelClass} htmlFor="spc-mic">Characteristic (MIC)</label>
@@ -332,7 +380,6 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
         {state.selectedMaterial && (
           <div className={filterCardClass}>
             <div className={filterStepClass}>
-              <span className={filterStepNumClass} aria-hidden="true">4</span>
               <div className={filterStepBodyClass}>
                 <div className={filterGroupClass}>
                   <label className={filterLabelClass} htmlFor="spc-stratify-by">Stratify By</label>
@@ -364,12 +411,51 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className={filterCardClass}>
           <div className={filterStepClass}>
-            <span className={scopeReady ? filterStepNumClass : filterStepNumInactiveClass} aria-hidden="true">
-              {state.selectedMaterial ? '5' : '2'}
-            </span>
             <div className={filterStepBodyClass}>
               <div className={filterGroupClass}>
                 <span className={filterLabelClass}>Date window</span>
+                <div className="flex flex-wrap gap-1">
+                  {([
+                    { label: '30d', days: 30 },
+                    { label: '90d', days: 90 },
+                    { label: '6m', days: 183 },
+                    { label: '1y', days: 365 },
+                    {
+                      label: 'YTD',
+                      getRange: () => {
+                        const now = new Date()
+                        return { from: toLocalDateString(new Date(now.getFullYear(), 0, 1)), to: toLocalDateString(now) }
+                      },
+                    },
+                  ] as Array<{ label: string; days?: number; getRange?: () => { from: string; to: string } }>).map(preset => {
+                    const getPresetRange = () => {
+                      if (preset.getRange) return preset.getRange()
+                      const to = new Date()
+                      const from = new Date(to)
+                      from.setDate(from.getDate() - preset.days!)
+                      return { from: toLocalDateString(from), to: toLocalDateString(to) }
+                    }
+                    const range = getPresetRange()
+                    const isActive = state.dateFrom === range.from && state.dateTo === range.to
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() => {
+                          dispatch({ type: 'SET_DATE_FROM', payload: range.from })
+                          dispatch({ type: 'SET_DATE_TO', payload: range.to })
+                        }}
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                          isActive
+                            ? 'bg-[var(--c-brand)] text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                        aria-pressed={isActive}
+                      >
+                        {preset.label}
+                      </button>
+                    )
+                  })}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className={filterGroupClass}>
                     <label className={filterLabelClass} htmlFor="spc-date-from">From</label>
@@ -395,7 +481,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
                 </div>
                 <span id="spc-date-help" className={fieldHelpClass}>
                   {!timeReady
-                    ? `Default: last 12 months (${defaults.from} → ${defaults.to}). Narrow the window to isolate a specific investigation period.`
+                    ? `Default: last 12 months (${defaults.from} to ${defaults.to}). Narrow the window to isolate a specific investigation period.`
                     : 'Custom date window active — capability and rule calculations apply to this period only.'}
                 </span>
               </div>

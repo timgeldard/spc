@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback } from 'react'
+import React, { useEffect, useCallback } from 'react'
 import {
   Background,
   Controls,
@@ -102,13 +102,8 @@ export default function ProcessFlowView() {
     state.dateTo,
   )
 
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => buildFlowElements(flowData?.nodes, flowData?.edges),
-    [flowData],
-  )
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   // Sync when flow data changes
   useEffect(() => {

@@ -1,10 +1,9 @@
-import { Suspense, lazy, useEffect, useRef, useState, type ComponentType, type LazyExoticComponent } from 'react'
+import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   GitBranch, Activity, BarChart2, Layers, Ruler, TrendingUp, type LucideIcon,
 } from 'lucide-react'
 import { AppShell } from '../components/layout'
-import { Card, CardContent, MetadataLabel, StatusBadge } from '../components/ui'
 import { SPCProvider, useSPC } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
 import SPCFilterBar from './SPCFilterBar'
@@ -62,69 +61,12 @@ interface SPCPageProps {
   onToggleDark?: () => void
 }
 
-function ScopeSummaryStrip() {
-  const { state } = useSPC()
-  const scopeCount = [
-    state.selectedMaterial,
-    state.selectedPlant,
-    state.selectedMIC,
-    state.dateFrom && state.dateTo,
-  ].filter(Boolean).length
 
-  const activeModuleLabel = TABS.find(tab => tab.id === state.activeTab)?.label ?? 'SPC'
-  const chartModeLabel = state.selectedMIC?.chart_type === 'p_chart'
-    ? 'Attribute'
-    : state.selectedMIC?.chart_type === 'xbar_r'
-      ? 'Subgroup'
-      : state.selectedMIC
-        ? 'Variable'
-        : 'Pending'
-  const exclusions = state.exclusionAudit?.excluded_count ?? state.excludedIndices.size
-
-  return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <Card variant="dark">
-        <CardContent className="space-y-3">
-          <MetadataLabel className="text-slate-400">Active Module</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-white">{activeModuleLabel}</div>
-          <StatusBadge status="healthy" label="Operational" />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3">
-          <MetadataLabel>Scope Completeness</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">{scopeCount}/4</div>
-          <StatusBadge
-            status={scopeCount >= 3 ? 'healthy' : scopeCount >= 2 ? 'warning' : 'critical'}
-            label={scopeCount >= 3 ? 'Analysis ready' : scopeCount >= 2 ? 'Needs refinement' : 'Scope incomplete'}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3">
-          <MetadataLabel>Analysis Mode</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{chartModeLabel}</div>
-          <StatusBadge
-            status={state.stratifyBy ? 'warning' : 'healthy'}
-            label={state.stratifyBy ? `Stratified by ${state.stratifyBy.replace('_', ' ')}` : 'Single view'}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3">
-          <MetadataLabel>Governance State</MetadataLabel>
-          <div className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">{exclusions}</div>
-          <StatusBadge
-            status={exclusions > 0 || state.limitsMode === 'locked' ? 'warning' : 'healthy'}
-            label={state.limitsMode === 'locked' ? 'Locked limits active' : exclusions > 0 ? 'Reviewed exclusions' : 'Live baseline'}
-          />
-        </CardContent>
-      </Card>
-    </div>
-  )
+function getTabUnavailableReason(tabId: TabId, state: SPCState): string | null {
+  if (!state.selectedMaterial) return 'Select a material first'
+  if (tabId === 'charts' && !state.selectedMIC) return 'Select a characteristic to view control charts'
+  if (tabId === 'msa' && !state.selectedMIC) return 'Select a characteristic to run MSA'
+  return null
 }
 
 function TabNavigation() {
@@ -132,19 +74,27 @@ function TabNavigation() {
 
   return (
     <div className="border-b border-slate-200 dark:border-slate-700">
-      <div className="flex flex-wrap gap-6">
+      <div role="tablist" aria-label="SPC analysis modules" className="flex flex-wrap gap-6">
         {TABS.map(tab => {
           const active = state.activeTab === tab.id
+          const unavailableReason = getTabUnavailableReason(tab.id, state)
+          const dimmed = !active && Boolean(unavailableReason)
           return (
             <button
               key={tab.id}
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={active}
+              aria-controls={`tabpanel-${tab.id}`}
+              title={dimmed ? unavailableReason ?? undefined : undefined}
               onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id })}
               className={`pb-4 px-1 font-medium text-sm border-b-2 transition-colors ${
                 active
                   ? 'border-slate-900 text-slate-900 dark:border-slate-100 dark:text-slate-100'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+                  : dimmed
+                    ? 'border-transparent text-slate-300 dark:text-slate-600 cursor-default'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
               }`}
-              aria-current={active ? 'page' : undefined}
             >
               {tab.label}
             </button>
@@ -160,24 +110,9 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
   useSPCUrlSync()
   useSPCPreferences()
   const ActiveView = TAB_COMPONENTS[state.activeTab]
-  const [tabTransitioning, setTabTransitioning] = useState(false)
-  const hasMountedRef = useRef(false)
 
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true
-      return
-    }
-    setTabTransitioning(true)
-    const timer = window.setTimeout(() => setTabTransitioning(false), 220)
-    return () => window.clearTimeout(timer)
-  }, [state.activeTab])
+  const shellItems = TABS.map(({ id, label, Icon }) => ({ id, label, icon: Icon }))
 
-  const shellItems = TABS.map(({ id, label, Icon }) => ({
-    id,
-    label: tabTransitioning && state.activeTab === id ? `${label} •` : label,
-    icon: Icon,
-  }))
   return (
     <AppShell
       dark={dark}
@@ -188,16 +123,21 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
       filterBar={<SPCFilterBar embedded />}
     >
       <div className={`${pageShellClass} min-h-0 bg-transparent gap-5`}>
-        <ScopeSummaryStrip />
         <TabNavigation />
         <SPCPageHeader />
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 p-1 shadow-sm">
+        <div
+          role="tabpanel"
+          id={`tabpanel-${state.activeTab}`}
+          aria-labelledby={`tab-${state.activeTab}`}
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 p-1 shadow-sm"
+        >
           <SPCErrorBoundary key={state.activeTab}>
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               <motion.div
                 key={state.activeTab}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <Suspense fallback={<TabLoadingState />}>

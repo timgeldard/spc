@@ -14,8 +14,8 @@
 set -euo pipefail
 
 PROFILE="${DATABRICKS_PROFILE:-uat}"
-APP_NAME="${APP_NAME:-spc}"
-BUNDLE_NAME="${BUNDLE_NAME:-spc}"
+APP_NAME="${APP_NAME:-spc-tim}"
+BUNDLE_NAME="${BUNDLE_NAME:-spc-tim}"
 
 # Allow --profile flag to override the default
 while [[ $# -gt 0 ]]; do
@@ -29,7 +29,7 @@ BUNDLE_PATH="/Workspace/Shared/.bundle/${BUNDLE_NAME}/${PROFILE}/files"
 
 echo "→ Deploying app '${APP_NAME}' from ${BUNDLE_PATH}..."
 
-databricks apps deploy "${APP_NAME}" \
+MSYS_NO_PATHCONV=1 databricks apps deploy "${APP_NAME}" \
   --profile "${PROFILE}" \
   --json "{\"source_code_path\": \"${BUNDLE_PATH}\", \"mode\": \"SNAPSHOT\"}"
 

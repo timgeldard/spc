@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSPC } from '../SPCContext'
 import { computeGRR, computeGRR_ANOVA } from './msaCalculations'
+import { useMSASave } from '../hooks/useMSASave'
 import type { MSAResult } from '../types'
 import {
   buttonBaseClass,
@@ -116,7 +117,7 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
       <div className={msaNdcClass}>
         NDC (Number of Distinct Categories): <strong>{ndc ?? '—'}</strong>
         {ndc != null && ndc < 5 && (
-          <span className="text-amber-700"> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
+          <span className="text-[#005776]"> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
         )}
       </div>
 
@@ -156,8 +157,7 @@ export default function MSAView() {
   const [tolerance, setTolerance] = useState('')
   const [csvText, setCsvText] = useState<string>(() => generateSampleData(3, 10, 2))
   const [result, setResult] = useState<MSAResult | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const { saving, error: saveError, save } = useMSASave()
 
   const handleCalculate = () => {
     const data = parseCSVData(csvText, nOperators, nParts, nReplicates)
@@ -171,34 +171,18 @@ export default function MSAView() {
 
   const handleSave = async () => {
     if (!result || result.error || !state.selectedMaterial || !state.selectedMIC) return
-    setSaving(true)
-    setSaveError(null)
-    try {
-      const res = await fetch('/api/spc/msa/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          material_id: state.selectedMaterial.material_id,
-          mic_id: state.selectedMIC.mic_id,
-          n_operators: nOperators,
-          n_parts: nParts,
-          n_replicates: nReplicates,
-          grr_pct: result.grrPct ?? 0,
-          repeatability: result.repeatability ?? 0,
-          reproducibility: result.reproducibility ?? 0,
-          ndc: result.ndc ?? 0,
-          results_json: JSON.stringify(result),
-        }),
-      })
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}))
-        throw new Error(b.detail ?? `Save failed (${res.status})`)
-      }
-    } catch (e) {
-      setSaveError(String(e))
-    } finally {
-      setSaving(false)
-    }
+    await save({
+      material_id: state.selectedMaterial.material_id,
+      mic_id: state.selectedMIC.mic_id,
+      n_operators: nOperators,
+      n_parts: nParts,
+      n_replicates: nReplicates,
+      grr_pct: result.grrPct ?? 0,
+      repeatability: result.repeatability ?? 0,
+      reproducibility: result.reproducibility ?? 0,
+      ndc: result.ndc ?? 0,
+      results_json: JSON.stringify(result),
+    })
   }
 
   return (
@@ -391,17 +375,17 @@ export default function MSAView() {
             rather than genuine part-to-part differences.
           </p>
           <div className="space-y-2 text-sm">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2.5">
-              <p className="font-semibold text-emerald-700">✓ &lt; 10% GRR</p>
-              <p className="mt-0.5 text-xs text-emerald-700">Acceptable. Gauge is suitable for production use.</p>
+            <div className="rounded-md border border-[#8FE2BE] bg-[#DAF5E9] p-2.5">
+              <p className="font-semibold text-[#143700]">✓ &lt; 10% GRR</p>
+              <p className="mt-0.5 text-xs text-[#143700]">Acceptable. Gauge is suitable for production use.</p>
             </div>
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5">
-              <p className="font-semibold text-amber-700">⚠ 10–30% GRR</p>
-              <p className="mt-0.5 text-xs text-amber-700">Conditionally acceptable. May be OK depending on process risk and context.</p>
+            <div className="rounded-md border border-[#FDE79D] bg-[#FEF3CE] p-2.5">
+              <p className="font-semibold text-[#005776]">⚠ 10–30% GRR</p>
+              <p className="mt-0.5 text-xs text-[#005776]">Conditionally acceptable. May be OK depending on process risk and context.</p>
             </div>
-            <div className="rounded-md border border-red-200 bg-red-50 p-2.5">
-              <p className="font-semibold text-red-700">✕ &gt; 30% GRR</p>
-              <p className="mt-0.5 text-xs text-red-700">Not acceptable. The measurement system is a major source of variability.</p>
+            <div className="rounded-md border border-[#FAB799] bg-[#FCDBCC] p-2.5">
+              <p className="font-semibold text-[#F24A00]">✕ &gt; 30% GRR</p>
+              <p className="mt-0.5 text-xs text-[#F24A00]">Not acceptable. The measurement system is a major source of variability.</p>
             </div>
           </div>
           <div className="border-t border-[var(--c-border)] pt-3 text-xs text-[var(--c-text-muted)]">

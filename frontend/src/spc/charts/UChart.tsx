@@ -134,7 +134,7 @@ export default function UChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="U chart — defects per unit" />
       <p className={chartHintClass}>
         ū = {chart.uBar.toFixed(4)} · Variable limits per inspection unit count
       </p>

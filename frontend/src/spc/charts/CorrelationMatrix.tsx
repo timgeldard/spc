@@ -26,11 +26,11 @@ interface CorrelationBubbleDatum {
 }
 
 function pairIdA(pair: CorrelationPair): string {
-  return pair.mic_a ?? pair.mic_a_id
+  return pair.mic_a_id
 }
 
 function pairIdB(pair: CorrelationPair): string {
-  return pair.mic_b ?? pair.mic_b_id
+  return pair.mic_b_id
 }
 
 export default function CorrelationMatrix({ pairs, mics, onCellClick }: CorrelationMatrixProps) {
@@ -155,6 +155,7 @@ export default function CorrelationMatrix({ pairs, mics, onCellClick }: Correlat
       <EChart
         option={option}
         theme="spc"
+        ariaLabel={`Pairwise Pearson correlation matrix — ${mics.length} characteristics`}
         style={{ height: size, width: '100%' }}
         onEvents={onEvents}
         notMerge

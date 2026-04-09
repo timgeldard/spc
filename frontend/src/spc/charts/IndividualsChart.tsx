@@ -166,7 +166,7 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
         Individuals Chart (X)
         <span className={chartNClass}>n = {indexedPoints.length}</span>
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} ariaLabel="Individuals (I) control chart" />
       <p className={chartHintClass}>
         Sigma estimator: {imr.sigmaMethod === 'mssd' ? 'MSSD (trend-aware / low-n)' : 'Moving range (MR̄ / d2)'}
       </p>

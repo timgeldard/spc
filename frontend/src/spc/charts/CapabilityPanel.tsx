@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import CapabilityHistogram from './CapabilityHistogram'
 import {
   CAPABILITY_TIERS,
@@ -16,7 +17,7 @@ function StabilityWarning({ signals, mrSignals }: StabilityWarningProps) {
   const total = (signals?.length ?? 0) + (mrSignals?.length ?? 0)
   if (total === 0) return null
   return (
-    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-600 bg-amber-50 px-3 py-2 text-[0.82rem] leading-[1.4] text-amber-800">
+    <div className="mb-3 flex items-start gap-2 rounded-md border border-[#F9C20A] bg-[#FEF3CE] px-3 py-2 text-[0.82rem] leading-[1.4] text-[#005776]">
       <span className="mt-[0.05rem] shrink-0 text-base">⚠</span>
       <span>
         <strong>Process unstable</strong> — {total} rule violation{total !== 1 ? 's' : ''} detected.
@@ -26,10 +27,11 @@ function StabilityWarning({ signals, mrSignals }: StabilityWarningProps) {
   )
 }
 
+// Kerry §4.3 KPI cards: Jade=positive, Sunrise=attention, Sunset=critical
 const TIER_STYLES = {
-  healthy: { color: '#059669', bg: '#d1fae5' },
-  warning: { color: '#d97706', bg: '#fffbeb' },
-  critical: { color: '#dc2626', bg: '#fef2f2' },
+  healthy:  { color: '#143700', bg: '#DAF5E9' },  /* Forest text / Jade 20 */
+  warning:  { color: '#005776', bg: '#FEF3CE' },  /* Slate text / Sunrise 20 */
+  critical: { color: '#F24A00', bg: '#FCDBCC' },  /* Sunset text / Sunset 20 */
 } as const
 
 type Tier = ReturnType<typeof getCapabilityTier>
@@ -72,6 +74,8 @@ interface CapabilityPanelProps {
 }
 
 export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+
   if (!spc?.capability) return null
 
   const {
@@ -99,90 +103,111 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
   return (
     <div className={`${heroCardDenseClass} space-y-4`}>
       <div>
-        <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Capability evidence</div>
+        <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Capability evidence</div>
         <div className="mt-1 text-base font-bold text-[var(--c-text)]">Process Capability</div>
-        <p className="mt-1 text-sm text-[var(--c-text-muted)]">
-          Short-term capability reflects within-subgroup variation; long-term capability reflects observed process performance.
-        </p>
       </div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
       {hasNoSpecification && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
-          No specification data is available for this characteristic in the selected range. Capability metrics cannot be calculated.
+          No specification data available — capability metrics cannot be calculated.
         </p>
       )}
       {normality?.is_normal === false && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          Distribution is non-normal. Non-parametric capability calculations (P50, P99.865, P0.135) applied.
+        <p className="rounded-lg border border-[#FDE79D] bg-[#FEF3CE] px-3 py-2 text-xs font-medium text-[#005776]">
+          Non-normal distribution — percentile-based capability applied.
           {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
         </p>
       )}
       {normalityWarning && normality?.is_normal !== false && (
-        <p className="mb-2 text-xs text-red-700">{normalityWarning}</p>
+        <p className="mb-2 text-xs text-[#F24A00]">{normalityWarning}</p>
       )}
       {normality?.warning && normality?.is_normal == null && (
-        <p className="mb-2 text-xs text-amber-700">{normality.warning}</p>
+        <p className="mb-2 text-xs text-[#005776]">{normality.warning}</p>
       )}
 
+      {/* Headline metric always visible */}
       <IndustrialCapabilityPanel
         cp={isUnilateral ? null : cp}
         cpk={cpk}
         pp={isUnilateral ? null : pp}
         ppk={ppk}
       />
-      <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-        {cpkLower95 != null && cpkUpper95 != null && (
-          <MetricCard
-            label="Cpk 95% CI"
-            value={cpk}
-            note={`[${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]`}
-          />
-        )}
-        {zScore != null && (
-          <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
-        )}
-        {dpmo != null && (
-          <div className="min-w-0 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-gray-500">DPMO</span>
-              <span className="text-2xl font-bold leading-none tabular-nums text-gray-800">{dpmo.toLocaleString()}</span>
-              <span className="text-xs text-gray-400">1.5σ shift</span>
+
+      {/* Progressive disclosure for secondary stats */}
+      <div className="border-t border-[var(--c-border)] pt-2">
+        <button
+          className="flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)] hover:text-[var(--c-text)] transition-colors"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen(v => !v)}
+        >
+          More capability stats
+          <svg
+            width="12" height="12" viewBox="0 0 12 12" fill="none"
+            className={`transition-transform duration-200 ${detailsOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          >
+            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {detailsOpen && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+              {cpkLower95 != null && cpkUpper95 != null && (
+                <MetricCard
+                  label="Cpk 95% CI"
+                  value={cpk}
+                  note={`[${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]`}
+                />
+              )}
+              {zScore != null && (
+                <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
+              )}
+              {dpmo != null && (
+                <div className="min-w-0 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-gray-500">DPMO</span>
+                    <span className="text-2xl font-bold leading-none tabular-nums text-gray-800">{dpmo.toLocaleString()}</span>
+                    <span className="text-xs text-gray-400">1.5σ shift</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && !isUnilateral && (
+              <p className="text-xs text-gray-500">
+                Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
+              </p>
+            )}
+            {isUnilateral && (
+              <p className="text-xs text-gray-400">Cp / Pp not defined for one-sided specification</p>
+            )}
+            {spc.capability?.specWarning && (
+              <p className="text-xs text-[#005776]">{spc.capability.specWarning}</p>
+            )}
+
+            {!hasNoSpecification && (usesNonParametricCapability ? (
+              <div className="space-y-2">
+                <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Empirical percentile evidence</div>
+                <div className="grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+                  <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
+                  <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
+                  <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
+                </div>
+              </div>
+            ) : (
+              <CapabilityHistogram spc={spc} />
+            ))}
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              {CAPABILITY_TIERS.map((t, i) => (
+                <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: TIER_STYLES[t.status].color }}>
+                  {i < CAPABILITY_TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< ${CAPABILITY_TIERS[i - 1]?.min.toFixed(2) ?? '1.33'} ${t.label}`}
+                </span>
+              ))}
             </div>
           </div>
         )}
-      </div>
-
-      {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && !isUnilateral && (
-        <p className="text-xs text-gray-500">
-          Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
-        </p>
-      )}
-      {isUnilateral && (
-        <p className="text-xs text-gray-400">Cp / Pp not defined for one-sided specification</p>
-      )}
-      {spc.capability?.specWarning && (
-        <p className="text-xs text-amber-700">{spc.capability.specWarning}</p>
-      )}
-
-      {hasNoSpecification ? null : usesNonParametricCapability ? (
-        <div className="space-y-2">
-          <div className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Empirical percentile evidence</div>
-          <div className="grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-            <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
-            <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
-            <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
-          </div>
-        </div>
-      ) : (
-        <CapabilityHistogram spc={spc} />
-      )}
-
-      <div className="flex flex-wrap gap-2 text-xs">
-        {CAPABILITY_TIERS.map((t, i) => (
-          <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: TIER_STYLES[t.status].color }}>
-            {i < CAPABILITY_TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< ${CAPABILITY_TIERS[i - 1]?.min.toFixed(2) ?? '1.33'} ${t.label}`}
-          </span>
-        ))}
       </div>
     </div>
   )

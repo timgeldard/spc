@@ -111,7 +111,7 @@ export default function NPChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="NP chart — number nonconforming" />
       <p className={chartHintClass}>
         n̄p̄ = {chart.npBar.toFixed(2)} · UCL = {chart.ucl.toFixed(2)} · LCL = {Math.max(0, chart.lcl).toFixed(2)}
       </p>

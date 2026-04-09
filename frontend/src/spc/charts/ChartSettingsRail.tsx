@@ -1,12 +1,7 @@
-import type { ReactNode } from 'react'
-
+import { useState, type ReactNode } from 'react'
+import { Button } from '../../components/ui'
 import type { ChartDataPoint, LockedLimits } from '../types'
 import {
-  buttonBaseClass,
-  buttonDangerClass,
-  buttonPrimaryClass,
-  buttonSecondaryClass,
-  buttonSmClass,
   checkboxLabelClass,
   settingsRailClass,
   settingsRailLabelClass,
@@ -32,11 +27,13 @@ function ChartTypeToggle({
   onOverride: (value: QuantChartType | null) => void
 }) {
   return (
-    <div className={toggleGroupClass}>
-      <span className={toggleLabelClass}>Chart type:</span>
+    <div role="radiogroup" aria-label="Chart type" className={toggleGroupClass}>
+      <span className={toggleLabelClass} aria-hidden="true">Chart type:</span>
       {(['imr', 'xbar_r'] as const).map(type => (
         <button
           key={type}
+          role="radio"
+          aria-checked={(override ?? chartType) === type}
           className={`${toggleButtonBaseClass} ${((override ?? chartType) === type) ? toggleButtonActiveClass : ''}`}
           onClick={() => onOverride(type === chartType ? null : type)}
           title={type === 'imr' ? 'Individuals + Moving Range' : 'X-bar + Range'}
@@ -69,11 +66,13 @@ function AttributeChartTypeToggle({
   ]
 
   return (
-    <div className={toggleGroupClass}>
-      <span className={toggleLabelClass}>Chart type:</span>
+    <div role="radiogroup" aria-label="Attribute chart type" className={toggleGroupClass}>
+      <span className={toggleLabelClass} aria-hidden="true">Chart type:</span>
       {options.map(({ type, label, title }) => (
         <button
           key={type}
+          role="radio"
+          aria-checked={attrChartType === type}
           className={`${toggleButtonBaseClass} ${attrChartType === type ? toggleButtonActiveClass : ''}`}
           onClick={() => onSet(type)}
           title={title}
@@ -93,9 +92,11 @@ function RuleSetToggle({
   onSet: (value: 'weco' | 'nelson') => void
 }) {
   return (
-    <div className={toggleGroupClass}>
-      <span className={toggleLabelClass}>Rules:</span>
+    <div role="radiogroup" aria-label="Rule set" className={toggleGroupClass}>
+      <span className={toggleLabelClass} aria-hidden="true">Rules:</span>
       <button
+        role="radio"
+        aria-checked={ruleSet === 'weco'}
         className={`${toggleButtonBaseClass} ${ruleSet === 'weco' ? toggleButtonActiveClass : ''}`}
         onClick={() => onSet('weco')}
         title="Western Electric rules (4 tests)"
@@ -103,6 +104,8 @@ function RuleSetToggle({
         WECO
       </button>
       <button
+        role="radio"
+        aria-checked={ruleSet === 'nelson'}
         className={`${toggleButtonBaseClass} ${ruleSet === 'nelson' ? toggleButtonActiveClass : ''}`}
         onClick={() => onSet('nelson')}
         title="Nelson rules (8 tests)"
@@ -165,12 +168,18 @@ export default function ChartSettingsRail({
   extraContent,
 }: ChartSettingsRailProps) {
   const outlierCount = quantPoints.filter(point => point.is_outlier).length
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
+  const hasAdvancedContent = !isAttributeChart && (
+    outlierCount > 0 || lockedLimits != null || canLockLimits
+  )
 
   return (
     <div className={settingsRailClass}>
       <div className={settingsRailLabelClass}>Analysis controls</div>
+
+      {/* ── Always-visible: chart type ── */}
       <div className={settingsRailRowClass}>
-        <RuleSetToggle ruleSet={ruleSet} onSet={onRuleSetChange} />
         {isAttributeChart ? (
           <AttributeChartTypeToggle attrChartType={attrChartType} onSet={onAttrChartTypeChange} />
         ) : (
@@ -181,66 +190,106 @@ export default function ChartSettingsRail({
           />
         )}
       </div>
-      {!isAttributeChart && (
-        <>
-          <div className={settingsRailRowClass}>
-            {lockedLimits && (
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${limitsMode === 'locked' ? buttonPrimaryClass : buttonSecondaryClass}`}
-                onClick={() => onLimitsMode(limitsMode === 'locked' ? 'live' : 'locked')}
-                title={`Locked ${lockedLimits.locked_at?.substring(0, 10) ?? ''} by ${lockedLimits.locked_by ?? 'unknown'}`}
-              >
-                {limitsMode === 'locked' ? 'Locked Limits' : 'Use Locked Limits'}
-              </button>
-            )}
-            {canLockLimits && limitsMode === 'live' && (
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-                onClick={onLockLimits}
-                title="Lock current control limits for Phase II monitoring"
-              >
-                Lock Limits
-              </button>
-            )}
-            {lockedLimits && limitsMode === 'locked' && (
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${buttonDangerClass}`}
-                onClick={onDeleteLock}
-                title="Remove locked limits"
-              >
-                Delete Lock
-              </button>
-            )}
-          </div>
-          <div className={settingsRailRowClass}>
-            {outlierCount > 0 && (
-              <label className={checkboxLabelClass}>
-                <input type="checkbox" checked={excludeOutliers} onChange={onToggleExcludeOutliers} />
-                Exclude outliers ({outlierCount})
-              </label>
-            )}
-            {exclusionCount > 0 && (
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-                disabled={exclusionsSaving}
-                onClick={onRestoreAll}
-              >
-                Clear {exclusionCount} exclusion{exclusionCount !== 1 ? 's' : ''}
-              </button>
-            )}
-            {canAutoClean && (
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-                disabled={exclusionsSaving}
-                onClick={onAutoClean}
-                title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
-              >
-                {exclusionsSaving ? 'Saving…' : 'Auto-clean Phase I'}
-              </button>
-            )}
-          </div>
-        </>
+
+      {/* ── Always-visible: exclusion actions ── */}
+      {!isAttributeChart && (exclusionCount > 0 || canAutoClean) && (
+        <div className={settingsRailRowClass}>
+          {exclusionCount > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exclusionsSaving}
+              onClick={onRestoreAll}
+            >
+              Clear {exclusionCount} exclusion{exclusionCount !== 1 ? 's' : ''}
+            </Button>
+          )}
+          {canAutoClean && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exclusionsSaving}
+              onClick={onAutoClean}
+              title="Iteratively remove Rule 1 OOC points to establish Phase I baseline limits"
+            >
+              Auto-clean Phase I
+            </Button>
+          )}
+        </div>
       )}
+
+      {/* ── Advanced settings disclosure ── */}
+      {(hasAdvancedContent || true) && (
+        <div className="border-t border-[var(--c-border)] pt-2">
+          <button
+            className="flex w-full items-center justify-between text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)] hover:text-[var(--c-text)] transition-colors"
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen(v => !v)}
+          >
+            Advanced settings
+            <svg
+              width="12" height="12" viewBox="0 0 12 12" fill="none"
+              className={`transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            >
+              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+
+          {advancedOpen && (
+            <div className="mt-2 space-y-2">
+              <div className={settingsRailRowClass}>
+                <RuleSetToggle ruleSet={ruleSet} onSet={onRuleSetChange} />
+              </div>
+
+              {!isAttributeChart && outlierCount > 0 && (
+                <div className={settingsRailRowClass}>
+                  <label className={checkboxLabelClass}>
+                    <input type="checkbox" checked={excludeOutliers} onChange={onToggleExcludeOutliers} />
+                    Exclude outliers ({outlierCount})
+                  </label>
+                </div>
+              )}
+
+              {!isAttributeChart && (
+                <div className={settingsRailRowClass}>
+                  {lockedLimits && (
+                    <Button
+                      size="sm"
+                      variant={limitsMode === 'locked' ? 'primary' : 'secondary'}
+                      onClick={() => onLimitsMode(limitsMode === 'locked' ? 'live' : 'locked')}
+                      title={`Locked ${lockedLimits.locked_at?.substring(0, 10) ?? ''} by ${lockedLimits.locked_by ?? 'unknown'}`}
+                    >
+                      {limitsMode === 'locked' ? 'Locked Limits' : 'Use Locked Limits'}
+                    </Button>
+                  )}
+                  {canLockLimits && limitsMode === 'live' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={onLockLimits}
+                      title="Lock current control limits for Phase II monitoring"
+                    >
+                      Lock Limits
+                    </Button>
+                  )}
+                  {lockedLimits && limitsMode === 'locked' && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={onDeleteLock}
+                      title="Remove locked limits"
+                    >
+                      Delete Lock
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {extraContent}
     </div>
   )

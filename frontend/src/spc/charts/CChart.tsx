@@ -108,7 +108,7 @@ export default function CChart({ points }: ChartPaneProps) {
           <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
-      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="C chart — count of defects per unit" />
       <p className={chartHintClass}>
         c̄ = {chart.cBar.toFixed(3)} · UCL = {chart.ucl.toFixed(3)} · LCL = {Math.max(0, chart.lcl).toFixed(3)}
       </p>

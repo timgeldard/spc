@@ -131,7 +131,7 @@ export default function CapabilityHistogram({ spc }: CapabilityHistogramProps) {
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>Capability Histogram</div>
-      <EChart option={option} style={{ height: 220 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 220 }} theme="spc" notMerge ariaLabel="Process capability histogram" />
       <p className={chartHintClass}>Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
     </div>
   )

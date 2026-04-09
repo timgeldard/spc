@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useRef } from 'react'
 
 import './ensureEChartsTheme'
 import { useSPC } from '../SPCContext'
@@ -86,6 +86,7 @@ export default function ControlChartsView() {
   const { state, dispatch } = useSPC()
   const { selectedMaterial, selectedMIC, selectedPlant, dateFrom, dateTo, excludedIndices, exclusionDialog, limitsMode } = state
   const ctrl = useControlChartsController()
+  const excludedPanelRef = useRef<HTMLDivElement>(null)
 
   // ── Guard states ───────────────────────────────────────────────────────
 
@@ -109,7 +110,11 @@ export default function ControlChartsView() {
   }
 
   if (ctrl.loading) {
-    return <LoadingSkeleton message="Loading measurement data…" />
+    return (
+      <div aria-live="polite" aria-busy="true">
+        <LoadingSkeleton message="Loading measurement data…" />
+      </div>
+    )
   }
 
   if (ctrl.error) {
@@ -198,7 +203,7 @@ export default function ControlChartsView() {
   // ── Quantitative chart layout ──────────────────────────────────────────
 
   return (
-    <div className={chartsLayoutClass}>
+    <div className={chartsLayoutClass} aria-live="polite" aria-busy="false">
 
       {/* ── Scope summary bar ── */}
       <ChartSummaryBar
@@ -214,6 +219,11 @@ export default function ControlChartsView() {
         quantNormality={ctrl.quantNormality}
         ruleSet={state.ruleSet}
         actionRail={actionRail}
+        lockedLimits={ctrl.lockedLimits}
+        limitsMode={limitsMode}
+        onExclusionClick={ctrl.exclusionCount > 0
+          ? () => excludedPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+          : undefined}
       />
 
       {/* ── Contextual banners ── */}
@@ -264,15 +274,17 @@ export default function ControlChartsView() {
           <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
             <CapabilityPanel spc={ctrl.spc} />
           </Suspense>
-          <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
-            <ExcludedPointsPanel
-              snapshot={ctrl.exclusionsSnapshot ?? state.exclusionAudit}
-              currentPoints={ctrl.currentExcludedPoints}
-              onRestorePoint={ctrl.handleRestorePoint}
-              onRestoreAll={ctrl.handleRestoreAll}
-              saving={ctrl.exclusionsSaving}
-            />
-          </Suspense>
+          <div ref={excludedPanelRef}>
+            <Suspense fallback={<LoadingSkeleton minHeight="160px" message="Loading panel…" />}>
+              <ExcludedPointsPanel
+                snapshot={ctrl.exclusionsSnapshot ?? state.exclusionAudit}
+                currentPoints={ctrl.currentExcludedPoints}
+                onRestorePoint={ctrl.handleRestorePoint}
+                onRestoreAll={ctrl.handleRestoreAll}
+                saving={ctrl.exclusionsSaving}
+              />
+            </Suspense>
+          </div>
           <div className={heroCardDenseClass}>
             <div className={rollingHeaderClass}>
               <div className={rollingTitleClass}>Interpretation guide</div>

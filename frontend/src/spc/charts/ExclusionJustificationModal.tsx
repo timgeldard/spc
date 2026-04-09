@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   buttonBaseClass,
   buttonGhostClass,
@@ -75,6 +76,43 @@ export default function ExclusionJustificationModal({
     }
   }, [dialog])
 
+  // Apply inert to app root to block AT access to background content
+  useEffect(() => {
+    if (!dialog) return
+    const root = document.getElementById('root')
+    if (root) root.setAttribute('inert', '')
+    return () => { root?.removeAttribute('inert') }
+  }, [dialog])
+
+  // Document-level focus trap — catches Tab even when focus escapes the dialog element
+  useEffect(() => {
+    if (!dialog) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) {
+        event.preventDefault()
+        onCancel()
+        return
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusables = [...dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), select:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      )]
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && active === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [dialog, saving, onCancel])
+
   if (!dialog) return null
 
   const title = dialog.action === 'manual_restore'
@@ -105,36 +143,7 @@ export default function ExclusionJustificationModal({
     onSubmit({ reason, comment: comment.trim(), justification })
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!dialogRef.current) return
-
-    if (event.key === 'Escape' && !saving) {
-      event.preventDefault()
-      onCancel()
-      return
-    }
-
-    if (event.key !== 'Tab') return
-
-    const focusables = [...dialogRef.current.querySelectorAll(
-      'button:not([disabled]), select:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-    )]
-    if (focusables.length === 0) return
-
-    const first = focusables[0]
-    const last = focusables[focusables.length - 1]
-    const active = document.activeElement
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault()
-      last instanceof HTMLElement && last.focus()
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first instanceof HTMLElement && first.focus()
-    }
-  }
-
-  return (
+  return createPortal(
     <div className={modalBackdropClass} role="presentation" onClick={saving ? undefined : onCancel}>
       <div
         className={modalClass}
@@ -143,7 +152,6 @@ export default function ExclusionJustificationModal({
         aria-labelledby="spc-exclusion-dialog-title"
         aria-describedby="spc-exclusion-dialog-description"
         onClick={event => event.stopPropagation()}
-        onKeyDown={handleKeyDown}
         ref={dialogRef}
       >
         <div className={modalHeaderClass}>
@@ -180,7 +188,12 @@ export default function ExclusionJustificationModal({
           </label>
 
           <label className={filterGroupClass}>
-            <span className={filterLabelClass}>Comment</span>
+            <span className={filterLabelClass}>
+              Comment
+              {(dialog.action === 'manual_exclude' || dialog.action === 'manual_restore') && (
+                <span className="ml-1 text-[0.72rem] font-normal normal-case tracking-normal text-[var(--c-text-muted)]">(optional)</span>
+              )}
+            </span>
             <textarea
               className={modalTextareaClass}
               rows={4}
@@ -201,6 +214,7 @@ export default function ExclusionJustificationModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

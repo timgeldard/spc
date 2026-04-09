@@ -5,11 +5,10 @@ import { useCorrelation } from '../hooks/useCorrelation'
 import CorrelationMatrix from '../charts/CorrelationMatrix'
 import CorrelationScatter from '../charts/CorrelationScatter'
 import { useCorrelationScatter } from '../hooks/useCorrelationScatter'
+import { Button } from '../../components/ui'
 import type { ChangeEvent } from 'react'
 import type { CorrelationPair } from '../types'
 import {
-  buttonBaseClass,
-  buttonPrimaryClass,
   cardSubClass,
   cardTitleClass,
   controlsRowClass,
@@ -40,7 +39,7 @@ interface SelectedCorrelationPair {
 function DriverRanking({ pairs, n = 5 }: { pairs: CorrelationPair[]; n?: number }) {
   type RankedPair = CorrelationPair & { _r: number }
   const top: RankedPair[] = pairs
-    .map(p => ({ ...p, _r: p.r ?? p.pearson_r ?? null }))
+    .map(p => ({ ...p, _r: p.pearson_r ?? null }))
     .filter((p): p is RankedPair => p._r != null)
     .sort((a, b) => Math.abs(b._r) - Math.abs(a._r))
     .slice(0, n)
@@ -59,7 +58,7 @@ function DriverRanking({ pairs, n = 5 }: { pairs: CorrelationPair[]; n?: number 
           const isPositive = r >= 0
           const absR = Math.abs(r)
           const strength = absR >= 0.7 ? 'strong' : absR >= 0.4 ? 'moderate' : 'weak'
-          const colorClass = absR >= 0.7 ? 'text-red-700' : absR >= 0.4 ? 'text-amber-700' : 'text-slate-500'
+          const colorClass = absR >= 0.7 ? 'text-[#F24A00]' : absR >= 0.4 ? 'text-[#005776]' : 'text-[#4E7080]'
           return (
             <li key={`${p.mic_a_id}-${p.mic_b_id}`} className="flex items-baseline gap-2 text-sm">
               <span className="w-4 shrink-0 text-right text-xs text-[var(--c-text-muted)]">{i + 1}.</span>
@@ -150,14 +149,14 @@ export default function CorrelationView() {
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setMinBatches(Math.max(5, Math.min(100, Number(e.target.value))))}
               />
             </label>
-            <button
-              className={`${buttonBaseClass} ${buttonPrimaryClass}`}
+            <Button
+              variant="primary"
               onClick={handleRun}
               disabled={loading}
               aria-label={`Run correlation analysis for ${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}`}
             >
               {loading ? 'Computing…' : 'Run Correlation'}
-            </button>
+            </Button>
           </div>
           <FieldHelp id="corr-min-batches-help">
             Minimum number of shared batch observations required to include a pair. Higher values improve
@@ -178,9 +177,9 @@ export default function CorrelationView() {
             trend, a confounding variable, or true process coupling — use the scatter plot to distinguish.
           </p>
           <div className="space-y-1 text-xs text-[var(--c-text-muted)]">
-            <p><span className="font-semibold text-red-700">|r| ≥ 0.70</span> — strong, worth investigating</p>
-            <p><span className="font-semibold text-amber-700">0.40 ≤ |r| &lt; 0.70</span> — moderate signal</p>
-            <p><span className="font-semibold text-slate-500">|r| &lt; 0.40</span> — weak, usually noise</p>
+            <p><span className="font-semibold text-[#F24A00]">|r| ≥ 0.70</span> — strong, worth investigating</p>
+            <p><span className="font-semibold text-[#005776]">0.40 ≤ |r| &lt; 0.70</span> — moderate signal</p>
+            <p><span className="font-semibold text-[#4E7080]">|r| &lt; 0.40</span> — weak, usually noise</p>
           </div>
         </aside>
       </div>

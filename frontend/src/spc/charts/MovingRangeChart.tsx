@@ -101,7 +101,7 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>Moving Range Chart (MR)</div>
-      <EChart option={option} style={{ height: 180 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 180 }} theme="spc" notMerge ariaLabel="Moving range (MR) control chart" />
     </div>
   )
 }

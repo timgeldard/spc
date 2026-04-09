@@ -105,7 +105,7 @@ export default function RangeChart({ spc, mrSignals }: RangeChartProps) {
   return (
     <div className={chartPaneClass}>
       <div className={chartPaneTitleClass}>R Chart (Subgroup Range)</div>
-      <EChart option={option} style={{ height: 180 }} theme="spc" notMerge />
+      <EChart option={option} style={{ height: 180 }} theme="spc" notMerge ariaLabel="R chart — subgroup range" />
     </div>
   )
 }

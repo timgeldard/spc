@@ -49,12 +49,12 @@ export function SummaryMetric({
   tone = 'slate',
 }: SummaryMetricProps) {
   const toneClass = tone === 'green'
-    ? 'border-emerald-200 bg-emerald-50'
+    ? 'border-[#8FE2BE] bg-[#DAF5E9]'              /* Jade */
     : tone === 'amber'
-      ? 'border-amber-200 bg-amber-50'
+      ? 'border-[#FDE79D] bg-[#FEF3CE]'            /* Sunrise */
       : tone === 'red'
-        ? 'border-red-200 bg-red-50'
-        : 'border-[var(--c-border)] bg-slate-50/80'
+        ? 'border-[#FAB799] bg-[#FCDBCC]'          /* Sunset */
+        : 'border-[var(--c-border)] bg-[#F4F4EA]'  /* Stone/Slate */
 
   return (
     <div className={`${metricCardClass} ${toneClass}`}>
@@ -78,6 +78,9 @@ interface ChartSummaryBarProps {
   quantNormality?: NormalityResult | null
   ruleSet: 'weco' | 'nelson'
   actionRail?: ReactNode
+  lockedLimits?: { locked_at?: string | null; locked_by?: string | null } | null
+  limitsMode?: 'live' | 'locked'
+  onExclusionClick?: () => void
 }
 
 export default function ChartSummaryBar({
@@ -93,6 +96,9 @@ export default function ChartSummaryBar({
   quantNormality,
   ruleSet,
   actionRail,
+  lockedLimits,
+  limitsMode,
+  onExclusionClick,
 }: ChartSummaryBarProps) {
   return (
     <div className={chartsHeaderClass}>
@@ -116,7 +122,24 @@ export default function ChartSummaryBar({
               </StatusChip>
             )}
             {stratifyLabel && <StatusChip tone="blue">Stratified by {stratifyLabel}</StatusChip>}
-            {exclusionCount > 0 && <StatusChip tone="amber">{exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}</StatusChip>}
+            {exclusionCount > 0 && (
+              onExclusionClick
+                ? (
+                  <button
+                    onClick={onExclusionClick}
+                    className={`${statusChipClass} ${badgeAmberClass} hover:opacity-80 transition-opacity`}
+                    title="Click to view excluded points"
+                  >
+                    {exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}
+                  </button>
+                )
+                : <StatusChip tone="amber">{exclusionCount} audited exclusion{exclusionCount === 1 ? '' : 's'}</StatusChip>
+            )}
+            {limitsMode === 'locked' && lockedLimits && (
+              <StatusChip tone="blue">
+                🔒 Limits locked{lockedLimits.locked_at ? ` · ${lockedLimits.locked_at.substring(0, 10)}` : ''}
+              </StatusChip>
+            )}
             {quantNormality?.is_normal === false && <StatusChip tone="amber">Non-normal capability override</StatusChip>}
           </div>
         </div>

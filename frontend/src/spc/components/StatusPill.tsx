@@ -15,31 +15,32 @@ interface StatusPillProps {
   compact?: boolean
 }
 
+// Kerry semantic colors: Jade=success, Sunrise=warning, Sunset=critical
 const STATUS_CONFIG: Record<StatusPillStatus, { label: string; icon: string; className: string }> = {
   'in-control': {
     label: 'In Control',
     icon: '✓',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    className: 'bg-[#DAF5E9] text-[#143700] border-[#8FE2BE]',   /* Jade */
   },
   warning: {
     label: 'Warning',
     icon: '⚠',
-    className: 'bg-amber-50 text-amber-700 border-amber-200',
+    className: 'bg-[#FEF3CE] text-[#005776] border-[#FDE79D]',   /* Sunrise */
   },
   'out-of-control': {
     label: 'Out of Control',
     icon: '✕',
-    className: 'bg-red-50 text-red-700 border-red-200',
+    className: 'bg-[#FCDBCC] text-[#F24A00] border-[#FAB799]',   /* Sunset */
   },
   'out-of-control-high': {
     label: 'Critical — Out of Control',
     icon: '‼',
-    className: 'bg-red-100 text-red-800 border-red-400',
+    className: 'bg-[#FCDBCC] text-[#F24A00] border-[#F56E33]',   /* Sunset strong */
   },
   unknown: {
     label: 'Unknown',
     icon: '—',
-    className: 'bg-slate-100 text-slate-500 border-slate-200',
+    className: 'bg-[#F4F4EA] text-[#4E7080] border-[#CCDDE4]',   /* Stone/Slate */
   },
 }
 
@@ -86,9 +87,9 @@ export function deriveStatus(
 /** Helper: derive a text-color class from GRR percentage for MSA verdicts */
 export function grrStatusClass(grrPct: number | null | undefined): { colorClass: string; verdict: string } {
   if (grrPct == null) return { colorClass: 'text-slate-400', verdict: 'Unknown' }
-  if (grrPct < 10) return { colorClass: 'text-emerald-700', verdict: 'Acceptable' }
-  if (grrPct < 30) return { colorClass: 'text-amber-700', verdict: 'Conditionally Acceptable' }
-  return { colorClass: 'text-red-700', verdict: 'Not Acceptable' }
+  if (grrPct < 10) return { colorClass: 'text-[#143700]', verdict: 'Acceptable' }         /* Forest on Jade bg */
+  if (grrPct < 30) return { colorClass: 'text-[#005776]', verdict: 'Conditionally Acceptable' } /* Slate on Sunrise bg */
+  return { colorClass: 'text-[#F24A00]', verdict: 'Not Acceptable' }                       /* Sunset */
 }
 
 /** Shared ReactNode rendering a StatusPill alongside explanatory children */

@@ -16,6 +16,7 @@ MIGRATIONS_DIR ?= scripts/migrations
 APP_CONFIG_TEMPLATE ?= app.template.yaml
 APP_CONFIG_OUTPUT ?= app.yaml
 WAREHOUSE_HTTP_PATH_DEFAULT ?= /sql/1.0/warehouses/e76480b94bea6ed5
+WAREHOUSE_ID ?= e76480b94bea6ed5
 TRACE_CATALOG_DEFAULT ?= connected_plant_uat
 TRACE_SCHEMA_DEFAULT ?= gold
 LOCKED_LIMITS_MIGRATION ?= $(MIGRATIONS_DIR)/000_setup_locked_limits.sql
@@ -37,7 +38,7 @@ render-app-config:
 	@export DATABRICKS_WAREHOUSE_HTTP_PATH="$${DATABRICKS_WAREHOUSE_HTTP_PATH:-$(WAREHOUSE_HTTP_PATH_DEFAULT)}" && \
 	 export TRACE_CATALOG="$${TRACE_CATALOG:-$(TRACE_CATALOG_DEFAULT)}" && \
 	 export TRACE_SCHEMA="$${TRACE_SCHEMA:-$(TRACE_SCHEMA_DEFAULT)}" && \
-	 envsubst '$$DATABRICKS_WAREHOUSE_HTTP_PATH $$TRACE_CATALOG $$TRACE_SCHEMA' < $(APP_CONFIG_TEMPLATE) > $(APP_CONFIG_OUTPUT)
+	 MSYS_NO_PATHCONV=1 envsubst '$$DATABRICKS_WAREHOUSE_HTTP_PATH $$TRACE_CATALOG $$TRACE_SCHEMA' < $(APP_CONFIG_TEMPLATE) > $(APP_CONFIG_OUTPUT)
 	@echo "✓ $(APP_CONFIG_OUTPUT) rendered"
 
 deploy: check-env build render-app-config
@@ -51,8 +52,12 @@ apply-migration: check-env
 	@echo "Applying $(NAME) migration from $(FILE)..."
 	@export TRACE_CATALOG="$${TRACE_CATALOG:-$(TRACE_CATALOG_DEFAULT)}" && \
 	 export TRACE_SCHEMA="$${TRACE_SCHEMA:-$(TRACE_SCHEMA_DEFAULT)}" && \
-	 envsubst '$$TRACE_CATALOG $$TRACE_SCHEMA' < $(FILE) | \
-	 databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "$$(cat)"
+	 SQL=$$(envsubst '$$TRACE_CATALOG $$TRACE_SCHEMA' < $(FILE)) && \
+	 TMPFILE=$$(mktemp /tmp/spc_mig_XXXXXX.json) && \
+	 python3 -c "import json,sys; print(json.dumps({'warehouse_id':sys.argv[1],'statement':sys.argv[2],'wait_timeout':'30s'}))" \
+	   "$(WAREHOUSE_ID)" "$$SQL" > "$$TMPFILE" && \
+	 MSYS_NO_PATHCONV=1 databricks api post /api/2.0/sql/statements --profile $(PROFILE) --json "@$$TMPFILE" && \
+	 rm -f "$$TMPFILE"
 	@echo "✓ $(NAME) table ready"
 
 setup-locked-limits:
@@ -62,10 +67,18 @@ setup-exclusions:
 	@$(MAKE) apply-migration NAME=spc_exclusions FILE=$(EXCLUSIONS_MIGRATION) PROFILE=$(PROFILE)
 	@export TRACE_CATALOG="$${TRACE_CATALOG:-$(TRACE_CATALOG_DEFAULT)}" && \
 	 export TRACE_SCHEMA="$${TRACE_SCHEMA:-$(TRACE_SCHEMA_DEFAULT)}" && \
-	 COLUMN_CHECK="$$(databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement \"SELECT column_name FROM system.information_schema.columns WHERE table_catalog = '$$TRACE_CATALOG' AND table_schema = '$$TRACE_SCHEMA' AND table_name = 'spc_exclusions' AND column_name = 'stratify_by'\")" && \
-	 if ! printf '%s\n' "$$COLUMN_CHECK" | grep -q "stratify_by"; then \
+	 TMPFILE=$$(mktemp /tmp/spc_col_XXXXXX.json) && \
+	 python3 -c "import json,sys; print(json.dumps({'warehouse_id':sys.argv[1],'statement':sys.argv[2],'wait_timeout':'30s'}))" \
+	   "$(WAREHOUSE_ID)" "SELECT column_name FROM system.information_schema.columns WHERE table_catalog='$$TRACE_CATALOG' AND table_schema='$$TRACE_SCHEMA' AND table_name='spc_exclusions' AND column_name='stratify_by'" > "$$TMPFILE" && \
+	 RESULT=$$(MSYS_NO_PATHCONV=1 databricks api post /api/2.0/sql/statements --profile $(PROFILE) --json "@$$TMPFILE" -o json) && \
+	 rm -f "$$TMPFILE" && \
+	 if ! printf '%s\n' "$$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); exit(0 if d.get('result',{}).get('data_array') else 1)" 2>/dev/null; then \
 	   echo "Adding missing stratify_by column to $$TRACE_CATALOG.$$TRACE_SCHEMA.spc_exclusions..."; \
-	   databricks sql execute --profile $(PROFILE) --wait-timeout 60s --statement "ALTER TABLE \`$$TRACE_CATALOG\`.\`$$TRACE_SCHEMA\`.\`spc_exclusions\` ADD COLUMNS (stratify_by STRING)"; \
+	   TMPFILE2=$$(mktemp /tmp/spc_alt_XXXXXX.json) && \
+	   python3 -c "import json,sys; print(json.dumps({'warehouse_id':sys.argv[1],'statement':sys.argv[2],'wait_timeout':'30s'}))" \
+	     "$(WAREHOUSE_ID)" "ALTER TABLE \`$$TRACE_CATALOG\`.\`$$TRACE_SCHEMA\`.\`spc_exclusions\` ADD COLUMNS (stratify_by STRING)" > "$$TMPFILE2" && \
+	   MSYS_NO_PATHCONV=1 databricks api post /api/2.0/sql/statements --profile $(PROFILE) --json "@$$TMPFILE2" && \
+	   rm -f "$$TMPFILE2"; \
 	 fi
 
 setup-query-audit:

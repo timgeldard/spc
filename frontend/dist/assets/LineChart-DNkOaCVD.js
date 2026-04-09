@@ -1,0 +1,1 @@
+import{g as a,L as i,X as s,Y as r,f as x}from"./CustomTooltip-Crd7s1ZW.js";var t=a({chartName:"LineChart",GraphicalChild:i,axisComponents:[{axisType:"xAxis",AxisComp:s},{axisType:"yAxis",AxisComp:r}],formatAxisMap:x});export{t as L};

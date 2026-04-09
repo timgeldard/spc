@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { CorrelationResult } from '../types'
+import type { CorrelationPair, CorrelationResult } from '../types'
 
 interface FetchCorrelationArgs {
   materialId: string
@@ -14,6 +14,17 @@ interface UseCorrelationResult {
   loading: boolean
   error: string | null
   fetchCorrelation: (args: FetchCorrelationArgs) => void
+}
+
+/** Normalise backend field aliases so display components always see a consistent shape. */
+function normalisePair(p: CorrelationPair): CorrelationPair {
+  return {
+    ...p,
+    mic_a_id: p.mic_a_id ?? p.mic_a ?? '',
+    mic_b_id: p.mic_b_id ?? p.mic_b ?? '',
+    pearson_r: p.pearson_r ?? p.r ?? null,
+    shared_batches: p.shared_batches ?? p.n ?? null,
+  }
 }
 
 export function useCorrelation(): UseCorrelationResult {
@@ -39,7 +50,7 @@ export function useCorrelation(): UseCorrelationResult {
       }),
     })
       .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(b.detail ?? `Error ${r.status}`)))
-      .then(d => setResult(d as CorrelationResult))
+      .then((d: CorrelationResult) => setResult({ ...d, pairs: d.pairs.map(normalisePair) }))
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
   }, [])

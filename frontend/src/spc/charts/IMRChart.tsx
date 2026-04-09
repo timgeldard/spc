@@ -41,6 +41,7 @@ export default function IMRChart({
       isOutlier: Boolean(point.is_outlier && !point.excluded),
       signalLabel: signalIndexSet.has(point.originalIndex) ? 'Signal' : null,
       onClickIndex: point.originalIndex,
+      stratifyValue: point.stratify_value ?? null,
     }))
   }, [indexedPoints, imr?.movingRanges, mrSignalIndexSet, signalIndexSet])
 

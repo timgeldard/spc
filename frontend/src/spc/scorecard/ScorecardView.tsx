@@ -34,12 +34,13 @@ const ScorecardTable = lazy(() => import('./ScorecardTable'))
 const CapabilityMatrix = lazy(() => import('../charts/CapabilityMatrix'))
 
 // ── Capability-status colour tokens ─────────────────────────────────────────
+// Kerry semantic status: Jade=capable, Sunrise=marginal, Sunset=poor
 const STATUS_COLOR: Record<string, string> = {
-  excellent: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  good: 'border-green-200 bg-green-50 text-green-700',
-  marginal: 'border-amber-200 bg-amber-50 text-amber-700',
-  poor: 'border-red-200 bg-red-50 text-red-700',
-  out_of_spec_mean: 'border-red-300 bg-red-100 text-red-800',
+  excellent:       'border-[#8FE2BE] bg-[#DAF5E9] text-[#143700]',  /* Jade strong */
+  good:            'border-[#B4ECD4] bg-[#DAF5E9] text-[#143700]',  /* Jade */
+  marginal:        'border-[#FDE79D] bg-[#FEF3CE] text-[#005776]',  /* Sunrise */
+  poor:            'border-[#FAB799] bg-[#FCDBCC] text-[#F24A00]',  /* Sunset */
+  out_of_spec_mean:'border-[#F56E33] bg-[#FCDBCC] text-[#F24A00]',  /* Sunset strong */
 }
 
 interface SummaryBarProps {
@@ -53,11 +54,11 @@ function SummaryBar({ rows }: SummaryBarProps) {
   const marginal = rows.filter(r => r.capability_status === 'marginal').length
   const poor = rows.filter(r => r.capability_status === 'poor').length
   const cards = [
-    { label: 'Characteristics', value: total, colorClass: 'border-slate-200 bg-slate-50 text-slate-800', meta: 'Total measurable MICs in scope' },
-    { label: 'Highly Capable (≥1.67)', value: excellent, colorClass: 'border-emerald-200 bg-emerald-50 text-emerald-700', meta: 'Strong headroom above specification' },
-    { label: 'Capable (≥1.33)', value: good, colorClass: 'border-green-200 bg-green-50 text-green-700', meta: 'Operationally healthy and reliable' },
-    { label: 'Marginal (≥1.00)', value: marginal, colorClass: 'border-amber-200 bg-amber-50 text-amber-700', meta: 'Monitor closely before release decisions' },
-    { label: 'Not Capable (<1.00)', value: poor, colorClass: 'border-red-200 bg-red-50 text-red-700', meta: 'Immediate attention required' },
+    { label: 'Characteristics', value: total, colorClass: 'border-[#CCDDE4] bg-[#F4F4EA] text-[#005776]', meta: 'Total measurable MICs in scope' },
+    { label: 'Highly Capable (≥1.67)', value: excellent, colorClass: 'border-[#8FE2BE] bg-[#DAF5E9] text-[#143700]', meta: 'Strong headroom above specification' },
+    { label: 'Capable (≥1.33)', value: good, colorClass: 'border-[#B4ECD4] bg-[#DAF5E9] text-[#143700]', meta: 'Operationally healthy and reliable' },
+    { label: 'Marginal (≥1.00)', value: marginal, colorClass: 'border-[#FDE79D] bg-[#FEF3CE] text-[#005776]', meta: 'Monitor closely before release decisions' },
+    { label: 'Not Capable (<1.00)', value: poor, colorClass: 'border-[#FAB799] bg-[#FCDBCC] text-[#F24A00]', meta: 'Immediate attention required' },
   ]
 
   return (

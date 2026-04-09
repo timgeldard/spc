@@ -5,33 +5,58 @@
 
 /* Tailwind theme tokens that map to existing design system */
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --color-brand: #1B3A4B;
-  --color-accent: #FF3621;
-  --color-capable: #10b981;
-  --color-marginal: #f59e0b;
-  --color-poor: #ef4444;
-  --color-muted: #6b7280;
+  --font-sans: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+
+  /* ── Colour tokens (reference CSS vars so dark mode works automatically) ── */
+  --color-brand:   var(--c-brand);
+  --color-accent:  var(--c-accent);
+  --color-surface: var(--c-surface);
+  --color-border:  var(--c-border);
+  --color-muted:   var(--c-text-muted);
+
+  /* Kerry semantic status palette */
+  --color-capable:  #44CF93;   /* Jade */
+  --color-marginal: #F9C20A;   /* Sunrise */
+  --color-poor:     #F24A00;   /* Sunset */
+
+  /* ── Type scale ── */
+  --text-2xs: 0.7rem;
+  --text-2xs--line-height: 1rem;
+  --text-eyebrow: 0.8125rem;
+  --text-eyebrow--line-height: 1.25rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-pagetitle: 1.45rem;
+  --text-pagetitle--line-height: 2rem;
+
+  /* ── Shadow tokens ── */
+  --shadow-base: 0 1px 4px rgba(0, 0, 0, .08), 0 4px 12px rgba(0, 0, 0, .06);
+
   --radius: 8px;
 }
 
-/* Dark mode overrides on existing CSS variables */
+/* ── Dark mode: Kerry brand-dark ── */
 [data-theme="dark"],
 .dark {
-  --c-bg: #0f172a;
-  --c-surface: #1e293b;
-  --c-text: #f1f5f9;
-  --c-text-muted: #94a3b8;
-  --c-border: #334155;
-  --c-brand: #38bdf8;
-  --spc-green: #34d399;
-  --spc-amber: #fbbf24;
-  --spc-red: #f87171;
-  --spc-green-bg: #064e3b;
-  --spc-amber-bg: #78350f;
-  --spc-red-bg: #7f1d1d;
-  --spc-grey-bg: #1e293b;
+  /* Canvas: Valentia Slate; Surfaces: Slate tints */
+  --c-bg:           #005776;   /* Slate canvas */
+  --c-surface:      #337991;   /* Slate 80 */
+  --c-text:         #FFFFFF;
+  --c-text-muted:   #F1F1E5;   /* Stone secondary text */
+  --c-border:       #669AAD;   /* Slate 60 */
+  --c-brand:        #289BA2;   /* Sage — primary action in dark */
+  --c-accent:       #44CF93;   /* Jade accent in dark */
+
+  /* SPC status on dark background */
+  --spc-green:    #44CF93;     /* Jade */
+  --spc-amber:    #F9C20A;     /* Sunrise */
+  --spc-red:      #F56E33;     /* Sunset 80 — more visible on Slate */
+  --spc-green-bg: #143700;     /* Forest */
+  --spc-amber-bg: #335500;     /* Forest-ish dark */
+  --spc-red-bg:   #3D1200;     /* very dark warm */
+  --spc-grey-bg:  #337991;     /* Slate 80 */
 }
 
-/* Inter numeric opentype features */
+/* Noto Sans OpenType features */
 body { font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; }

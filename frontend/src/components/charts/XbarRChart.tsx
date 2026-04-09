@@ -34,11 +34,13 @@ interface IndustrialXbarRChartProps {
   title?: string
 }
 
+// §4.7 SPC charts: data=Slate, centerline=Sage, violations=Sunset
 const chartTheme = {
   grid: 'var(--c-border)',
   muted: 'var(--c-text-muted)',
-  danger: 'var(--c-status-red)',
-  primary: 'var(--c-text)',
+  danger: 'var(--c-status-red)',   // Sunset — violations only
+  primary: 'var(--c-brand)',        // Slate — data series
+  cl: 'var(--c-accent)',            // Sage — centerline
   contrast: 'var(--c-surface)',
 }
 
@@ -90,7 +92,7 @@ export function XbarRChart({
               <Tooltip content={<CustomTooltip />} />
               {ucl != null && <ReferenceLine y={ucl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'UCL', fill: chartTheme.danger, fontSize: 11 }} />}
               {lcl != null && <ReferenceLine y={lcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'LCL', fill: chartTheme.danger, fontSize: 11 }} />}
-              {target != null && <ReferenceLine y={target} stroke={chartTheme.muted} strokeDasharray="2 2" label={{ value: 'Target', fill: chartTheme.muted, fontSize: 11 }} />}
+              {target != null && <ReferenceLine y={target} stroke={chartTheme.cl} strokeDasharray="2 2" label={{ value: 'CL', fill: chartTheme.cl, fontSize: 11 }} />}
               <Line type="monotone" dataKey="xbar" stroke={chartTheme.primary} strokeWidth={2.5} dot={(props) => <PrimaryDot cx={props.cx} cy={props.cy} payload={props.payload as IndustrialXbarRPoint | undefined} />} activeDot={{ r: 5 }} name="Subgroup Mean" />
             </LineChart>
           </ResponsiveContainer>
@@ -105,8 +107,8 @@ export function XbarRChart({
               <Tooltip content={<CustomTooltip />} />
               {rangeUcl != null && <ReferenceLine y={rangeUcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'R UCL', fill: chartTheme.danger, fontSize: 11 }} />}
               {rangeLcl != null && <ReferenceLine y={rangeLcl} stroke={chartTheme.danger} strokeDasharray="3 3" label={{ value: 'R LCL', fill: chartTheme.danger, fontSize: 11 }} />}
-              {rangeTarget != null && <ReferenceLine y={rangeTarget} stroke={chartTheme.muted} strokeDasharray="2 2" label={{ value: 'R̄', fill: chartTheme.muted, fontSize: 11 }} />}
-              <Line type="monotone" dataKey="range" stroke={chartTheme.muted} strokeWidth={1.75} dot={(props) => <RangeDot cx={props.cx} cy={props.cy} payload={props.payload as IndustrialXbarRPoint | undefined} />} activeDot={{ r: 5 }} name="Subgroup Range" />
+              {rangeTarget != null && <ReferenceLine y={rangeTarget} stroke={chartTheme.cl} strokeDasharray="2 2" label={{ value: 'R̄', fill: chartTheme.cl, fontSize: 11 }} />}
+              <Line type="monotone" dataKey="range" stroke={chartTheme.cl} strokeWidth={1.75} dot={(props) => <RangeDot cx={props.cx} cy={props.cy} payload={props.payload as IndustrialXbarRPoint | undefined} />} activeDot={{ r: 5 }} name="Subgroup Range" />
             </LineChart>
           </ResponsiveContainer>
         </div>
