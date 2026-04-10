@@ -1,5 +1,4 @@
 import { InlineNotification } from '~/lib/carbon-feedback'
-import type { ReactNode } from 'react'
 
 type Variant = 'error' | 'warn' | 'info' | 'neutral'
 
@@ -12,7 +11,7 @@ const KIND_MAP: Record<Variant, 'error' | 'warning' | 'info' | 'info-square'> = 
 
 interface InfoBannerProps {
   variant?: Variant
-  children: ReactNode
+  children: string
 }
 
 /**
@@ -27,7 +26,7 @@ export default function InfoBanner({ variant = 'neutral', children }: InfoBanner
     <InlineNotification
       kind={KIND_MAP[variant]}
       title=""
-      subtitle={children as string}
+      subtitle={children}
       hideCloseButton
       lowContrast
       role={variant === 'error' ? 'alert' : 'status'}

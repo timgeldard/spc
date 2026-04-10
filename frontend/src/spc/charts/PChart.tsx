@@ -3,6 +3,15 @@ import EChart from './EChart'
 import { computePChart } from '../calculations'
 import type { ChartPaneProps, EventParamLike } from '../types'
 
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;')
+    .split("'").join('&#39;')
+}
+
 interface PChartInputPoint {
   batch_id?: string | null
   batch_seq?: number | null
@@ -86,8 +95,8 @@ export default function PChart({ points, embedded = false }: PChartViewProps) {
           const s = subgroupStats[p.dataIndex]
           if (!s) return ''
           const ooc = s.p > s.ucl || s.p < s.lcl
-          let html = `<strong>${s.batch_id ?? categories[p.dataIndex]}</strong><br/>`
-          if (s.batch_date) html += `Date: ${s.batch_date}<br/>`
+          let html = `<strong>${escapeHtml(s.batch_id ?? categories[p.dataIndex])}</strong><br/>`
+          if (s.batch_date) html += `Date: ${escapeHtml(s.batch_date)}<br/>`
           html += `p: <strong>${(s.p * 100).toFixed(2)}%</strong> (${s.n_nonconforming}/${s.n_inspected})<br/>`
           html += `p̄ = ${(pBar * 100).toFixed(2)}%<br/>`
           html += `UCL = ${(s.ucl * 100).toFixed(2)}%  LCL = ${(Math.max(0, s.lcl) * 100).toFixed(2)}%<br/>`

@@ -42,9 +42,10 @@ interface GRRResultProps {
   result: MSAResult | null
   onSave: () => Promise<void>
   saving: boolean
+  isPersistable: boolean
 }
 
-function GRRResult({ result, onSave, saving }: GRRResultProps) {
+function GRRResult({ result, onSave, saving, isPersistable }: GRRResultProps) {
   if (!result) return null
   if (result.error) return <InfoBanner variant="error">{result.error}</InfoBanner>
 
@@ -114,7 +115,7 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
           )}
         </p>
 
-        <Button kind="primary" onClick={() => { void onSave() }} disabled={saving}>
+        <Button kind="primary" onClick={() => { void onSave() }} disabled={saving || !isPersistable}>
           {saving ? 'Saving…' : 'Save Session'}
         </Button>
       </Stack>
@@ -157,6 +158,8 @@ export default function MSAView() {
   const [csvText, setCsvText] = useState<string>(() => generateSampleData(3, 10, 2))
   const [result, setResult] = useState<MSAResult | null>(null)
   const { saving, error: saveError, save } = useMSASave()
+
+  const isPersistable = !!result && !result?.error && !!state.selectedMaterial && !!state.selectedMIC
 
   const handleCalculate = () => {
     const data = parseCSVData(csvText, nOperators, nParts, nReplicates)
@@ -247,6 +250,7 @@ export default function MSAView() {
                       kind={method === 'average_range' ? 'primary' : 'secondary'}
                       size="sm"
                       onClick={() => setMethod('average_range')}
+                      aria-pressed={method === 'average_range'}
                     >
                       Average &amp; Range
                     </Button>
@@ -254,6 +258,7 @@ export default function MSAView() {
                       kind={method === 'anova' ? 'primary' : 'secondary'}
                       size="sm"
                       onClick={() => setMethod('anova')}
+                      aria-pressed={method === 'anova'}
                     >
                       ANOVA
                     </Button>
@@ -377,7 +382,7 @@ export default function MSAView() {
       </div>
 
       {saveError && <InfoBanner variant="error">{saveError}</InfoBanner>}
-      <GRRResult result={result} onSave={handleSave} saving={saving} />
+      <GRRResult result={result} onSave={handleSave} saving={saving} isPersistable={isPersistable} />
     </Stack>
   )
 }

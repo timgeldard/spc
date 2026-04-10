@@ -41,6 +41,14 @@ const STATUS_COLOR = {
   grey:  'var(--cds-icon-secondary)',
 }
 
+// Concrete hex fallbacks for MiniMap (cannot resolve CSS vars)
+const STATUS_MINIMAP_COLOR: Record<string, string> = {
+  green: '#24a148',   // IBM Green 50
+  amber: '#f1c21b',   // IBM Yellow 30
+  red:   '#da1e28',   // IBM Red 60
+  grey:  '#697077',   // IBM Gray 50
+}
+
 function buildFlowElements(
   rawNodes?: ProcessFlowNodeRecord[] | null,
   rawEdges?: ProcessFlowEdgeData[] | null,
@@ -310,10 +318,7 @@ export default function ProcessFlowView() {
             <Background variant={'dots' as BackgroundVariant} gap={24} color="var(--cds-border-subtle-01)" />
             <Controls />
             <MiniMap
-              nodeColor={n => {
-                const raw = STATUS_COLOR[(n.data?.status ?? 'grey') as keyof typeof STATUS_COLOR] ?? 'var(--cds-icon-secondary)'
-                return raw.startsWith('var(') ? '#99BCC8' : raw
-              }}
+              nodeColor={n => STATUS_MINIMAP_COLOR[(n.data?.status ?? 'grey') as string] ?? '#697077'}
               maskColor="rgba(0,0,0,0.05)"
               pannable
               zoomable

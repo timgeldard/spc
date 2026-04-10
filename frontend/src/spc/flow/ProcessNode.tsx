@@ -37,6 +37,8 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
       aria-label={ariaLabel}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
       style={{
         background: s.bg,
         border: `1.5px solid ${selected ? s.dot : s.border}`,

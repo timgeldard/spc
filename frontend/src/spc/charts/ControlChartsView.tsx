@@ -51,7 +51,6 @@ function renderQuantitativeChart(
   limits: LockedLimits | null,
   excludedSet: Set<number>,
   onPointClick?: (index: number) => void,
-  embedded = false,
 ) {
   return (
     <Suspense fallback={<ChartSkeleton height="520px" />}>
@@ -431,7 +430,7 @@ export default function ControlChartsView() {
                   </Suspense>
                 ) : (
                   ctrl.spc
-                    ? renderQuantitativeChart(ctrl.spc, ctrl.externalLimits, excludedIndices, ctrl.handlePointClick, true)
+                    ? renderQuantitativeChart(ctrl.spc, ctrl.externalLimits, excludedIndices, ctrl.handlePointClick)
                     : null
                 )}
               </ChartCard>
@@ -554,7 +553,7 @@ export default function ControlChartsView() {
                     micLabel={selectedMIC.mic_name || selectedMIC.mic_id}
                     stratifyBy={state.stratifyBy ?? ''}
                     sections={ctrl.stratumSections}
-                    renderChart={spc => renderQuantitativeChart(spc, null, new Set<number>(), undefined, true)}
+                    renderChart={spc => renderQuantitativeChart(spc, null, new Set<number>())}
                     renderSignals={spc => (
                       <Suspense fallback={<ChartSkeleton height="160px" />}>
                         <SignalsPanel signals={spc.signals} mrSignals={spc.mrSignals} indexedPoints={spc.indexedPoints} ruleSet={state.ruleSet} />
