@@ -1,5 +1,2 @@
-export { IMRChart } from './IMRChart'
-export { XbarRChart } from './XbarRChart'
-export { PChart } from './PChart'
 export { CapabilityPanel } from './CapabilityPanel'
 export { CustomTooltip } from './CustomTooltip'

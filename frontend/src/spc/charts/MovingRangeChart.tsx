@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
-import { chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 import type { EventParamLike, IndexedChartPoint, SPCComputationResult, SPCSignal } from '../types'
 
 interface MovingRangeChartProps {
@@ -32,7 +31,7 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
       const isSignal = signalIndices.has(i)
       return {
         value: mr,
-        itemStyle: { color: isSignal ? '#ef4444' : '#64748b' },
+        itemStyle: { color: isSignal ? '#da1e28' : '#64748b' },
         symbolSize: isSignal ? 7 : 4,
       }
     })
@@ -87,8 +86,8 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
           silent: true,
           symbol: ['none', 'none'],
           data: [
-            { yAxis: ucl_mr, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl_mr.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } },
-            { yAxis: mrBar,  lineStyle: { color: '#1B3A4B', type: 'solid',  width: 2   }, label: { formatter: `MR̄ ${mrBar.toFixed(4)}`,  position: 'end', color: '#1B3A4B', fontSize: 10 } },
+            { yAxis: ucl_mr, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${ucl_mr.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } },
+            { yAxis: mrBar,  lineStyle: { color: '#0f62fe', type: 'solid',  width: 2   }, label: { formatter: `MR̄ ${mrBar.toFixed(4)}`,  position: 'end', color: '#0f62fe', fontSize: 10 } },
             { yAxis: 0,      lineStyle: { color: '#94a3b8', type: 'solid',  width: 1   }, label: { show: false } },
           ],
         },
@@ -99,8 +98,8 @@ export default function MovingRangeChart({ spc, indexedPoints, mrSignals, extern
   if (!imr || !indexedPoints || !option) return null
 
   return (
-    <div className={chartPaneClass}>
-      <div className={chartPaneTitleClass}>Moving Range Chart (MR)</div>
+    <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
+      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>Moving Range Chart (MR)</div>
       <EChart option={option} style={{ height: 180 }} theme="spc" notMerge ariaLabel="Moving range (MR) control chart" />
     </div>
   )

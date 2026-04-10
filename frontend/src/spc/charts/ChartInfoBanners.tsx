@@ -1,12 +1,5 @@
-import { AlertTriangle } from 'lucide-react'
-
+import { InlineNotification } from '~/lib/carbon-feedback'
 import type { ExclusionAuditSnapshot } from '../types'
-import {
-  infoBannerErrorClass,
-  infoBannerInfoClass,
-  infoBannerNeutralClass,
-  infoBannerWarnClass,
-} from '../uiClasses'
 
 interface ChartInfoBannersProps {
   lockedLimitsError?: string | null
@@ -26,33 +19,52 @@ export default function ChartInfoBanners({
   return (
     <>
       {lockedLimitsError && (
-        <div className={infoBannerErrorClass} role="alert">
-          Locked limits error: {lockedLimitsError}
-        </div>
+        <InlineNotification
+          kind="error"
+          title="Locked limits error:"
+          subtitle={lockedLimitsError}
+          hideCloseButton
+          lowContrast
+        />
       )}
       {exclusionsError && (
-        <div className={infoBannerErrorClass} role="alert">
-          Exclusions audit error: {exclusionsError}
-        </div>
+        <InlineNotification
+          kind="error"
+          title="Exclusions audit error:"
+          subtitle={exclusionsError}
+          hideCloseButton
+          lowContrast
+        />
       )}
       {exclusionsLoading && (
-        <div className={infoBannerInfoClass} role="status" aria-live="polite">
-          Loading persisted exclusions…
-        </div>
+        <InlineNotification
+          kind="info"
+          title="Loading persisted exclusions…"
+          hideCloseButton
+          lowContrast
+        />
       )}
       {dataTruncated && (
-        <div className={infoBannerWarnClass} role="alert">
-          <AlertTriangle size={16} />
-          <span>Data limit reached. Only the first 10,000 points are displayed. Please narrow your Date Range for a complete analysis.</span>
-        </div>
+        <InlineNotification
+          kind="warning"
+          title="Data limit reached."
+          subtitle="Only the first 10,000 points are displayed. Please narrow your Date Range for a complete analysis."
+          hideCloseButton
+          lowContrast
+        />
       )}
       {exclusionAudit && (
-        <div className={infoBannerNeutralClass} role="status" aria-live="polite">
-          {exclusionAudit.excluded_count ?? 0} point{(exclusionAudit.excluded_count ?? 0) !== 1 ? 's' : ''} excluded
-          {exclusionAudit.user_id ? ` by ${exclusionAudit.user_id}` : ''}
-          {exclusionAudit.event_ts ? ` on ${String(exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : ''}
-          {exclusionAudit.justification ? ` — ${exclusionAudit.justification}` : ''}
-        </div>
+        <InlineNotification
+          kind="info"
+          title={`${exclusionAudit.excluded_count ?? 0} point${(exclusionAudit.excluded_count ?? 0) !== 1 ? 's' : ''} excluded`}
+          subtitle={[
+            exclusionAudit.user_id ? `by ${exclusionAudit.user_id}` : '',
+            exclusionAudit.event_ts ? `on ${String(exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : '',
+            exclusionAudit.justification ? `— ${exclusionAudit.justification}` : '',
+          ].filter(Boolean).join(' ')}
+          hideCloseButton
+          lowContrast
+        />
       )}
     </>
   )

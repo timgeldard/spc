@@ -1,49 +1,7 @@
 @use '@carbon/styles';
 
 :root {
-  /* Temporary compatibility bridge while legacy surfaces are migrated */
-  --c-brand: var(--cds-link-primary);
-  --c-accent: var(--cds-icon-info);
-  --c-bg: var(--cds-background);
-  --c-surface: var(--cds-layer);
-  --c-text: var(--cds-text-primary);
-  --c-text-muted: var(--cds-text-secondary);
-  --c-border: var(--cds-border-subtle-01);
-
-  --c-status-green: var(--cds-support-success);
-  --c-status-red: var(--cds-support-error);
-  --c-status-yellow: var(--cds-support-warning);
-  --c-status-gray: var(--cds-icon-secondary);
-
-  --c-status-ok-bg: color-mix(in srgb, var(--cds-support-success) 16%, var(--cds-layer) 84%);
-  --c-status-ok-border: color-mix(in srgb, var(--cds-support-success) 40%, var(--cds-border-subtle-01) 60%);
-  --c-status-ok-strong-border: color-mix(in srgb, var(--cds-support-success) 55%, var(--cds-border-subtle-01) 45%);
-  --c-status-ok-text: var(--cds-text-primary);
-
-  --c-status-warn-bg: color-mix(in srgb, var(--cds-support-warning) 18%, var(--cds-layer) 82%);
-  --c-status-warn-border: color-mix(in srgb, var(--cds-support-warning) 42%, var(--cds-border-subtle-01) 58%);
-  --c-status-warn-text: var(--cds-text-primary);
-
-  --c-status-bad-bg: color-mix(in srgb, var(--cds-support-error) 16%, var(--cds-layer) 84%);
-  --c-status-bad-border: color-mix(in srgb, var(--cds-support-error) 42%, var(--cds-border-subtle-01) 58%);
-  --c-status-bad-strong-border: color-mix(in srgb, var(--cds-support-error) 58%, var(--cds-border-subtle-01) 42%);
-  --c-status-bad-text: var(--cds-text-primary);
-
-  --c-status-neutral-bg: var(--cds-layer-accent-01);
-  --c-status-neutral-border: var(--cds-border-subtle-01);
-  --c-status-neutral-text: var(--cds-text-secondary);
-
-  --c-status-info-bg: color-mix(in srgb, var(--cds-support-info) 16%, var(--cds-layer) 84%);
-  --c-status-info-border: color-mix(in srgb, var(--cds-support-info) 40%, var(--cds-border-subtle-01) 60%);
-  --c-status-info-text: var(--cds-text-primary);
-
-  --spc-green: var(--cds-support-success);
-  --spc-amber: var(--cds-support-warning);
-  --spc-red: var(--cds-support-error);
-
-  --radius: 0;
   --spc-shadow-base: 0 1px 2px rgb(0 0 0 / 0.16);
-  --shadow-base: var(--spc-shadow-base);
 }
 
 html,

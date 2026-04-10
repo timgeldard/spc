@@ -16,8 +16,10 @@ import ChartSettingsRail from './ChartSettingsRail'
 import ChartSummaryBar from './ChartSummaryBar'
 import StratificationPanel from './StratificationPanel'
 
-const IMRChart                   = lazy(() => import('./IMRChart'))
-const XbarRChart                 = lazy(() => import('./XbarRChart'))
+const IndividualsChart           = lazy(() => import('./IndividualsChart'))
+const MovingRangeChart           = lazy(() => import('./MovingRangeChart'))
+const XbarChart                  = lazy(() => import('./XbarChart'))
+const RangeChart                 = lazy(() => import('./RangeChart'))
 const PChart                     = lazy(() => import('./PChart'))
 const CChart                     = lazy(() => import('./CChart'))
 const UChart                     = lazy(() => import('./UChart'))
@@ -54,24 +56,35 @@ function renderQuantitativeChart(
   return (
     <Suspense fallback={<ChartSkeleton height="520px" />}>
       {spcResult.chartType === 'imr' ? (
-        <IMRChart
-          spc={spcResult}
-          indexedPoints={spcResult.indexedPoints}
-          signals={spcResult.signals}
-          mrSignals={spcResult.mrSignals}
-          excludedIndices={excludedSet}
-          onPointClick={onPointClick}
-          externalLimits={limits}
-          embedded={embedded}
-        />
+        <>
+          <IndividualsChart
+            spc={spcResult}
+            indexedPoints={spcResult.indexedPoints}
+            signals={spcResult.signals}
+            excludedIndices={excludedSet}
+            onPointClick={onPointClick}
+            externalLimits={limits}
+          />
+          <MovingRangeChart
+            spc={spcResult}
+            indexedPoints={spcResult.indexedPoints ?? []}
+            mrSignals={spcResult.mrSignals ?? []}
+            externalUclMr={limits?.ucl_r}
+          />
+        </>
       ) : (
-        <XbarRChart
-          spc={spcResult}
-          signals={spcResult.signals}
-          mrSignals={spcResult.mrSignals}
-          externalLimits={limits}
-          embedded={embedded}
-        />
+        <>
+          <XbarChart
+            spc={spcResult}
+            signals={spcResult.signals}
+            externalLimits={limits}
+          />
+          <RangeChart
+            spc={spcResult}
+            mrSignals={spcResult.mrSignals ?? []}
+            externalUclR={limits?.ucl_r}
+          />
+        </>
       )}
     </Suspense>
   )

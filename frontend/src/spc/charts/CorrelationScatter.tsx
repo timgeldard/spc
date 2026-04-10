@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
-import { loadingClass, spinnerClass, surfacePanelClass } from '../uiClasses'
+import { InlineLoading } from '~/lib/carbon-feedback'
+import { Tile } from '~/lib/carbon-layout'
 import InfoBanner from '../components/InfoBanner'
 import type { CorrelationScatterPoint, CorrelationScatterProps, EventParamLike } from '../types'
 
@@ -103,9 +104,8 @@ export default function CorrelationScatter({ result, loading, error }: Correlati
 
   if (loading) {
     return (
-      <div className={`${loadingClass} min-h-[120px]`}>
-        <div className={spinnerClass} />
-        <p>Loading scatter data…</p>
+      <div style={{ minHeight: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+        <InlineLoading description="Loading scatter data…" status="active" />
       </div>
     )
   }
@@ -117,8 +117,8 @@ export default function CorrelationScatter({ result, loading, error }: Correlati
   if (!option) return null
 
   return (
-    <div className={surfacePanelClass}>
+    <Tile>
       <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge ariaLabel="Scatter plot for selected characteristic pair" />
-    </div>
+    </Tile>
   )
 }

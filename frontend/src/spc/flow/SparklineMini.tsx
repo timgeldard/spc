@@ -72,7 +72,7 @@ export default function SparklineMini({
       <polyline
         points={points}
         fill="none"
-        stroke="var(--c-brand)"
+        stroke="var(--cds-interactive)"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -95,7 +95,7 @@ export default function SparklineMini({
         cx={scaleX(n - 1)}
         cy={scaleY(values[n - 1])}
         r={2}
-        fill="var(--c-brand)"
+        fill="var(--cds-interactive)"
       />
     </svg>
   )

@@ -44,17 +44,17 @@ export default function CapabilityGauge({
   const needleBase2 = polarToXY(needleAngle + 90, 6)
 
   const color =
-    value === null ? '#9ca3af' :
-    value >= 1.33  ? '#10b981' :
-    value >= 1.00  ? '#f59e0b' :
-                     '#ef4444'
+    value === null ? 'var(--cds-text-placeholder)' :
+    value >= 1.33  ? 'var(--cds-support-success)' :
+    value >= 1.00  ? 'var(--cds-support-warning)' :
+                     'var(--cds-support-error)'
 
   const ciTitle = (lower95 != null && upper95 != null)
     ? `${label}: ${value?.toFixed(2) ?? '—'}\n95% CI: [${lower95.toFixed(2)}, ${upper95.toFixed(2)}]`
     : undefined
 
   return (
-    <div className="flex flex-col items-center gap-1 text-center" title={ciTitle}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center' }} title={ciTitle}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         {/* Background track */}
         <path d={arc(-180, 0, R)} fill="none" stroke="#e5e7eb" strokeWidth={STROKE} strokeLinecap="butt" />
@@ -93,7 +93,7 @@ export default function CapabilityGauge({
         <text x={CX} y={CY - 2} textAnchor="middle" fontSize="10" fill="#6b7280">{label}</text>
       </svg>
       {lower95 != null && upper95 != null && (
-        <div className="text-[0.7rem] text-[var(--c-text-muted)]">[{lower95.toFixed(2)}, {upper95.toFixed(2)}]</div>
+        <div style={{ fontSize: '0.7rem', color: 'var(--cds-text-secondary)' }}>[{lower95.toFixed(2)}, {upper95.toFixed(2)}]</div>
       )}
     </div>
   )

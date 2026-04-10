@@ -1,13 +1,13 @@
+import { InlineNotification } from '~/lib/carbon-feedback'
 import type { ReactNode } from 'react'
-import { infoBannerErrorClass, infoBannerInfoClass, infoBannerNeutralClass, infoBannerWarnClass } from '../uiClasses'
 
 type Variant = 'error' | 'warn' | 'info' | 'neutral'
 
-const VARIANT_CLASS: Record<Variant, string> = {
-  error: infoBannerErrorClass,
-  warn: infoBannerWarnClass,
-  info: infoBannerInfoClass,
-  neutral: infoBannerNeutralClass,
+const KIND_MAP: Record<Variant, 'error' | 'warning' | 'info' | 'info-square'> = {
+  error:   'error',
+  warn:    'warning',
+  info:    'info',
+  neutral: 'info-square',
 }
 
 interface InfoBannerProps {
@@ -16,7 +16,7 @@ interface InfoBannerProps {
 }
 
 /**
- * Consistent info/warning/error banner. Replaces ad-hoc .banner.banner--* CSS classes.
+ * Inline info/warning/error banner backed by Carbon InlineNotification.
  *
  * Usage:
  *   <InfoBanner variant="error">Failed to load data: {error}</InfoBanner>
@@ -24,12 +24,13 @@ interface InfoBannerProps {
  */
 export default function InfoBanner({ variant = 'neutral', children }: InfoBannerProps) {
   return (
-    <div
-      className={VARIANT_CLASS[variant]}
+    <InlineNotification
+      kind={KIND_MAP[variant]}
+      title=""
+      subtitle={children as string}
+      hideCloseButton
+      lowContrast
       role={variant === 'error' ? 'alert' : 'status'}
-      aria-live={variant === 'error' ? 'assertive' : 'polite'}
-    >
-      {children}
-    </div>
+    />
   )
 }

@@ -1,13 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   resolve: {
     alias: {
       '~': path.resolve(__dirname, 'src'),
@@ -35,9 +34,7 @@ export default defineConfig({
           ) {
             return 'spc-core'
           }
-          if (id.includes('node_modules/recharts/')) return 'recharts'
           if (id.includes('node_modules/framer-motion/')) return 'motion'
-          if (id.includes('node_modules/ag-grid-community/') || id.includes('node_modules/ag-grid-react/')) return 'ag-grid'
           if (id.includes('node_modules/zrender/')) return 'zrender'
           if (id.includes('node_modules/echarts/')) return 'echarts-core'
           if (id.includes('node_modules/echarts-for-react/')) return 'echarts-react'
