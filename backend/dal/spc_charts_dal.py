@@ -189,6 +189,7 @@ def _build_chart_filters(
     date_from: Optional[str],
     date_to: Optional[str],
     stratify_by: Optional[str] = None,
+    operation_id: Optional[str] = None,
 ) -> ChartFilterSpec:
     params = [
         sql_param("material_id", material_id),
@@ -207,9 +208,9 @@ def _build_chart_filters(
     final_where_conditions: list[str] = []
     select_extra_columns: list[str] = []
 
-    if mic_name:
-        params.append(sql_param("mic_name", mic_name))
-        quality_conditions.append("r.MIC_NAME = :mic_name")
+    if operation_id:
+        params.append(sql_param("operation_id", operation_id))
+        quality_conditions.append("r.OPERATION_ID = :operation_id")
     if date_from:
         batch_date_conditions.append("POSTING_DATE >= :date_from")
         params.append(sql_param("date_from", date_from))
@@ -294,7 +295,7 @@ def _build_quality_data_cte(filters: ChartFilterSpec):
 
     query = (
         MySQLQuery.from_(r)
-        .left_join(bd)
+        .join(bd)
         .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
         .select(*select_terms)
     )
@@ -381,10 +382,10 @@ def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tupl
     final_query = (
         MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
         .from_(r)
-        .left_join(bd)
+        .join(bd)
         .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
         .select(_sql_expr("CAST(r.QUANTITATIVE_RESULT AS DOUBLE)").as_("value"))
-        .orderby(_sql_expr("COALESCE(bd.batch_date, '9999-12-31')"))
+        .orderby(bd.batch_date)
         .orderby(r.BATCH_ID)
         .orderby(r.SAMPLE_ID)
         .orderby(r.INSPECTION_LOT_ID)
@@ -405,6 +406,7 @@ async def fetch_chart_data_page(
     stratify_by: Optional[str] = None,
     cursor: Optional[str] = None,
     limit: int = 1000,
+    operation_id: Optional[str] = None,
 ) -> dict:
     filters = _build_chart_filters(
         material_id,
@@ -414,6 +416,7 @@ async def fetch_chart_data_page(
         date_from,
         date_to,
         stratify_by,
+        operation_id,
     )
     query, params = _build_chart_page_query(filters, cursor, limit)
     rows = await run_sql_async(token, query, params)
@@ -447,6 +450,7 @@ async def fetch_chart_data_values(
     date_to: Optional[str],
     stratify_by: Optional[str] = None,
     max_points: int = _NORMALITY_MAX_POINTS,
+    operation_id: Optional[str] = None,
 ) -> list[Optional[float]]:
     filters = _build_chart_filters(
         material_id,
@@ -456,6 +460,7 @@ async def fetch_chart_data_values(
         date_from,
         date_to,
         stratify_by,
+        operation_id,
     )
     query, params = _build_chart_values_query(filters, max_points)
     rows = await run_sql_async(token, query, params)
@@ -479,6 +484,7 @@ async def fetch_chart_data(
     date_to: Optional[str],
     stratify_by: Optional[str] = None,
     max_rows: int = _FULL_CHART_MAX_ROWS,
+    operation_id: Optional[str] = None,
 ) -> list[dict]:
     all_rows: list[dict] = []
     cursor = None
@@ -495,6 +501,7 @@ async def fetch_chart_data(
             stratify_by,
             cursor=cursor,
             limit=min(1000, remaining),
+            operation_id=operation_id,
         )
         all_rows.extend(page["data"])
         if not page["has_more"]:
@@ -511,10 +518,9 @@ async def fetch_p_chart_data(
     plant_id: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
+    operation_id: Optional[str] = None,
 ) -> list[dict]:
     params = [sql_param("material_id", material_id), sql_param("mic_id", mic_id)]
-    if mic_name:
-        params.append(sql_param("mic_name", mic_name))
     mb_clauses = []
     if date_from:
         mb_clauses.append("mb.POSTING_DATE >= :date_from")
@@ -526,7 +532,9 @@ async def fetch_p_chart_data(
         mb_clauses.append("mb.PLANT_ID = :plant_id")
         params.append(sql_param("plant_id", plant_id))
     date_filter = ("AND " + " AND ".join(mb_clauses)) if mb_clauses else ""
-    mic_name_filter = "AND r.MIC_NAME = :mic_name" if mic_name else ""
+    if operation_id:
+        params.append(sql_param("operation_id", operation_id))
+    operation_id_filter = "AND r.OPERATION_ID = :operation_id" if operation_id else ""
 
     query = f"""
         WITH batch_dates AS (
@@ -548,7 +556,7 @@ async def fetch_p_chart_data(
                 ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
             WHERE r.MATERIAL_ID = :material_id
               AND r.MIC_ID       = :mic_id
-              {mic_name_filter}
+              {operation_id_filter}
               AND r.QUALITATIVE_RESULT IS NOT NULL
               AND r.QUALITATIVE_RESULT != ''
               AND r.INSPECTION_RESULT_VALUATION IN ('A', 'R')
@@ -583,10 +591,9 @@ async def fetch_count_chart_data(
     date_from: Optional[str],
     date_to: Optional[str],
     chart_subtype: str,
+    operation_id: Optional[str] = None,
 ) -> list[dict]:
     params = [sql_param("material_id", material_id), sql_param("mic_id", mic_id)]
-    if mic_name:
-        params.append(sql_param("mic_name", mic_name))
     mb_clauses = []
     if date_from:
         mb_clauses.append("mb.POSTING_DATE >= :date_from")
@@ -598,7 +605,9 @@ async def fetch_count_chart_data(
         mb_clauses.append("mb.PLANT_ID = :plant_id")
         params.append(sql_param("plant_id", plant_id))
     date_filter = ("AND " + " AND ".join(mb_clauses)) if mb_clauses else ""
-    mic_name_filter = "AND r.MIC_NAME = :mic_name" if mic_name else ""
+    if operation_id:
+        params.append(sql_param("operation_id", operation_id))
+    operation_id_filter = "AND r.OPERATION_ID = :operation_id" if operation_id else ""
 
     query = f"""
         WITH batch_dates AS (
@@ -620,7 +629,7 @@ async def fetch_count_chart_data(
                 ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
             WHERE r.MATERIAL_ID = :material_id
               AND r.MIC_ID       = :mic_id
-              {mic_name_filter}
+              {operation_id_filter}
               AND r.QUALITATIVE_RESULT IS NOT NULL
               AND r.QUALITATIVE_RESULT != ''
               AND r.INSPECTION_RESULT_VALUATION IN ('A', 'R')
@@ -658,6 +667,7 @@ async def save_locked_limits(
     sigma_within: Optional[float],
     baseline_from: Optional[str],
     baseline_to: Optional[str],
+    operation_id: Optional[str] = None,
 ) -> None:
     params = [
         sql_param("material_id", material_id),
@@ -679,12 +689,20 @@ async def save_locked_limits(
     else:
         source_plant_expr = "NULL"
         plant_on_clause = "t.plant_id IS NULL AND s.plant_id IS NULL"
+    if operation_id:
+        source_operation_id_expr = "CAST(:operation_id AS STRING)"
+        operation_id_on_clause = "COALESCE(t.operation_id, '') = COALESCE(s.operation_id, '')"
+        params.append(sql_param("operation_id", operation_id))
+    else:
+        source_operation_id_expr = "NULL"
+        operation_id_on_clause = "t.operation_id IS NULL AND s.operation_id IS NULL"
     merge_sql = f"""
         MERGE INTO {tbl('spc_locked_limits')} AS t
         USING (SELECT
             :material_id   AS material_id,
             :mic_id        AS mic_id,
             {source_plant_expr} AS plant_id,
+            {source_operation_id_expr} AS operation_id,
             :chart_type    AS chart_type,
             :cl            AS cl,
             :ucl           AS ucl,
@@ -701,6 +719,7 @@ async def save_locked_limits(
            AND t.mic_id  = s.mic_id
            AND t.chart_type = s.chart_type
            AND {plant_on_clause}
+           AND {operation_id_on_clause}
         WHEN MATCHED THEN UPDATE SET
             t.cl = s.cl,
             t.ucl = s.ucl,
@@ -713,11 +732,11 @@ async def save_locked_limits(
             t.locked_by = s.locked_by,
             t.locked_at = s.locked_at
         WHEN NOT MATCHED THEN INSERT (
-            material_id, mic_id, plant_id, chart_type,
+            material_id, mic_id, plant_id, operation_id, chart_type,
             cl, ucl, lcl, ucl_r, lcl_r, sigma_within,
             baseline_from, baseline_to, locked_by, locked_at
         ) VALUES (
-            s.material_id, s.mic_id, s.plant_id, s.chart_type,
+            s.material_id, s.mic_id, s.plant_id, s.operation_id, s.chart_type,
             s.cl, s.ucl, s.lcl, s.ucl_r, s.lcl_r, s.sigma_within,
             s.baseline_from, s.baseline_to, s.locked_by, s.locked_at
         )
@@ -732,6 +751,7 @@ async def fetch_locked_limits(
     mic_id: str,
     plant_id: Optional[str],
     chart_type: str,
+    operation_id: Optional[str] = None,
 ) -> Optional[dict]:
     params = [
         sql_param("material_id", material_id),
@@ -743,8 +763,13 @@ async def fetch_locked_limits(
         params.append(sql_param("plant_id", plant_id))
     else:
         plant_filter = "AND plant_id IS NULL"
+    if operation_id:
+        operation_id_filter = "AND operation_id = :operation_id"
+        params.append(sql_param("operation_id", operation_id))
+    else:
+        operation_id_filter = "AND operation_id IS NULL"
     query = f"""
-        SELECT material_id, mic_id, plant_id, chart_type,
+        SELECT material_id, mic_id, plant_id, operation_id, chart_type,
                cl, ucl, lcl, ucl_r, lcl_r, sigma_within,
                baseline_from, baseline_to, locked_by, locked_at
         FROM {tbl('spc_locked_limits')}
@@ -752,6 +777,7 @@ async def fetch_locked_limits(
           AND mic_id = :mic_id
           AND chart_type = :chart_type
           {plant_filter}
+          {operation_id_filter}
         ORDER BY locked_at DESC
         LIMIT 1
     """
@@ -773,6 +799,7 @@ async def delete_locked_limits(
     mic_id: str,
     plant_id: Optional[str],
     chart_type: str,
+    operation_id: Optional[str] = None,
 ) -> None:
     params = [
         sql_param("material_id", material_id),
@@ -784,12 +811,18 @@ async def delete_locked_limits(
         params.append(sql_param("plant_id", plant_id))
     else:
         plant_filter = "AND plant_id IS NULL"
+    if operation_id:
+        operation_id_filter = "AND operation_id = :operation_id"
+        params.append(sql_param("operation_id", operation_id))
+    else:
+        operation_id_filter = "AND operation_id IS NULL"
     query = f"""
         DELETE FROM {tbl('spc_locked_limits')}
         WHERE material_id = :material_id
           AND mic_id = :mic_id
           AND chart_type = :chart_type
           {plant_filter}
+          {operation_id_filter}
     """
     await run_sql_async(token, query, params)
     return {"deleted": True}

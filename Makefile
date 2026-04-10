@@ -22,8 +22,10 @@ TRACE_SCHEMA_DEFAULT ?= gold
 LOCKED_LIMITS_MIGRATION ?= $(MIGRATIONS_DIR)/000_setup_locked_limits.sql
 EXCLUSIONS_MIGRATION ?= $(MIGRATIONS_DIR)/001_create_spc_exclusions.sql
 QUERY_AUDIT_MIGRATION ?= $(MIGRATIONS_DIR)/002_create_query_audit.sql
+ADD_OPERATION_ID_LOCKED_LIMITS_MIGRATION ?= $(MIGRATIONS_DIR)/003_add_operation_id_to_locked_limits.sql
+ADD_OPERATION_ID_EXCLUSIONS_MIGRATION ?= $(MIGRATIONS_DIR)/004_add_operation_id_to_spc_exclusions.sql
 
-.PHONY: apply-migration build check-env deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit
+.PHONY: apply-migration build check-env deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions
 
 check-env:
 	@databricks current-user me --profile $(PROFILE) -o json > /dev/null 2>&1 || \
@@ -47,6 +49,8 @@ deploy: check-env build render-app-config
 	$(MAKE) setup-locked-limits PROFILE=$(PROFILE)
 	$(MAKE) setup-exclusions PROFILE=$(PROFILE)
 	$(MAKE) setup-query-audit PROFILE=$(PROFILE)
+	$(MAKE) setup-operation-id-locked-limits PROFILE=$(PROFILE)
+	$(MAKE) setup-operation-id-exclusions PROFILE=$(PROFILE)
 
 apply-migration: check-env
 	@echo "Applying $(NAME) migration from $(FILE)..."
@@ -83,3 +87,9 @@ setup-exclusions:
 
 setup-query-audit:
 	@$(MAKE) apply-migration NAME=spc_query_audit FILE=$(QUERY_AUDIT_MIGRATION) PROFILE=$(PROFILE)
+
+setup-operation-id-locked-limits:
+	@$(MAKE) apply-migration NAME=spc_locked_limits_operation_id FILE=$(ADD_OPERATION_ID_LOCKED_LIMITS_MIGRATION) PROFILE=$(PROFILE)
+
+setup-operation-id-exclusions:
+	@$(MAKE) apply-migration NAME=spc_exclusions_operation_id FILE=$(ADD_OPERATION_ID_EXCLUSIONS_MIGRATION) PROFILE=$(PROFILE)

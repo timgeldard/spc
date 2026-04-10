@@ -60,6 +60,7 @@ async def spc_chart_data(
             body.stratify_by,
             cursor=cursor,
             limit=limit,
+            operation_id=body.operation_id,
         )
     except Exception as exc:
         handle_sql_error(exc)
@@ -76,6 +77,7 @@ async def spc_chart_data(
                     body.date_to,
                     body.stratify_by,
                     max_points=_NORMALITY_MAX_POINTS,
+                    operation_id=body.operation_id,
                 )
             )
             if include_summary and cursor is None else None
@@ -120,6 +122,7 @@ async def spc_p_chart_data(
             body.plant_id,
             body.date_from,
             body.date_to,
+            operation_id=body.operation_id,
         )
     except Exception as exc:
         handle_sql_error(exc)
@@ -152,6 +155,7 @@ async def spc_count_chart_data(
             body.date_from,
             body.date_to,
             body.chart_subtype,
+            operation_id=body.operation_id,
         )
     except Exception as exc:
         handle_sql_error(exc)
@@ -189,6 +193,7 @@ async def lock_limits(
             body.sigma_within,
             body.baseline_from,
             body.baseline_to,
+            operation_id=body.operation_id,
         )
     except Exception as exc:
         handle_locked_limits_error(exc)
@@ -201,6 +206,7 @@ async def get_locked_limits(
     material_id: str,
     mic_id: str,
     plant_id: Optional[str] = None,
+    operation_id: Optional[str] = None,
     chart_type: str = "imr",
     x_forwarded_access_token: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
@@ -212,13 +218,14 @@ async def get_locked_limits(
             material_id=material_id,
             mic_id=mic_id,
             plant_id=plant_id,
+            operation_id=operation_id,
             chart_type=chart_type,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     try:
-        row = await fetch_locked_limits(token, material_id, mic_id, plant_id, chart_type)
+        row = await fetch_locked_limits(token, material_id, mic_id, plant_id, chart_type, operation_id=operation_id)
     except Exception as exc:
         handle_locked_limits_error(exc)
 
@@ -236,6 +243,6 @@ async def delete_locked_limits_route(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
     try:
-        return await delete_locked_limits(token, body.material_id, body.mic_id, body.plant_id, body.chart_type)
+        return await delete_locked_limits(token, body.material_id, body.mic_id, body.plant_id, body.chart_type, operation_id=body.operation_id)
     except Exception as exc:
         handle_locked_limits_error(exc)

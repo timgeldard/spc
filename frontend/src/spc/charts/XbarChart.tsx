@@ -54,8 +54,9 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
       return { value: s.xbar, itemStyle: { color }, symbolSize }
     })
 
-    const allY = [uclX, lclX, usl, lsl].filter((v): v is number => v != null)
-    const yPad = Math.abs(uclX - lclX) * 0.15
+    const dataValues = seriesData.map(d => d.value as number)
+    const allY = [...dataValues, uclX, lclX, usl, lsl].filter((v): v is number => v != null)
+    const yPad = Math.abs(uclX - lclX) * 0.15 || 1
     const yMin = Math.min(...allY) - yPad
     const yMax = Math.max(...allY) + yPad
 

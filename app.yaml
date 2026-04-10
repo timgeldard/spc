@@ -17,3 +17,6 @@ env:
 
   - name: TRACE_SCHEMA
     value: "gold"
+
+  - name: GENIE_SPACE_ID
+    value: "01f134d334681d2398e1205b9b2739c4"

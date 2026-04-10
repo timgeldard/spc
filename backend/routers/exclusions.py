@@ -76,6 +76,7 @@ class SaveExclusionsRequest(BaseModel):
     material_id: str
     mic_id: str
     mic_name: Optional[str] = None
+    operation_id: Optional[str] = None
     plant_id: Optional[str] = None
     stratify_all: bool = False
     stratify_by: Optional[str] = None
@@ -103,7 +104,7 @@ class SaveExclusionsRequest(BaseModel):
             raise ValueError(f"stratify_by must be one of {sorted(_STRATIFY_KEYS)}")
         return value
 
-    @field_validator("mic_name", "plant_id", "date_from", "date_to", "rule_set", "stratify_by", mode="before")
+    @field_validator("mic_name", "operation_id", "plant_id", "date_from", "date_to", "rule_set", "stratify_by", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -124,6 +125,7 @@ class GetExclusionsQuery(BaseModel):
     material_id: str
     mic_id: str
     chart_type: str = "imr"
+    operation_id: Optional[str] = None
     plant_id: Optional[str] = None
     stratify_all: bool = False
     stratify_by: Optional[str] = None
@@ -140,7 +142,7 @@ class GetExclusionsQuery(BaseModel):
     def validate_stratify_by(cls, value: Optional[str]) -> Optional[str]:
         return SaveExclusionsRequest.validate_stratify_by(value)
 
-    @field_validator("plant_id", "date_from", "date_to", "stratify_by", mode="before")
+    @field_validator("operation_id", "plant_id", "date_from", "date_to", "stratify_by", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         return SaveExclusionsRequest.normalize_optional_text(value)
@@ -163,6 +165,7 @@ async def save_exclusions(
         "material_id": body.material_id,
         "mic_id": body.mic_id,
         "mic_name": body.mic_name,
+        "operation_id": body.operation_id,
         "plant_id": body.plant_id,
         "stratify_all": body.stratify_all,
         "stratify_by": body.stratify_by,
@@ -216,6 +219,7 @@ async def get_exclusions(
     params = [
         sql_param("material_id", query.material_id),
         sql_param("mic_id", query.mic_id),
+        sql_param("operation_id", query.operation_id),
         sql_param("plant_id", query.plant_id),
         sql_param("stratify_all", query.stratify_all),
         sql_param("stratify_by", query.stratify_by),
@@ -230,6 +234,7 @@ async def get_exclusions(
             material_id,
             mic_id,
             mic_name,
+            operation_id,
             plant_id,
             stratify_all,
             stratify_by,
@@ -249,6 +254,7 @@ async def get_exclusions(
         WHERE material_id = :material_id
           AND mic_id = :mic_id
           AND chart_type = :chart_type
+          AND operation_id <=> :operation_id
           AND plant_id <=> :plant_id
           AND COALESCE(stratify_all, false) = CAST(:stratify_all AS BOOLEAN)
           AND (

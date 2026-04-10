@@ -24,6 +24,7 @@ const ScorecardView = lazy(() => import('./scorecard/ScorecardView'))
 const CompareView = lazy(() => import('./compare/CompareView'))
 const MSAView = lazy(() => import('./msa/MSAView'))
 const CorrelationView = lazy(() => import('./correlation/CorrelationView'))
+const GenieView = lazy(() => import('./genie/GenieView'))
 
 const PRIMARY_TABS: TabDefinition[] = [
   { id: 'overview', label: 'Overview' },
@@ -36,6 +37,7 @@ const ADVANCED_TABS: TabDefinition[] = [
   { id: 'compare', label: 'Compare' },
   { id: 'msa', label: 'MSA' },
   { id: 'correlation', label: 'Correlation' },
+  { id: 'genie', label: 'Ask Genie' },
 ]
 
 const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
@@ -46,6 +48,7 @@ const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
   compare: CompareView,
   msa: MSAView,
   correlation: CorrelationView,
+  genie: GenieView,
 }
 
 function TabLoadingState() {

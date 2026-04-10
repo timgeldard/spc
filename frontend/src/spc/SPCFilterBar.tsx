@@ -20,9 +20,9 @@ import type { MaterialRef, MicRef, PlantRef, StratifyByKey } from './types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'mic_name'> | null | undefined): string {
+function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'operation_id'> | null | undefined): string {
   if (!mic) return ''
-  return JSON.stringify({ mic_id: mic.mic_id, mic_name: mic.mic_name ?? null })
+  return JSON.stringify({ mic_id: mic.mic_id, operation_id: mic.operation_id ?? null })
 }
 
 /** YYYY-MM-DD in local time — avoids toISOString UTC shift in negative-offset timezones */
@@ -137,9 +137,23 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   // Auto-clear MIC when it's no longer valid for the current material / plant
   useEffect(() => {
     if (charsLoading || !state.selectedMIC) return
-    const match = allCharacteristics.find(c => c.mic_id === state.selectedMIC?.mic_id)
+    const selected = state.selectedMIC
+    const match = allCharacteristics.find(c => {
+      if (selected.operation_id != null) {
+        return c.mic_id === selected.mic_id && c.operation_id === selected.operation_id
+      }
+      // Fallback for old bookmarks/saved views without operation_id — match on mic_id + mic_name
+      return c.mic_id === selected.mic_id && (c.mic_name ?? null) === (selected.mic_name ?? null)
+    })
     if (match) {
-      if (match.mic_name !== state.selectedMIC?.mic_name) dispatch({ type: 'SET_MIC', payload: match })
+      // Always dispatch with full resolved MIC — upgrades state that lacked operation_id
+      if (
+        match.operation_id !== selected.operation_id ||
+        match.mic_name !== selected.mic_name ||
+        match.chart_type !== selected.chart_type
+      ) {
+        dispatch({ type: 'SET_MIC', payload: match as MicRef })
+      }
     } else {
       dispatch({ type: 'SET_MIC', payload: null })
     }
@@ -397,7 +411,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
             />
             {allCharacteristics.map(c => (
               <SelectItem
-                key={`${c.mic_id}|${c.mic_name}`}
+                key={`${c.operation_id ?? ''}|${c.mic_id}`}
                 value={serializeMicKey(c)}
                 text={`${c.chart_type === 'p_chart' ? '[Attribute] ' : ''}${c.mic_name || c.mic_id}${c.batch_count ? ` (${c.batch_count} batches)` : ''}`}
               />

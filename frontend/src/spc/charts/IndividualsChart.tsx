@@ -70,11 +70,11 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
       return { value: p.value, itemStyle: { color }, symbolSize, symbol }
     })
 
-    const allY = [uclX, lclX, usl, lsl].filter((v): v is number => v != null)
-    const minY = Math.min(...allY)
-    const maxY = Math.max(...allY)
-    const yMin = minY - Math.abs(minY - lclX) * 0.15
-    const yMax = maxY + Math.abs(uclX - maxY) * 0.15
+    const dataValues = seriesData.map(d => d.value as number)
+    const allY = [...dataValues, uclX, lclX, usl, lsl].filter((v): v is number => v != null)
+    const pad = Math.abs(uclX - lclX) * 0.15 || 1
+    const yMin = Math.min(...allY) - pad
+    const yMax = Math.max(...allY) + pad
 
     const markLineData: Array<Record<string, unknown>> = [
       { yAxis: uclX, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${uclX.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } },

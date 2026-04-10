@@ -14,6 +14,7 @@ const TAB_LABELS = {
   compare: 'Compare',
   msa: 'MSA',
   correlation: 'Correlation',
+  genie: 'Databricks Genie',
 } as const
 
 const STRATIFY_LABELS: Record<StratifyByKey, string> = {

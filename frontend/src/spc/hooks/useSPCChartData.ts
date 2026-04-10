@@ -36,6 +36,7 @@ export function useSPCChartData(
   dateTo: string | null | undefined,
   plantId: string | null | undefined,
   stratifyBy: StratifyByKey | null = null,
+  operationId: string | null | undefined = null,
 ): UseSPCChartDataResult {
   const [points, setPoints] = useState<ChartDataPoint[]>([])
   const [normality, setNormality] = useState<NormalityResult | null>(null)
@@ -48,7 +49,7 @@ export function useSPCChartData(
     setNormality(null)
     setDataTruncated(false)
     setError(null)
-    if (!materialId || !micId || !micName) {
+    if (!materialId || !micId) {
       setLoading(false)
       return
     }
@@ -60,7 +61,8 @@ export function useSPCChartData(
     const payload = {
       material_id: materialId,
       mic_id: micId,
-      mic_name: micName,
+      mic_name: micName ?? null,
+      operation_id: operationId ?? null,
       date_from: dateFrom || null,
       date_to: dateTo || null,
       plant_id: plantId ?? null,
@@ -122,7 +124,7 @@ export function useSPCChartData(
       cancelled = true
       controller.abort()
     }
-  }, [materialId, micId, micName, dateFrom, dateTo, plantId, stratifyBy])
+  }, [materialId, micId, operationId, dateFrom, dateTo, plantId, stratifyBy])
 
   return { points, normality, dataTruncated, loading, error }
 }

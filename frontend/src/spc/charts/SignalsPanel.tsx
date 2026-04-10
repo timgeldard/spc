@@ -1,7 +1,12 @@
+import { useEffect, useState } from 'react'
 import { Button } from '~/lib/carbon-forms'
+import { Pagination } from '~/lib/carbon-data-table'
 import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import type { IndexedChartPoint, SPCSignal } from '../types'
+
+const PAGE_SIZES = [10, 25, 50]
+const DEFAULT_PAGE_SIZE = 10
 
 const WECO_RULES = {
   desc: {
@@ -56,10 +61,20 @@ export default function SignalsPanel({
   const rules = ruleSet === 'nelson' ? NELSON_RULES : WECO_RULES
   const label = ruleSet === 'nelson' ? 'Nelson' : 'WECO'
 
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+
   const allSignals: TimelineSignal[] = [
     ...signals.map(signal => ({ ...signal, chart: 'X' as const })),
     ...mrSignals.map(signal => ({ ...signal, chart: 'MR' as const })),
   ]
+
+  // Reset to page 1 when signals change (new material/MIC/ruleSet)
+  useEffect(() => {
+    setPage(1)
+  }, [allSignals.length, ruleSet])
+
+  const pageSignals = allSignals.slice((page - 1) * pageSize, page * pageSize)
 
   if (allSignals.length === 0) {
     return (
@@ -92,7 +107,8 @@ export default function SignalsPanel({
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: '7px', width: '1px', background: 'var(--cds-border-subtle-01)' }} />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {allSignals.map((signal, index) => {
+            {pageSignals.map((signal, index) => {
+              const index_ = (page - 1) * pageSize + index
               const severity = (rules.severity[signal.rule as keyof typeof rules.severity] ?? 'info') as SeverityKey
               const style = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.info
               const batchIds = signal.indices
@@ -102,7 +118,7 @@ export default function SignalsPanel({
                 .slice(0, 3)
 
               return (
-                <div key={`${signal.chart}-${signal.rule}-${index}`} style={{ position: 'relative', paddingLeft: '1.5rem' }}>
+                <div key={`${signal.chart}-${signal.rule}-${index_}`} style={{ position: 'relative', paddingLeft: '1.5rem' }}>
                   <div
                     style={{
                       position: 'absolute',
@@ -146,6 +162,20 @@ export default function SignalsPanel({
             })}
           </div>
         </div>
+
+        {allSignals.length > DEFAULT_PAGE_SIZE && (
+          <Pagination
+            totalItems={allSignals.length}
+            pageSize={pageSize}
+            pageSizes={PAGE_SIZES}
+            page={page}
+            onChange={({ page: p, pageSize: ps }: { page: number; pageSize: number }) => {
+              setPage(p)
+              setPageSize(ps)
+            }}
+            size="sm"
+          />
+        )}
 
         <Button
           kind="secondary"

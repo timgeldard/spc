@@ -14,6 +14,7 @@ export function useLockedLimits(
   micId: string | null | undefined,
   plantId: string | null | undefined,
   chartType: string | null | undefined,
+  operationId: string | null | undefined = null,
 ): UseLockedLimitsResult {
   const [lockedLimits, setLockedLimits] = useState<LockedLimits | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,6 +36,7 @@ export function useLockedLimits(
       chart_type: chartType,
     })
     if (plantId) params.append('plant_id', plantId)
+    if (operationId) params.append('operation_id', operationId)
 
     return fetch(`/api/spc/locked-limits?${params}`)
       .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(b.detail ?? `Error ${r.status}`)))
@@ -48,7 +50,7 @@ export function useLockedLimits(
         return null
       })
       .finally(() => setLoading(false))
-  }, [materialId, micId, plantId, chartType])
+  }, [materialId, micId, plantId, operationId, chartType])
 
   useEffect(() => {
     setLockedLimits(null)
@@ -66,6 +68,7 @@ export function useLockedLimits(
         material_id: materialId,
         mic_id: micId,
         plant_id: plantId ?? null,
+        operation_id: operationId ?? null,
         chart_type: chartType,
         ...limitsObj,
       }),
@@ -77,7 +80,7 @@ export function useLockedLimits(
       throw new Error(message)
     }
     return fetchLimits()
-  }, [materialId, micId, plantId, chartType, fetchLimits])
+  }, [materialId, micId, plantId, operationId, chartType, fetchLimits])
 
   const deleteLimits = useCallback(async () => {
     if (!materialId || !micId || !chartType) throw new Error('Missing required fields')
@@ -90,6 +93,7 @@ export function useLockedLimits(
         material_id: materialId,
         mic_id: micId,
         plant_id: plantId ?? null,
+        operation_id: operationId ?? null,
         chart_type: chartType,
       }),
     })
@@ -100,7 +104,7 @@ export function useLockedLimits(
       throw new Error(message)
     }
     setLockedLimits(null)
-  }, [materialId, micId, plantId, chartType])
+  }, [materialId, micId, plantId, operationId, chartType])
 
   return { lockedLimits, loading, error, saveLimits, deleteLimits }
 }

@@ -43,6 +43,7 @@ export function useChartData(
   dateTo: string,
   plantId: string | null | undefined,
   stratifyBy: StratifyByKey | null,
+  operationId: string | null | undefined = null,
 ): ChartDataResult {
   const isAttributeMIC = micChartType === 'p_chart'
   const isAttributeChart = isAttributeMIC
@@ -68,6 +69,7 @@ export function useChartData(
     dateTo,
     plantId,
     stratifyBy,
+    operationId,
   )
 
   const { points: attrPoints, loading: attrLoading, error: attrError } = usePChartData(
@@ -77,6 +79,7 @@ export function useChartData(
     dateFrom,
     dateTo,
     plantId,
+    operationId,
   )
 
   const countChartVariant = attrChartType === 'u_chart' ? 'u' : attrChartType === 'np_chart' ? 'np' : 'c'
@@ -88,6 +91,7 @@ export function useChartData(
     dateTo,
     plantId,
     countChartVariant,
+    operationId,
   )
 
   const points: Array<ChartDataPoint | AttributeChartPoint> = isPChart

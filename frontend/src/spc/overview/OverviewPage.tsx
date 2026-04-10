@@ -13,6 +13,7 @@ import EmptyState from '../../components/EmptyState'
 import { useSPC } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
+import ProcessFlowMiniMap from '../flow/ProcessFlowMiniMap'
 import KPICard from './KPICard'
 import RecentViolations from './RecentViolations'
 
@@ -270,41 +271,20 @@ export default function OverviewPage() {
             <ArrowRight size={16} style={{ color: 'var(--cds-text-secondary)', flexShrink: 0 }} />
           </div>
 
-          {/* Mini-map placeholder — replace with embedded XYFlow in a future phase */}
           <div
             style={{
               height: '20rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px dashed var(--cds-border-subtle-01)',
+              border: '1px solid var(--cds-border-subtle-01)',
               background: 'var(--cds-layer-02)',
+              overflow: 'hidden',
             }}
           >
             {hasScope ? (
-              <div style={{ maxWidth: '24rem', padding: '1.5rem', textAlign: 'center' }}>
-                <p
-                  style={{
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    color: 'var(--cds-text-primary)',
-                    margin: 0,
-                  }}
-                >
-                  Mini XYFlow Process Map
-                </p>
-                <p
-                  style={{
-                    marginTop: '0.5rem',
-                    fontSize: '0.875rem',
-                    color: 'var(--cds-text-secondary)',
-                  }}
-                >
-                  Selected characteristic: {characteristicLabel.toLowerCase()}
-                </p>
-              </div>
+              <ProcessFlowMiniMap flowData={flowData} loading={flowLoading} />
             ) : (
-              <EmptyState message="Select a material from the filter bar to load KPI context, flow preview, and investigation shortcuts." />
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+                <EmptyState message="Select a material from the filter bar to load KPI context, flow preview, and investigation shortcuts." />
+              </div>
             )}
           </div>
         </ClickableTile>

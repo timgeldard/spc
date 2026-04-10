@@ -5,6 +5,7 @@ interface UseSPCExclusionsArgs {
   materialId: string | null | undefined
   micId: string | null | undefined
   chartType: string | null | undefined
+  operationId: string | null | undefined
   plantId: string | null | undefined
   stratifyAll: boolean
   stratifyBy: StratifyByKey | null
@@ -31,6 +32,7 @@ export function useSPCExclusions({
   materialId,
   micId,
   chartType,
+  operationId,
   plantId,
   stratifyAll,
   stratifyBy,
@@ -62,6 +64,7 @@ export function useSPCExclusions({
       chart_type: chartType!,
       stratify_all: String(Boolean(stratifyAll)),
     })
+    if (operationId) params.set('operation_id', operationId)
     if (stratifyBy) params.set('stratify_by', stratifyBy)
     if (plantId) params.set('plant_id', plantId)
     if (dateFrom) params.set('date_from', dateFrom)
@@ -87,7 +90,7 @@ export function useSPCExclusions({
       cancelled = true
       controller.abort()
     }
-  }, [scopeReady, materialId, micId, chartType, plantId, stratifyAll, stratifyBy, dateFrom, dateTo])
+  }, [scopeReady, materialId, micId, chartType, operationId, plantId, stratifyAll, stratifyBy, dateFrom, dateTo])
 
   const saveSnapshot = useCallback(async (payload: Record<string, unknown>) => {
     setSaving(true)

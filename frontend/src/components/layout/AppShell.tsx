@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import type { ElementType, ReactNode } from 'react'
-import { Content, HeaderContainer } from '~/lib/carbon-shell'
+import { Content } from '~/lib/carbon-shell'
 import { GlobalFilterBar } from './GlobalFilterBar'
 import { SPCHeader } from './SPCHeader'
 import { Sidebar } from './Sidebar'
@@ -30,32 +31,29 @@ export function AppShell({
   filterBar,
 }: AppShellProps) {
   const showSideNav = Boolean(sidebarItems && sidebarItems.length > 0)
+  const [isSideNavExpanded, setIsSideNavExpanded] = useState(false)
 
   return (
-    <HeaderContainer
-      render={({ isSideNavExpanded, onClickSideNavExpand }) => (
-        <>
-          <SPCHeader
-            dark={dark}
-            onToggleDark={onToggleDark}
-            showMenuButton={showSideNav}
-            isSideNavExpanded={showSideNav ? isSideNavExpanded : false}
-            onClickSideNavExpand={showSideNav ? onClickSideNavExpand : undefined}
-          />
-          {showSideNav && (
-            <Sidebar
-              items={sidebarItems}
-              activeItem={activeItem}
-              onSelectItem={onSelectItem}
-              isSideNavExpanded={isSideNavExpanded}
-            />
-          )}
-          <Content className="spc-app-shell__content">
-            <GlobalFilterBar>{filterBar}</GlobalFilterBar>
-            {children}
-          </Content>
-        </>
+    <>
+      <SPCHeader
+        dark={dark}
+        onToggleDark={onToggleDark}
+        showMenuButton={showSideNav}
+        isSideNavExpanded={showSideNav ? isSideNavExpanded : false}
+        onClickSideNavExpand={showSideNav ? () => setIsSideNavExpanded(prev => !prev) : undefined}
+      />
+      {showSideNav && (
+        <Sidebar
+          items={sidebarItems}
+          activeItem={activeItem}
+          onSelectItem={onSelectItem}
+          isSideNavExpanded={isSideNavExpanded}
+        />
       )}
-    />
+      <Content className="spc-app-shell__content">
+        <GlobalFilterBar>{filterBar}</GlobalFilterBar>
+        {children}
+      </Content>
+    </>
   )
 }

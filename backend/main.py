@@ -11,6 +11,7 @@ from starlette.requests import Request as StarletteRequest
 
 from backend.routers.exclusions import router as exclusions_router
 from backend.routers.export import router as export_router
+from backend.routers.genie import router as genie_router
 from backend.routers.spc_analysis import router as spc_analysis_router
 from backend.routers.spc_charts import router as spc_charts_router
 from backend.routers.spc_metadata import router as spc_metadata_router
@@ -48,6 +49,7 @@ app.include_router(spc_charts_router, prefix="/api/spc", tags=["SPC"])
 app.include_router(spc_analysis_router, prefix="/api/spc", tags=["SPC"])
 app.include_router(export_router, prefix="/api/spc", tags=["SPC Export"])
 app.include_router(exclusions_router, prefix="/api/spc", tags=["SPC Exclusions"])
+app.include_router(genie_router, prefix="/api/spc", tags=["Genie"])
 
 
 @app.exception_handler(Exception)

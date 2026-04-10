@@ -48,6 +48,7 @@ export function useSPCUrlSync(): void {
       // Characteristic (MIC)
       if (selectedMIC?.mic_id) {
         params.set('mic', selectedMIC.mic_id)
+        if (selectedMIC.operation_id) params.set('op_id', selectedMIC.operation_id)
         if (selectedMIC.mic_name) params.set('mic_n', selectedMIC.mic_name)
         if (selectedMIC.chart_type) params.set('mic_ct', selectedMIC.chart_type)
       }

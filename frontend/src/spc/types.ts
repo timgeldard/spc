@@ -23,6 +23,7 @@ export interface PlantRef {
 
 export interface MicRef {
   mic_id: string
+  operation_id?: string | null
   mic_name?: string | null
   chart_type?: string | null
   avg_samples_per_batch?: number | null
@@ -524,7 +525,7 @@ export interface MSAResult {
   [key: string]: unknown
 }
 
-export type SPCTabId = 'overview' | 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation'
+export type SPCTabId = 'overview' | 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation' | 'genie'
 
 export interface OverviewKpis {
   processHealth: number

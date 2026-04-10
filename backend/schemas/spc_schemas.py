@@ -62,6 +62,7 @@ class CharacteristicsRequest(BaseModel):
 
 class _MicIdMixin(BaseModel):
     mic_id: str
+    operation_id: Optional[str] = None
 
     @field_validator("mic_id")
     @classmethod
@@ -165,6 +166,7 @@ class LockLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
     plant_id: Optional[str] = None
+    operation_id: Optional[str] = None
     chart_type: str
     cl: float
     ucl: float
@@ -211,6 +213,7 @@ class GetLockedLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
     plant_id: Optional[str] = None
+    operation_id: Optional[str] = None
     chart_type: str
 
     @field_validator("material_id")
@@ -239,6 +242,7 @@ class DeleteLockedLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
     plant_id: Optional[str] = None
+    operation_id: Optional[str] = None
     chart_type: str
 
     @field_validator("material_id")

@@ -14,6 +14,7 @@ export function usePChartData(
   dateFrom: string | null | undefined,
   dateTo: string | null | undefined,
   plantId: string | null | undefined,
+  operationId: string | null | undefined = null,
 ): UsePChartDataResult {
   const [points, setPoints] = useState<AttributeChartPoint[]>([])
   const [loading, setLoading] = useState(false)
@@ -22,7 +23,7 @@ export function usePChartData(
   useEffect(() => {
     setPoints([])
     setError(null)
-    if (!materialId || !micId || !micName) {
+    if (!materialId || !micId) {
       setLoading(false)
       return
     }
@@ -36,7 +37,8 @@ export function usePChartData(
       body: JSON.stringify({
         material_id: materialId,
         mic_id: micId,
-        mic_name: micName,
+        mic_name: micName ?? null,
+        operation_id: operationId ?? null,
         date_from: dateFrom || null,
         date_to: dateTo || null,
         plant_id: plantId ?? null,
@@ -48,7 +50,7 @@ export function usePChartData(
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [materialId, micId, micName, dateFrom, dateTo, plantId])
+  }, [materialId, micId, operationId, dateFrom, dateTo, plantId])
 
   return { points, loading, error }
 }

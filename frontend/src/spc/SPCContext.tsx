@@ -11,7 +11,7 @@ const PREF_ROLE_MODE = 'spc_role_mode'
 const PREF_SAVED_VIEWS = 'spc_saved_views'
 
 // ── URL param keys ────────────────────────────────────────────────────────────
-const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation'] as const
+const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation', 'genie'] as const
 
 function getPref(key: string): string | null {
   try { return localStorage.getItem(key) } catch { return null }
@@ -105,6 +105,7 @@ function buildInitialState(): SPCState {
     if (micId) {
       state.selectedMIC = {
         mic_id: micId,
+        operation_id: params.get('op_id') ?? null,
         mic_name: params.get('mic_n') ?? null,
         chart_type: params.get('mic_ct') ?? null,
       }
@@ -116,7 +117,7 @@ function buildInitialState(): SPCState {
     if (to) state.dateTo = to
   } catch { /* no window.location (e.g., test environment) */ }
 
-  if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation'].includes(state.activeTab)) {
+  if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation', 'genie'].includes(state.activeTab)) {
     state.activeTab = 'overview'
   }
 
@@ -153,6 +154,9 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
       return {
         ...state,
         selectedMaterial: action.payload,
+        selectedPlant: null,
+        selectedMIC: null,
+        stratifyBy: null,
         excludedIndices: new Set<number>(),
         chartTypeOverride: null,
         exclusionAudit: null,
@@ -195,7 +199,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload }
     case 'SET_ROLE_MODE': {
-      const nextTab = action.payload === 'operator' && ['compare', 'msa', 'correlation'].includes(state.activeTab)
+      const nextTab = action.payload === 'operator' && ['compare', 'msa', 'correlation', 'genie'].includes(state.activeTab)
         ? 'overview'
         : state.activeTab
       return { ...state, roleMode: action.payload, activeTab: nextTab }
@@ -210,7 +214,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         savedViews: [action.payload, ...state.savedViews.filter(view => view.id !== action.payload.id)].slice(0, 8),
       }
     case 'APPLY_SAVED_VIEW': {
-      const nextTab = state.roleMode === 'operator' && ['compare', 'msa', 'correlation'].includes(action.payload.activeTab)
+      const nextTab = state.roleMode === 'operator' && ['compare', 'msa', 'correlation', 'genie'].includes(action.payload.activeTab)
         ? 'overview'
         : action.payload.activeTab
       return {
@@ -280,6 +284,9 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
       return {
         ...state,
         selectedMaterial: action.payload,
+        selectedPlant: null,
+        selectedMIC: null,
+        stratifyBy: null,
         activeTab: 'charts',
         excludedIndices: new Set<number>(),
         chartTypeOverride: null,

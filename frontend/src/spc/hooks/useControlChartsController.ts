@@ -141,6 +141,7 @@ export function useControlChartsController(): ControlChartsController {
     dateTo,
     selectedPlant?.plant_id,
     stratifyBy,
+    selectedMIC?.operation_id,
   )
 
   // ── SPC computation ─────────────────────────────────────────────────────
@@ -162,6 +163,7 @@ export function useControlChartsController(): ControlChartsController {
     materialId: selectedMaterial?.material_id,
     micId: selectedMIC?.mic_id,
     micName: selectedMIC?.mic_name,
+    operationId: selectedMIC?.operation_id,
     plantId: selectedPlant?.plant_id,
     effectiveChartType,
     isQuantitative,
@@ -181,6 +183,7 @@ export function useControlChartsController(): ControlChartsController {
     isQuantitative ? selectedMIC?.mic_id : null,
     isQuantitative ? selectedPlant?.plant_id : null,
     effectiveChartType,
+    isQuantitative ? selectedMIC?.operation_id : null,
   )
 
   // ── Derived values ──────────────────────────────────────────────────────

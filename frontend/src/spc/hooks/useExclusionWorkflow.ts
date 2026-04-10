@@ -33,6 +33,7 @@ interface UseExclusionWorkflowArgs {
   materialId: string | null | undefined
   micId: string | null | undefined
   micName: string | null | undefined
+  operationId: string | null | undefined
   plantId: string | null | undefined
   effectiveChartType: QuantChartType | null
   isQuantitative: boolean
@@ -54,6 +55,7 @@ export function useExclusionWorkflow({
   materialId,
   micId,
   micName,
+  operationId,
   plantId,
   effectiveChartType,
   isQuantitative,
@@ -79,6 +81,7 @@ export function useExclusionWorkflow({
     materialId: isQuantitative ? materialId : null,
     micId: isQuantitative ? micId : null,
     chartType: effectiveChartType,
+    operationId: operationId ?? null,
     plantId: plantId ?? null,
     stratifyAll: Boolean(stratifyBy),
     stratifyBy,
@@ -135,6 +138,7 @@ export function useExclusionWorkflow({
       material_id: materialId,
       mic_id: micId,
       mic_name: micName ?? null,
+      operation_id: operationId ?? null,
       plant_id: plantId ?? null,
       stratify_all: Boolean(stratifyBy),
       stratify_by: stratifyBy,
@@ -151,7 +155,7 @@ export function useExclusionWorkflow({
 
     dispatch({ type: 'SET_EXCLUSIONS', payload: [...nextExcludedIndices].sort((a, b) => a - b) })
   }, [
-    materialId, micId, micName, plantId, effectiveChartType,
+    materialId, micId, micName, operationId, plantId, effectiveChartType,
     quantPoints, ruleSet, quantNormality, stratifyBy, dateFrom, dateTo,
     spc, saveSnapshot, dispatch,
   ])

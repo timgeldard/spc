@@ -72,6 +72,7 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
     query = f"""
         SELECT
             MIC_ID                                                       AS mic_id,
+            OPERATION_ID                                                 AS operation_id,
             MIC_NAME                                                     AS mic_name,
             INSPECTION_METHOD                                            AS inspection_method,
             MAX(CASE WHEN QUALITATIVE_RESULT IS NOT NULL
@@ -84,7 +85,7 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
           AND (QUANTITATIVE_RESULT IS NOT NULL
                OR (QUALITATIVE_RESULT IS NOT NULL AND QUALITATIVE_RESULT != ''))
           {plant_filter}
-        GROUP BY MIC_ID, MIC_NAME, INSPECTION_METHOD
+        GROUP BY MIC_ID, MIC_NAME, INSPECTION_METHOD, OPERATION_ID
         HAVING COUNT(DISTINCT BATCH_ID) >= 3
         ORDER BY mic_name
     """
@@ -125,6 +126,7 @@ async def fetch_attribute_characteristics(token: str, material_id: str, plant_id
     query = f"""
         SELECT
             MIC_ID                              AS mic_id,
+            OPERATION_ID                        AS operation_id,
             MIC_NAME                            AS mic_name,
             COUNT(DISTINCT BATCH_ID)            AS batch_count,
             COUNT(*)                            AS total_inspected,
@@ -136,7 +138,7 @@ async def fetch_attribute_characteristics(token: str, material_id: str, plant_id
           AND QUALITATIVE_RESULT != ''
           AND INSPECTION_RESULT_VALUATION IN ('A', 'R')
           {plant_filter}
-        GROUP BY MIC_ID, MIC_NAME
+        GROUP BY MIC_ID, MIC_NAME, OPERATION_ID
         HAVING COUNT(DISTINCT BATCH_ID) >= 3
         ORDER BY mic_name
     """
