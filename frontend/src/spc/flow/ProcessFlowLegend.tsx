@@ -1,21 +1,31 @@
-import { cn } from '../../lib/utils'
-
-// Colours mirror ProcessNode STATUS — Kerry Jade / Sunrise / Sunset palette
+// Colours mirror ProcessNode STATUS — Carbon support tokens for Jade/Sunrise/Sunset
 const items = [
-  { label: 'Healthy (< 2% rejection)',   color: '#44CF93' },
-  { label: 'Warning (2–10% rejection)',  color: '#F9C20A' },
-  { label: 'Critical (≥ 10% rejection)', color: '#F24A00' },
-  { label: 'OOC Signal Present',         color: '#F56E33' },
+  { label: 'Healthy (< 2% rejection)',   color: 'var(--cds-support-success)' },
+  { label: 'Warning (2–10% rejection)',  color: 'var(--cds-support-warning)' },
+  { label: 'Critical (≥ 10% rejection)', color: 'var(--cds-support-error)' },
+  { label: 'OOC Signal Present',         color: 'var(--cds-support-error)' },
 ]
 
 export default function ProcessFlowLegend() {
   return (
-    <div className="absolute bottom-4 right-4 z-10 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-      <p className="mb-3 text-xs font-medium text-gray-500 dark:text-gray-400">NODE HEALTH</p>
-      <div className="space-y-2">
+    <div style={{
+      position: 'absolute',
+      bottom: '1rem',
+      right: '1rem',
+      zIndex: 10,
+      borderRadius: '0.75rem',
+      border: '1px solid var(--cds-border-subtle-01)',
+      background: 'var(--cds-layer)',
+      padding: '1rem',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+    }}>
+      <p style={{ marginBottom: '0.75rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--cds-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        NODE HEALTH
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {items.map(item => (
-          <div key={item.label} className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200">
-            <div className={cn('h-4 w-4 rounded')} style={{ backgroundColor: item.color }} />
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem', color: 'var(--cds-text-primary)' }}>
+            <div style={{ width: 16, height: 16, borderRadius: 3, backgroundColor: item.color, flexShrink: 0 }} />
             <span>{item.label}</span>
           </div>
         ))}

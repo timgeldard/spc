@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import { useSPC } from '../SPCContext'
-import { chartHintClass, surfacePanelClass } from '../uiClasses'
+import { Tile } from '~/lib/carbon-layout'
 import type { CapabilityMatrixDatum, CapabilityMatrixProps, EventParamLike, ScorecardRow } from '../types'
 import ModuleEmptyState from '../components/ModuleEmptyState'
 
@@ -129,11 +129,11 @@ export default function CapabilityMatrix({ rows }: CapabilityMatrixProps) {
   }
 
   return (
-    <div className={surfacePanelClass}>
+    <Tile>
       <EChart option={option} style={{ height: 500, width: '100%' }} theme="spc" onEvents={onEvents} notMerge ariaLabel="Capability matrix — bubble size represents batch count, colour represents Ppk" />
-      <p className={chartHintClass}>
+      <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
         Bubble size = batch count · Click a bubble to open the control chart · Green = Capable &amp; Stable
       </p>
-    </div>
+    </Tile>
   )
 }

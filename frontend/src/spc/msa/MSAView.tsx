@@ -1,33 +1,11 @@
 import { useState } from 'react'
+import { Button, TextArea } from '~/lib/carbon-forms'
+import { InlineNotification } from '~/lib/carbon-feedback'
+import { Stack, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import { computeGRR, computeGRR_ANOVA } from './msaCalculations'
 import { useMSASave } from '../hooks/useMSASave'
 import type { MSAResult } from '../types'
-import {
-  buttonBaseClass,
-  buttonPrimaryClass,
-  buttonSecondaryClass,
-  buttonSmClass,
-  cardSubClass,
-  cardTitleClass,
-  chartHintClass,
-  heroCardDenseClass,
-  inputBaseClass,
-  inputSmClass,
-  msaDataClass,
-  msaNdcClass,
-  msaResultsClass,
-  msaSetupClass,
-  msaSetupRowClass,
-  msaTableClass,
-  msaTextareaClass,
-  msaVerdictClass,
-  msaViewClass,
-  moduleEyebrowClass,
-  moduleHeaderCardClass,
-  splitPanelClass,
-  surfacePanelClass,
-} from '../uiClasses'
 import FieldHelp from '../components/FieldHelp'
 import InfoBanner from '../components/InfoBanner'
 import { grrStatusClass } from '../components/StatusPill'
@@ -88,43 +66,59 @@ function GRRResult({ result, onSave, saving }: GRRResultProps) {
   const { colorStyle, verdict } = grrStatusClass(grrPct)
 
   return (
-    <div className={msaResultsClass}>
-      <div className={`${chartHintClass} mb-2`}>
-        Method: <strong>{method === 'anova' ? 'ANOVA Gauge R&R' : 'Average & Range'}</strong>
-        {method === 'anova' && interactionPValue != null && ` · interaction p = ${interactionPValue.toFixed(4)}`}
-      </div>
-      {modelWarning && <InfoBanner variant="warn">{modelWarning}</InfoBanner>}
-      {systemStabilityWarning && <InfoBanner variant="warn">{systemStabilityWarning}</InfoBanner>}
+    <Tile>
+      <Stack gap={4}>
+        <p style={{ margin: 0, fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
+          Method: <strong>{method === 'anova' ? 'ANOVA Gauge R&R' : 'Average & Range'}</strong>
+          {method === 'anova' && interactionPValue != null && ` · interaction p = ${interactionPValue.toFixed(4)}`}
+        </p>
+        {modelWarning && <InfoBanner variant="warn">{modelWarning}</InfoBanner>}
+        {systemStabilityWarning && <InfoBanner variant="warn">{systemStabilityWarning}</InfoBanner>}
 
-      <div className={msaVerdictClass} style={{ color: colorStyle }}>
-        <span>{grrPct?.toFixed(1) ?? '—'}% GRR</span>
-        <span>{verdict}</span>
-        {grrPctTol != null && <span className="text-sm font-normal">({grrPctTol.toFixed(1)}% of tolerance)</span>}
-      </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '0.5rem', fontSize: '1.125rem', fontWeight: 600, color: colorStyle }}>
+          <span>{grrPct?.toFixed(1) ?? '—'}% GRR</span>
+          <span>{verdict}</span>
+          {grrPctTol != null && <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>({grrPctTol.toFixed(1)}% of tolerance)</span>}
+        </div>
 
-      <table className={msaTableClass}>
-        <thead><tr><th>Source</th><th>σ</th><th>% Contribution</th></tr></thead>
-        <tbody>
-          <tr><td>Repeatability (EV)</td><td>{ev?.toFixed(4)}</td><td>{tv && tv > 0 && ev != null ? ((ev / tv) * 100).toFixed(1) : '—'}%</td></tr>
-          <tr><td>Reproducibility (AV)</td><td>{av?.toFixed(4)}</td><td>{tv && tv > 0 && av != null ? ((av / tv) * 100).toFixed(1) : '—'}%</td></tr>
-          {method === 'anova' && <tr><td>Op × Part Interaction</td><td>{interactionVariation?.toFixed(4)}</td><td>{tv && tv > 0 ? (((interactionVariation ?? 0) / tv) * 100).toFixed(1) : '—'}%</td></tr>}
-          <tr><td>GRR</td><td>{grr?.toFixed(4)}</td><td>{grrPct?.toFixed(1)}%</td></tr>
-          <tr><td>Part Variation (PV)</td><td>{pv?.toFixed(4)}</td><td>{tv && tv > 0 && pv != null ? ((pv / tv) * 100).toFixed(1) : '—'}%</td></tr>
-          <tr><td><strong>Total Variation (TV)</strong></td><td><strong>{tv?.toFixed(4)}</strong></td><td>100%</td></tr>
-        </tbody>
-      </table>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--cds-border-subtle-01)' }}>
+              <th style={{ textAlign: 'left', padding: '0.375rem 0', color: 'var(--cds-text-secondary)', fontWeight: 600 }}>Source</th>
+              <th style={{ textAlign: 'right', padding: '0.375rem 0', color: 'var(--cds-text-secondary)', fontWeight: 600 }}>σ</th>
+              <th style={{ textAlign: 'right', padding: '0.375rem 0', color: 'var(--cds-text-secondary)', fontWeight: 600 }}>% Contribution</th>
+            </tr>
+          </thead>
+          <tbody style={{ color: 'var(--cds-text-primary)' }}>
+            {[
+              { label: 'Repeatability (EV)', sigma: ev, pct: tv && tv > 0 && ev != null ? ((ev / tv) * 100).toFixed(1) : '—' },
+              { label: 'Reproducibility (AV)', sigma: av, pct: tv && tv > 0 && av != null ? ((av / tv) * 100).toFixed(1) : '—' },
+              ...(method === 'anova' ? [{ label: 'Op × Part Interaction', sigma: interactionVariation, pct: tv && tv > 0 ? (((interactionVariation ?? 0) / tv) * 100).toFixed(1) : '—' }] : []),
+              { label: 'GRR', sigma: grr, pct: grrPct != null ? `${grrPct.toFixed(1)}` : '—' },
+              { label: 'Part Variation (PV)', sigma: pv, pct: tv && tv > 0 && pv != null ? ((pv / tv) * 100).toFixed(1) : '—' },
+              { label: 'Total Variation (TV)', sigma: tv, pct: '100', bold: true },
+            ].map(row => (
+              <tr key={row.label} style={{ borderBottom: '1px solid var(--cds-border-subtle-01)' }}>
+                <td style={{ padding: '0.375rem 0' }}>{row.bold ? <strong>{row.label}</strong> : row.label}</td>
+                <td style={{ textAlign: 'right', padding: '0.375rem 0', fontVariantNumeric: 'tabular-nums' }}>{row.bold ? <strong>{row.sigma?.toFixed(4)}</strong> : row.sigma?.toFixed(4)}</td>
+                <td style={{ textAlign: 'right', padding: '0.375rem 0' }}>{row.pct}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      <div className={msaNdcClass}>
-        NDC (Number of Distinct Categories): <strong>{ndc ?? '—'}</strong>
-        {ndc != null && ndc < 5 && (
-          <span className="text-[#005776]"> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
-        )}
-      </div>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+          NDC (Number of Distinct Categories): <strong style={{ color: 'var(--cds-text-primary)' }}>{ndc ?? '—'}</strong>
+          {ndc != null && ndc < 5 && (
+            <span style={{ color: 'var(--cds-support-warning)' }}> ⚠ NDC &lt; 5 — gauge cannot discriminate between parts</span>
+          )}
+        </p>
 
-      <button className={`${buttonBaseClass} ${buttonPrimaryClass}`} onClick={() => { void onSave() }} disabled={saving}>
-        {saving ? 'Saving…' : 'Save Session'}
-      </button>
-    </div>
+        <Button kind="primary" onClick={() => { void onSave() }} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Session'}
+        </Button>
+      </Stack>
+    </Tile>
   )
 }
 
@@ -146,6 +140,11 @@ function generateSampleData(nOp: number, nPt: number, nRep: number): string {
     }
   }
   return rows.join('\n')
+}
+
+const STEP_STYLE = {
+  num: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '1.25rem', height: '1.25rem', borderRadius: '50%', background: 'var(--cds-link-primary)', color: 'var(--cds-text-inverse)', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 } as const,
+  li: { display: 'flex', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' } as const,
 }
 
 export default function MSAView() {
@@ -185,218 +184,200 @@ export default function MSAView() {
     })
   }
 
+  const inputStyle = { height: '2rem', width: '6rem', border: '1px solid var(--cds-border-strong-01)', background: 'var(--cds-field)', color: 'var(--cds-text-primary)', padding: '0 0.75rem', fontSize: '0.875rem' }
+
   return (
-    <div className={msaViewClass}>
+    <Stack gap={4}>
       {/* Header */}
-      <div className={moduleHeaderCardClass}>
-        <div className={moduleEyebrowClass}>Measurement system validation</div>
-        <h3 className={cardTitleClass}>Gauge R&amp;R</h3>
-        <p className={cardSubClass}>
+      <Tile>
+        <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)', marginBottom: '0.25rem' }}>
+          Measurement system validation
+        </div>
+        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>Gauge R&amp;R</h3>
+        <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
           Assess whether the measurement system can reliably distinguish part-to-part variation from
           gauge noise (repeatability and reproducibility).
         </p>
-      </div>
+      </Tile>
 
       {/* Getting started guidance */}
-      <div className={`${surfacePanelClass} space-y-3`}>
-        <div className={moduleEyebrowClass}>Getting started</div>
-        <ol className="grid gap-2 text-sm text-[var(--c-text-muted)] sm:grid-cols-2 xl:grid-cols-4">
-          <li className="flex gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white">1</span>
-            <span>Select a characteristic in the <strong>Charts</strong> tab to associate the study with a specific MIC.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white">2</span>
-            <span>Set the study parameters below: how many operators, representative parts, and replicates.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white">3</span>
-            <span>Collect measurements: each operator measures each part the required number of times.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--c-brand)] text-[0.65rem] font-bold text-white">4</span>
-            <span>Enter the data in the table below and press <strong>Calculate GRR</strong>.</span>
-          </li>
-        </ol>
-      </div>
+      <Tile>
+        <Stack gap={3}>
+          <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+            Getting started
+          </div>
+          <ol style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', listStyle: 'none', padding: 0, margin: 0 }}>
+            {[
+              <>Select a characteristic in the <strong>Charts</strong> tab to associate the study with a specific MIC.</>,
+              <>Set the study parameters below: how many operators, representative parts, and replicates.</>,
+              <>Collect measurements: each operator measures each part the required number of times.</>,
+              <>Enter the data in the table below and press <strong>Calculate GRR</strong>.</>,
+            ].map((text, i) => (
+              <li key={i} style={STEP_STYLE.li}>
+                <span style={STEP_STYLE.num}>{i + 1}</span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ol>
+        </Stack>
+      </Tile>
 
       {/* MIC association warning */}
       {!state.selectedMIC && (
-        <InfoBanner variant="warn">
-          No characteristic selected. Go to the <strong>Charts</strong> tab, select a MIC, then return here to
-          associate this study with that characteristic. Results can still be calculated without this link,
-          but cannot be saved to the audit trail.
-        </InfoBanner>
+        <InlineNotification
+          kind="warning"
+          title="No characteristic selected."
+          subtitle="Go to the Charts tab, select a MIC, then return here to associate this study with that characteristic. Results can still be calculated without this link, but cannot be saved to the audit trail."
+          hideCloseButton
+          lowContrast
+        />
       )}
 
-      <div className={splitPanelClass}>
-        <div className="flex flex-col gap-4">
-
+      <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'minmax(0, 1.5fr) 320px', alignItems: 'start' }}>
+        <Stack gap={4}>
           {/* Study setup */}
-          <fieldset className={msaSetupClass}>
-            <legend className="sr-only">Study parameters</legend>
-            <div className={msaSetupRowClass}>
-              <label>Method:</label>
-              <div className="flex gap-2" role="group" aria-label="GRR calculation method">
-                <button
-                  type="button"
-                  className={`${buttonBaseClass} ${buttonSmClass} ${method === 'average_range' ? buttonPrimaryClass : buttonSecondaryClass}`}
-                  onClick={() => setMethod('average_range')}
-                  aria-pressed={method === 'average_range'}
-                >
-                  Average &amp; Range
-                </button>
-                <button
-                  type="button"
-                  className={`${buttonBaseClass} ${buttonSmClass} ${method === 'anova' ? buttonPrimaryClass : buttonSecondaryClass}`}
-                  onClick={() => setMethod('anova')}
-                  aria-pressed={method === 'anova'}
-                >
-                  ANOVA
-                </button>
-              </div>
-            </div>
-            <FieldHelp>
-              Average &amp; Range is simpler and widely accepted. Use ANOVA when you have ≥ 3 replicates and
-              want to detect operator-by-part interaction effects.
-            </FieldHelp>
+          <Tile>
+            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Study parameters</legend>
+              <Stack gap={3}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <label style={{ fontSize: '0.875rem', color: 'var(--cds-text-primary)' }}>Method:</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }} role="group" aria-label="GRR calculation method">
+                    <Button
+                      kind={method === 'average_range' ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setMethod('average_range')}
+                    >
+                      Average &amp; Range
+                    </Button>
+                    <Button
+                      kind={method === 'anova' ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setMethod('anova')}
+                    >
+                      ANOVA
+                    </Button>
+                  </div>
+                </div>
+                <FieldHelp>
+                  Average &amp; Range is simpler and widely accepted. Use ANOVA when you have ≥ 3 replicates and
+                  want to detect operator-by-part interaction effects.
+                </FieldHelp>
 
-            <div className={msaSetupRowClass}>
-              <label htmlFor="msa-operators">Operators:</label>
-              <input
-                id="msa-operators"
-                type="number"
-                className={`${inputBaseClass} ${inputSmClass} w-24`}
-                min={2} max={5}
-                value={nOperators}
-                aria-describedby="msa-operators-help"
-                onChange={e => setNOperators(Math.max(2, Math.min(5, Number(e.target.value))))}
-              />
-            </div>
-            <FieldHelp id="msa-operators-help">2–5. Typically 3 operators for a standard study.</FieldHelp>
+                {[
+                  { id: 'msa-operators', label: 'Operators:', value: nOperators, min: 2, max: 5, helpId: 'msa-operators-help', help: '2–5. Typically 3 operators for a standard study.', onChange: (v: number) => setNOperators(Math.max(2, Math.min(5, v))) },
+                  { id: 'msa-parts', label: 'Parts:', value: nParts, min: 2, max: 10, helpId: 'msa-parts-help', help: '2–10. Use 10 parts spanning the expected production range (not just good parts).', onChange: (v: number) => setNParts(Math.max(2, Math.min(10, v))) },
+                  { id: 'msa-replicates', label: 'Replicates:', value: nReplicates, min: 2, max: 5, helpId: 'msa-replicates-help', help: '2–5. Each operator measures each part this many times (blind, random order).', onChange: (v: number) => setNReplicates(Math.max(2, Math.min(5, v))) },
+                ].map(({ id, label, value, min, max, helpId, help, onChange }) => (
+                  <Stack gap={1} key={id}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                      <label htmlFor={id} style={{ fontSize: '0.875rem', color: 'var(--cds-text-primary)' }}>{label}</label>
+                      <input
+                        id={id}
+                        type="number"
+                        style={inputStyle}
+                        min={min}
+                        max={max}
+                        value={value}
+                        aria-describedby={helpId}
+                        onChange={e => onChange(Number(e.target.value))}
+                      />
+                    </div>
+                    <FieldHelp id={helpId}>{help}</FieldHelp>
+                  </Stack>
+                ))}
 
-            <div className={msaSetupRowClass}>
-              <label htmlFor="msa-parts">Parts:</label>
-              <input
-                id="msa-parts"
-                type="number"
-                className={`${inputBaseClass} ${inputSmClass} w-24`}
-                min={2} max={10}
-                value={nParts}
-                aria-describedby="msa-parts-help"
-                onChange={e => setNParts(Math.max(2, Math.min(10, Number(e.target.value))))}
-              />
-            </div>
-            <FieldHelp id="msa-parts-help">2–10. Use 10 parts spanning the expected production range (not just good parts).</FieldHelp>
-
-            <div className={msaSetupRowClass}>
-              <label htmlFor="msa-replicates">Replicates:</label>
-              <input
-                id="msa-replicates"
-                type="number"
-                className={`${inputBaseClass} ${inputSmClass} w-24`}
-                min={2} max={5}
-                value={nReplicates}
-                aria-describedby="msa-replicates-help"
-                onChange={e => setNReplicates(Math.max(2, Math.min(5, Number(e.target.value))))}
-              />
-            </div>
-            <FieldHelp id="msa-replicates-help">2–5. Each operator measures each part this many times (blind, random order).</FieldHelp>
-
-            <div className={msaSetupRowClass}>
-              <label htmlFor="msa-tolerance">Tolerance (USL−LSL):</label>
-              <input
-                id="msa-tolerance"
-                type="number"
-                className={`${inputBaseClass} ${inputSmClass} w-32`}
-                step="any"
-                value={tolerance}
-                aria-describedby="msa-tolerance-help"
-                onChange={e => setTolerance(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
-            <FieldHelp id="msa-tolerance-help">
-              Optional. If provided, % GRR of tolerance is calculated in addition to % of total variation.
-            </FieldHelp>
-          </fieldset>
+                <Stack gap={1}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <label htmlFor="msa-tolerance" style={{ fontSize: '0.875rem', color: 'var(--cds-text-primary)' }}>Tolerance (USL−LSL):</label>
+                    <input
+                      id="msa-tolerance"
+                      type="number"
+                      style={{ ...inputStyle, width: '8rem' }}
+                      step="any"
+                      value={tolerance}
+                      aria-describedby="msa-tolerance-help"
+                      onChange={e => setTolerance(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <FieldHelp id="msa-tolerance-help">
+                    Optional. If provided, % GRR of tolerance is calculated in addition to % of total variation.
+                  </FieldHelp>
+                </Stack>
+              </Stack>
+            </fieldset>
+          </Tile>
 
           {/* Data entry */}
-          <div className={msaDataClass}>
-            <div className="mb-2 flex items-baseline justify-between gap-4">
-              <label className="text-sm font-medium text-[var(--c-text)]" htmlFor="msa-data">
-                Measurement data
-              </label>
-              <button
-                className={`${buttonBaseClass} ${buttonSmClass} ${buttonSecondaryClass}`}
-                type="button"
-                onClick={() => setCsvText(generateSampleData(nOperators, nParts, nReplicates))}
-                aria-label="Fill textarea with generated sample data matching current parameters"
-              >
-                Fill sample data
-              </button>
-            </div>
-            <p className="mb-1.5 text-xs text-[var(--c-text-muted)]">
-              One measurement per line. Columns: <code className="rounded bg-slate-100 px-1 font-mono text-[0.7rem]">operator, part, replicate, value</code>
-              <br />
-              Example (3 operators, 2 parts, 2 replicates):
-            </p>
-            <pre className="mb-2 overflow-x-auto rounded border border-[var(--c-border)] bg-slate-50 px-3 py-2 text-[0.7rem] leading-relaxed text-[var(--c-text-muted)]">{`1,1,1,10.25
-1,1,2,10.30
-1,2,1,10.52
-1,2,2,10.48
-2,1,1,10.21  ← operator 2, part 1, replicate 1
-2,1,2,10.27
-…`}</pre>
-            <textarea
-              id="msa-data"
-              className={msaTextareaClass}
-              rows={10}
-              value={csvText}
-              aria-label="Measurement data in CSV format: operator, part, replicate, value"
-              onChange={e => setCsvText(e.target.value)}
-            />
-          </div>
+          <Tile>
+            <Stack gap={3}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '1rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--cds-text-primary)' }} htmlFor="msa-data">
+                  Measurement data
+                </label>
+                <Button
+                  kind="secondary"
+                  size="sm"
+                  onClick={() => setCsvText(generateSampleData(nOperators, nParts, nReplicates))}
+                >
+                  Fill sample data
+                </Button>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                One measurement per line. Columns: <code style={{ background: 'var(--cds-layer-accent-01)', padding: '0 0.25rem', fontFamily: 'var(--cds-code-02-font-family, monospace)', fontSize: '0.7rem' }}>operator, part, replicate, value</code>
+              </p>
+              <pre style={{ margin: 0, overflowX: 'auto', border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer-accent-01)', padding: '0.5rem 0.75rem', fontSize: '0.7rem', lineHeight: 1.6, color: 'var(--cds-text-secondary)', fontFamily: 'var(--cds-code-02-font-family, monospace)' }}>{`1,1,1,10.25\n1,1,2,10.30\n1,2,1,10.52\n1,2,2,10.48\n2,1,1,10.21  ← operator 2, part 1, replicate 1\n2,1,2,10.27\n…`}</pre>
+              <TextArea
+                id="msa-data"
+                labelText=""
+                rows={10}
+                value={csvText}
+                aria-label="Measurement data in CSV format: operator, part, replicate, value"
+                onChange={e => setCsvText(e.target.value)}
+              />
+            </Stack>
+          </Tile>
 
-          <button
-            className={`${buttonBaseClass} ${buttonPrimaryClass} w-fit`}
-            onClick={handleCalculate}
-            aria-label="Calculate Gauge R&R from entered data"
-          >
+          <Button kind="primary" onClick={handleCalculate}>
             Calculate GRR
-          </button>
-        </div>
+          </Button>
+        </Stack>
 
         {/* Interpretation guide */}
-        <aside className={`${heroCardDenseClass} space-y-4`}>
-          <div className={moduleEyebrowClass}>Interpretation guide</div>
-          <p className="text-sm text-[var(--c-text-muted)]">
-            GRR tells you what fraction of your observed variation comes from the measurement system itself
-            rather than genuine part-to-part differences.
-          </p>
-          <div className="space-y-2 text-sm">
-            <div className="rounded-md border border-[#8FE2BE] bg-[#DAF5E9] p-2.5">
-              <p className="font-semibold text-[#143700]">✓ &lt; 10% GRR</p>
-              <p className="mt-0.5 text-xs text-[#143700]">Acceptable. Gauge is suitable for production use.</p>
+        <Tile>
+          <Stack gap={4}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+              Interpretation guide
             </div>
-            <div className="rounded-md border border-[#FDE79D] bg-[#FEF3CE] p-2.5">
-              <p className="font-semibold text-[#005776]">⚠ 10–30% GRR</p>
-              <p className="mt-0.5 text-xs text-[#005776]">Conditionally acceptable. May be OK depending on process risk and context.</p>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+              GRR tells you what fraction of your observed variation comes from the measurement system itself
+              rather than genuine part-to-part differences.
+            </p>
+            <Stack gap={2}>
+              <div style={{ border: '1px solid var(--cds-support-success)', background: 'var(--cds-notification-background-success)', padding: '0.625rem' }}>
+                <p style={{ margin: 0, fontWeight: 600, color: 'var(--cds-text-primary)' }}>✓ &lt; 10% GRR</p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>Acceptable. Gauge is suitable for production use.</p>
+              </div>
+              <div style={{ border: '1px solid var(--cds-support-warning)', background: 'var(--cds-notification-background-warning)', padding: '0.625rem' }}>
+                <p style={{ margin: 0, fontWeight: 600, color: 'var(--cds-text-primary)' }}>⚠ 10–30% GRR</p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>Conditionally acceptable. May be OK depending on process risk and context.</p>
+              </div>
+              <div style={{ border: '1px solid var(--cds-support-error)', background: 'var(--cds-notification-background-error)', padding: '0.625rem' }}>
+                <p style={{ margin: 0, fontWeight: 600, color: 'var(--cds-text-primary)' }}>✕ &gt; 30% GRR</p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>Not acceptable. The measurement system is a major source of variability.</p>
+              </div>
+            </Stack>
+            <div style={{ borderTop: '1px solid var(--cds-border-subtle-01)', paddingTop: '0.75rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--cds-text-primary)' }}>NDC (Number of Distinct Categories)</p>
+              <p style={{ margin: '0.25rem 0 0' }}>NDC ≥ 5 means the gauge can resolve at least 5 distinct levels of part quality. If NDC &lt; 5, the system cannot reliably classify parts.</p>
             </div>
-            <div className="rounded-md border border-[#FAB799] bg-[#FCDBCC] p-2.5">
-              <p className="font-semibold text-[#F24A00]">✕ &gt; 30% GRR</p>
-              <p className="mt-0.5 text-xs text-[#F24A00]">Not acceptable. The measurement system is a major source of variability.</p>
-            </div>
-          </div>
-          <div className="border-t border-[var(--c-border)] pt-3 text-xs text-[var(--c-text-muted)]">
-            <p className="font-semibold">NDC (Number of Distinct Categories)</p>
-            <p className="mt-1">NDC ≥ 5 means the gauge can resolve at least 5 distinct levels of part quality. If NDC &lt; 5, the system cannot reliably classify parts.</p>
-          </div>
-        </aside>
+          </Stack>
+        </Tile>
       </div>
 
       {saveError && <InfoBanner variant="error">{saveError}</InfoBanner>}
       <GRRResult result={result} onSave={handleSave} saving={saving} />
-    </div>
+    </Stack>
   )
 }

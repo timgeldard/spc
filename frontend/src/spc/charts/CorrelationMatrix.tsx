@@ -5,7 +5,7 @@ import type { CapabilityMatrixDatum, CorrelationMatrixProps, CorrelationPair, Ev
 /**
  * Bubble matrix of pairwise Pearson correlations.
  * Circle area encodes |r| (strength); colour encodes direction.
- * Positive r → navy (#1B3A4B), Negative r → red (#ef4444).
+ * Positive r → navy (#0f62fe), Negative r → red (#da1e28).
  * onCellClick(micAId, micBId, micAName, micBName)
  */
 
@@ -15,8 +15,8 @@ function rToColor(r: number | null | undefined): string {
   const abs = Math.abs(r)
   const [r1, g1, b1] = [209, 213, 219]       // #d1d5db — neutral grey
   const [r2, g2, b2] = r >= 0
-    ? [27,  58,  75]                           // #1B3A4B — positive navy
-    : [239, 68,  68]                           // #ef4444 — negative red
+    ? [27,  58,  75]                           // #0f62fe — positive navy
+    : [239, 68,  68]                           // #da1e28 — negative red
   return `rgb(${Math.round(r1 + (r2 - r1) * abs)},${Math.round(g1 + (g2 - g1) * abs)},${Math.round(b1 + (b2 - b1) * abs)})`
 }
 
@@ -163,11 +163,11 @@ export default function CorrelationMatrix({ pairs, mics, onCellClick }: Correlat
       {/* Legend */}
       <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', fontSize: '0.75rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#1B3A4B', display: 'inline-block' }} />
+          <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#0f62fe', display: 'inline-block' }} />
           Positive correlation
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+          <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#da1e28', display: 'inline-block' }} />
           Negative correlation
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>

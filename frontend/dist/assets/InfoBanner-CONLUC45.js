@@ -1,0 +1,1 @@
+import{j as o}from"./react-vendor-BDCH8fP5.js";import{D as n}from"./SPCPage-CLplilA9.js";const e={error:"error",warn:"warning",info:"info",neutral:"info-square"};function a({variant:r="neutral",children:t}){return o.jsx(n,{kind:e[r],title:"",subtitle:t,hideCloseButton:!0,lowContrast:!0,role:r==="error"?"alert":"status"})}export{a as I};

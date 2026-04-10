@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { fieldHelpClass, fieldValidationErrorClass } from '../uiClasses'
 
 interface FieldHelpProps {
   id?: string
@@ -11,8 +10,7 @@ interface FieldHelpProps {
 }
 
 /**
- * Inline field help or validation message.
- * Uses fieldHelpClass (neutral) or fieldValidationErrorClass (error) tokens.
+ * Inline field help or validation message using Carbon token styles.
  *
  * Usage:
  *   <FieldHelp id="spc-material-help">Validate the material before proceeding.</FieldHelp>
@@ -22,7 +20,11 @@ export default function FieldHelp({ id, error = false, live = false, children }:
   return (
     <span
       id={id}
-      className={error ? fieldValidationErrorClass : fieldHelpClass}
+      style={{
+        fontSize: '0.75rem',
+        color: error ? 'var(--cds-support-error)' : 'var(--cds-text-secondary)',
+        fontWeight: error ? 600 : 400,
+      }}
       role={error && live ? 'alert' : undefined}
       aria-live={live ? (error ? 'assertive' : 'polite') : undefined}
     >

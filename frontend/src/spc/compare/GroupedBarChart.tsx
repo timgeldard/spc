@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import EChart from '../charts/EChart'
-import { emptyCardClass } from '../uiClasses'
+import { Tile } from '~/lib/carbon-layout'
 import type { CompareScorecardMaterial, EventParamLike } from '../types'
 
-const PALETTE = ['#1B3A4B', '#10b981', '#7c3aed']
+const PALETTE = ['#0f62fe', '#42be65', '#a56eff']
 
 function escapeHtml(value: unknown): string {
   return String(value)
@@ -32,7 +32,7 @@ export default function GroupedBarChart({ materials, commonMics }: GroupedBarCha
         return {
           value: row.ppk,
           itemStyle: {
-            color: row.ppk >= 1.33 ? PALETTE[i] : row.ppk >= 1.00 ? '#d97706' : '#dc2626',
+            color: row.ppk >= 1.33 ? PALETTE[i] : row.ppk >= 1.00 ? '#f1c21b' : '#da1e28',
           },
         }
       })
@@ -79,7 +79,7 @@ export default function GroupedBarChart({ materials, commonMics }: GroupedBarCha
           type: 'line',
           name: 'Ppk 1.33',
           data: Array(micNames.length).fill(1.33),
-          lineStyle: { color: '#10b981', type: 'dashed', width: 1.5 },
+          lineStyle: { color: '#42be65', type: 'dashed', width: 1.5 },
           symbol: 'none',
           tooltip: { show: false },
         },
@@ -87,7 +87,7 @@ export default function GroupedBarChart({ materials, commonMics }: GroupedBarCha
           type: 'line',
           name: 'Ppk 1.00',
           data: Array(micNames.length).fill(1.00),
-          lineStyle: { color: '#d97706', type: 'dashed', width: 1.5 },
+          lineStyle: { color: '#f1c21b', type: 'dashed', width: 1.5 },
           symbol: 'none',
           tooltip: { show: false },
         },
@@ -95,7 +95,11 @@ export default function GroupedBarChart({ materials, commonMics }: GroupedBarCha
     }
   }, [materials, commonMics])
 
-  if (!option) return <div className={emptyCardClass}><p>No common characteristics to compare.</p></div>
+  if (!option) return (
+    <Tile style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '180px', borderStyle: 'dashed', color: 'var(--cds-text-secondary)' }}>
+      <p style={{ margin: 0 }}>No common characteristics to compare.</p>
+    </Tile>
+  )
 
   return <EChart option={option} style={{ height: 380, width: '100%' }} theme="spc" notMerge ariaLabel="Grouped comparison bar chart — capability across materials" />
 }

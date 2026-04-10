@@ -1,16 +1,15 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import SparklineMini from './SparklineMini'
 import NodeTooltip from './NodeTooltip'
 import type { ProcessFlowNodeData } from '../types'
 
-// Labels reflect rejection-rate semantics — colours follow the Kerry brand palette:
-// Jade (green), Sunrise (amber), Sunset (red), Slate (grey)
+// Labels reflect rejection-rate semantics — Carbon support tokens
 const STATUS = {
-  green: { dot: '#44CF93', text: '#143700', bg: '#DAF5E9', border: '#8FE2BE', label: 'Low rejection rate' },
-  amber: { dot: '#F9C20A', text: '#005776', bg: '#FEF3CE', border: '#FDE79D', label: 'Elevated rejection rate' },
-  red:   { dot: '#F24A00', text: '#F24A00', bg: '#FCDBCC', border: '#FAB799', label: 'High rejection rate' },
-  grey:  { dot: '#99BCC8', text: '#4E7080', bg: '#F4F4EA', border: '#CCDDE4', label: 'Insufficient data' },
+  green: { dot: 'var(--cds-support-success)', text: 'var(--cds-text-primary)', bg: 'var(--cds-notification-background-success)', border: 'var(--cds-support-success)', label: 'Low rejection rate' },
+  amber: { dot: 'var(--cds-support-warning)', text: 'var(--cds-text-primary)', bg: 'var(--cds-notification-background-warning)', border: 'var(--cds-support-warning)', label: 'Elevated rejection rate' },
+  red:   { dot: 'var(--cds-support-error)',   text: 'var(--cds-support-error)', bg: 'var(--cds-notification-background-error)', border: 'var(--cds-support-error)', label: 'High rejection rate' },
+  grey:  { dot: 'var(--cds-text-placeholder)', text: 'var(--cds-text-secondary)', bg: 'var(--cds-layer)', border: 'var(--cds-border-subtle-01)', label: 'Insufficient data' },
 }
 
 type ProcessNodeStatus = keyof typeof STATUS
@@ -22,6 +21,7 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
   const s = STATUS[statusKey] ?? STATUS.grey
   const rejectionRate = data.rejection_rate_pct
   const hasSignal = Boolean(data.has_ooc_signal || data.last_ooc)
+  const [hovered, setHovered] = useState(false)
 
   const shortName = data.material_name && data.material_name.length > 22
     ? data.material_name.substring(0, 21) + '…'
@@ -35,7 +35,8 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}
-      className="group"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background: s.bg,
         border: `1.5px solid ${selected ? s.dot : s.border}`,
@@ -71,7 +72,7 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
         title={s.label}
       />
 
-      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#111827', paddingRight: 20, lineHeight: 1.3 }}
+      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--cds-text-primary)', paddingRight: 20, lineHeight: 1.3 }}
         title={data.material_name || String(data.material_id)}>
         {shortName}
       </div>
@@ -81,12 +82,12 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
           display: 'inline-flex',
           alignItems: 'center',
           marginTop: 3,
-          background: 'rgba(0,0,0,0.05)',
+          background: 'var(--cds-layer-accent-01)',
           borderRadius: 4,
           padding: '1px 5px',
           fontSize: '0.625rem',
           fontWeight: 500,
-          color: '#6b7280',
+          color: 'var(--cds-text-secondary)',
           letterSpacing: '0.02em',
         }}>
           {data.plant_name}
@@ -99,12 +100,12 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
           alignItems: 'center',
           marginLeft: data.plant_name ? 4 : 0,
           marginTop: 3,
-          background: '#1B3A4B',
+          background: 'var(--cds-background-inverse)',
           borderRadius: 4,
           padding: '1px 5px',
           fontSize: '0.625rem',
           fontWeight: 700,
-          color: '#fff',
+          color: 'var(--cds-text-inverse)',
           letterSpacing: '0.04em',
         }}>
           ROOT
@@ -120,9 +121,9 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
           padding: '2px 7px',
           fontSize: '0.625rem',
           fontWeight: 700,
-          color: '#F24A00',
-          background: '#FCDBCC',
-          border: '1px solid #F56E33',
+          color: 'var(--cds-support-error)',
+          background: 'var(--cds-notification-background-error)',
+          border: '1px solid var(--cds-support-error)',
           letterSpacing: '0.04em',
         }}>
           OOC
@@ -139,17 +140,17 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
             fontSize: '0.7rem',
             fontWeight: 700,
             color: s.text,
-            background: `${s.dot}18`,
+            background: 'var(--cds-layer-accent-01)',
             borderRadius: 4,
             padding: '1px 5px',
           }}>
             Cpk {data.estimated_cpk.toFixed(2)}
           </span>
         )}
-        <span style={{ fontSize: '0.65rem', color: '#9ca3af', marginLeft: 'auto' }}>
+        <span style={{ fontSize: '0.65rem', color: 'var(--cds-text-placeholder)', marginLeft: 'auto' }}>
           {data.total_batches ?? 0}b
           {(data.rejected_batches ?? 0) > 0 && (
-            <span style={{ color: '#ef4444', marginLeft: 3 }}>·{data.rejected_batches}r</span>
+            <span style={{ color: 'var(--cds-support-error)', marginLeft: 3 }}>·{data.rejected_batches}r</span>
           )}
         </span>
       </div>
@@ -169,6 +170,7 @@ function ProcessNode({ data, selected }: NodeProps<ProcessFlowGraphNode>) {
         rejectedBatches={data.rejected_batches}
         lastOoc={data.last_ooc}
         hasSignal={hasSignal}
+        visible={hovered}
       />
 
       <Handle type="source" position={Position.Right} style={{ background: s.dot }} />

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import { computeCChart } from '../calculations'
-import { chartHintClass, chartOocClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 import type { ChartPaneProps, EventParamLike } from '../types'
 
 interface CChartPoint {
@@ -71,7 +70,7 @@ export default function CChart({ points, embedded = false }: CChartViewProps) {
           if (s.batch_date) html += `Date: ${s.batch_date}<br/>`
           html += `Defects: <strong>${s.c}</strong><br/>`
           html += `c̄ = ${cBar.toFixed(3)}  UCL = ${ucl.toFixed(3)}  LCL = ${Math.max(0, lcl).toFixed(3)}<br/>`
-          if (ooc) html += `<span style="color:#ef4444">⚠ Beyond control limit</span>`
+          if (ooc) html += `<span style="color:#da1e28">⚠ Beyond control limit</span>`
           return html
         },
       },
@@ -81,15 +80,15 @@ export default function CChart({ points, embedded = false }: CChartViewProps) {
           type: 'line',
           data: subgroupStats.map(s => ({
             value: s.c,
-            itemStyle: { color: (s.c > ucl || s.c < lcl) ? '#ef4444' : '#1B3A4B' },
+            itemStyle: { color: (s.c > ucl || s.c < lcl) ? '#da1e28' : '#0f62fe' },
           })),
-          lineStyle: { color: '#1B3A4B', width: 2.4 },
+          lineStyle: { color: '#0f62fe', width: 2.4 },
           showSymbol: true,
           symbolSize: 6,
           markPoint: {
             symbol: 'circle',
             symbolSize: 12,
-            itemStyle: { color: '#ef4444' },
+            itemStyle: { color: '#da1e28' },
             data: subgroupStats
               .map((s, index) => (s.c > ucl || s.c < lcl ? { coord: [categories[index], s.c], value: s.c } : null))
               .filter(Boolean),
@@ -98,9 +97,9 @@ export default function CChart({ points, embedded = false }: CChartViewProps) {
             silent: true,
             symbol: ['none', 'none'],
             data: [
-              { yAxis: cBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2.2 }, label: { formatter: `c̄ ${cBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
-              { yAxis: ucl,  lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
-              { yAxis: Math.max(0, lcl), lineStyle: { color: '#ef4444', type: 'dashed', width: 2.4 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#ef4444' } },
+              { yAxis: cBar, lineStyle: { color: '#0f62fe', type: 'solid', width: 2.2 }, label: { formatter: `c̄ ${cBar.toFixed(2)}`, position: 'end', fontSize: 10 } },
+              { yAxis: ucl,  lineStyle: { color: '#da1e28', type: 'dashed', width: 2.4 }, label: { formatter: `UCL ${ucl.toFixed(2)}`, position: 'end', fontSize: 10, color: '#da1e28' } },
+              { yAxis: Math.max(0, lcl), lineStyle: { color: '#da1e28', type: 'dashed', width: 2.4 }, label: { formatter: `LCL ${Math.max(0, lcl).toFixed(2)}`, position: 'end', fontSize: 10, color: '#da1e28' } },
             ],
           },
         },
@@ -117,15 +116,15 @@ export default function CChart({ points, embedded = false }: CChartViewProps) {
   if (embedded) return chartNode
 
   return (
-    <div className={chartPaneClass}>
-      <div className={chartPaneTitleClass}>
+    <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
+      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>
         C Chart (Defects per Unit)
         {oocCount > 0 && (
-          <span className={chartOocClass}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--cds-support-error)' }}>⚠ {oocCount} point{oocCount !== 1 ? 's' : ''} beyond limits</span>
         )}
       </div>
       {chartNode}
-      <p className={chartHintClass}>
+      <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
         c̄ = {chart.cBar.toFixed(3)} · UCL = {chart.ucl.toFixed(3)} · LCL = {Math.max(0, chart.lcl).toFixed(3)}
       </p>
     </div>

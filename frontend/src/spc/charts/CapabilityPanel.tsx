@@ -6,7 +6,6 @@ import {
   getCapabilityTier,
 } from '../../components/charts/CapabilityPanel'
 import type { SPCComputationResult } from '../types'
-import { heroCardDenseClass } from '../uiClasses'
 
 interface StabilityWarningProps {
   signals?: SPCComputationResult['signals']
@@ -17,8 +16,20 @@ function StabilityWarning({ signals, mrSignals }: StabilityWarningProps) {
   const total = (signals?.length ?? 0) + (mrSignals?.length ?? 0)
   if (total === 0) return null
   return (
-    <div className="mb-3 flex items-start gap-2 rounded-md border border-[#F9C20A] bg-[#FEF3CE] px-3 py-2 text-[0.82rem] leading-[1.4] text-[#005776]">
-      <span className="mt-[0.05rem] shrink-0 text-base">⚠</span>
+    <div style={{
+      marginBottom: '0.75rem',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '0.5rem',
+      borderRadius: 4,
+      border: '1px solid var(--cds-support-warning)',
+      background: 'var(--cds-notification-background-warning)',
+      padding: '0.5rem 0.75rem',
+      fontSize: '0.8125rem',
+      lineHeight: 1.4,
+      color: 'var(--cds-text-primary)',
+    }}>
+      <span style={{ marginTop: '0.05rem', flexShrink: 0, fontSize: '1rem' }}>⚠</span>
       <span>
         <strong>Process unstable</strong> — {total} rule violation{total !== 1 ? 's' : ''} detected.
         Cpk may be unreliable until the assignable cause is identified and removed.
@@ -27,11 +38,11 @@ function StabilityWarning({ signals, mrSignals }: StabilityWarningProps) {
   )
 }
 
-// Kerry §4.3 KPI cards: Jade=positive, Sunrise=attention, Sunset=critical
+// Carbon-token tier styles
 const TIER_STYLES = {
-  healthy:  { color: '#143700', bg: '#DAF5E9' },  /* Forest text / Jade 20 */
-  warning:  { color: '#005776', bg: '#FEF3CE' },  /* Slate text / Sunrise 20 */
-  critical: { color: '#F24A00', bg: '#FCDBCC' },  /* Sunset text / Sunset 20 */
+  healthy:  { color: 'var(--cds-support-success)', bg: 'var(--cds-notification-background-success)' },
+  warning:  { color: 'var(--cds-support-warning)', bg: 'var(--cds-notification-background-warning)' },
+  critical: { color: 'var(--cds-support-error)',   bg: 'var(--cds-notification-background-error)' },
 } as const
 
 type Tier = ReturnType<typeof getCapabilityTier>
@@ -53,17 +64,20 @@ function MetricCard({ label, value, tier, subtitle, note }: MetricCardProps) {
   const tierStyle = t ? TIER_STYLES[t.status] : null
   const displayVal = value != null ? value.toFixed(2) : '—'
   return (
-    <div
-      className="min-w-0 rounded-lg p-3"
-      style={{ background: tierStyle?.bg ?? '#f9fafb', border: `1px solid ${tierStyle?.color ?? '#e5e7eb'}20` }}
-    >
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium" style={{ color: tierStyle?.color ?? '#6b7280' }}>{label}</span>
-        <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: tierStyle?.color ?? '#111827' }}>
+    <div style={{
+      minWidth: 0,
+      borderRadius: 4,
+      padding: '0.75rem',
+      background: tierStyle?.bg ?? 'var(--cds-layer)',
+      border: `1px solid ${tierStyle ? tierStyle.color : 'var(--cds-border-subtle-01)'}`,
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 500, color: tierStyle?.color ?? 'var(--cds-text-secondary)' }}>{label}</span>
+        <span style={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: tierStyle?.color ?? 'var(--cds-text-primary)' }}>
           {displayVal}
         </span>
-        {subtitle && <span className="text-xs" style={{ color: tierStyle?.color ?? '#6b7280' }}>{subtitle}</span>}
-        {note && <span className="mt-0.5 text-xs text-gray-400">{note}</span>}
+        {subtitle && <span style={{ fontSize: '0.75rem', color: tierStyle?.color ?? 'var(--cds-text-secondary)' }}>{subtitle}</span>}
+        {note && <span style={{ marginTop: 2, fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>{note}</span>}
       </div>
     </div>
   )
@@ -101,28 +115,32 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
   const usesNonParametricCapability = capabilityMethod === 'non_parametric'
 
   return (
-    <div className={`${heroCardDenseClass} space-y-4`}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div>
-        <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Capability evidence</div>
-        <div className="mt-1 text-base font-bold text-[var(--c-text)]">Process Capability</div>
+        <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+          Capability evidence
+        </div>
+        <div style={{ marginTop: 4, fontSize: '1rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>
+          Process Capability
+        </div>
       </div>
       <StabilityWarning signals={spc.signals} mrSignals={spc.mrSignals} />
       {hasNoSpecification && (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+        <p style={{ borderRadius: 4, border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer)', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: 500, color: 'var(--cds-text-secondary)', margin: 0 }}>
           No specification data available — capability metrics cannot be calculated.
         </p>
       )}
       {normality?.is_normal === false && (
-        <p className="rounded-lg border border-[#FDE79D] bg-[#FEF3CE] px-3 py-2 text-xs font-medium text-[#005776]">
+        <p style={{ borderRadius: 4, border: '1px solid var(--cds-support-warning)', background: 'var(--cds-notification-background-warning)', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: 500, color: 'var(--cds-text-primary)', margin: 0 }}>
           Non-normal distribution — percentile-based capability applied.
           {normality?.p_value != null ? ` (Shapiro-Wilk p=${normality.p_value.toFixed(4)})` : ''}
         </p>
       )}
       {normalityWarning && normality?.is_normal !== false && (
-        <p className="mb-2 text-xs text-[#F24A00]">{normalityWarning}</p>
+        <p style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: 'var(--cds-support-error)', margin: 0 }}>{normalityWarning}</p>
       )}
       {normality?.warning && normality?.is_normal == null && (
-        <p className="mb-2 text-xs text-[#005776]">{normality.warning}</p>
+        <p style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)', margin: 0 }}>{normality.warning}</p>
       )}
 
       {/* Headline metric always visible */}
@@ -134,16 +152,30 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
       />
 
       {/* Progressive disclosure for secondary stats */}
-      <div className="border-t border-[var(--c-border)] pt-2">
+      <div style={{ borderTop: '1px solid var(--cds-border-subtle-01)', paddingTop: '0.5rem' }}>
         <button
-          className="flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-[0.05em] text-[var(--c-text-muted)] hover:text-[var(--c-text)] transition-colors"
+          style={{
+            display: 'flex',
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: 'var(--cds-text-secondary)',
+          }}
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen(v => !v)}
         >
           More capability stats
           <svg
             width="12" height="12" viewBox="0 0 12 12" fill="none"
-            className={`transition-transform duration-200 ${detailsOpen ? 'rotate-180' : ''}`}
+            style={{ transition: 'transform 200ms', transform: detailsOpen ? 'rotate(180deg)' : 'none' }}
             aria-hidden="true"
           >
             <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -151,8 +183,8 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         </button>
 
         {detailsOpen && (
-          <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
               {cpkLower95 != null && cpkUpper95 != null && (
                 <MetricCard
                   label="Cpk 95% CI"
@@ -164,32 +196,34 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
                 <MetricCard label="Z (σ level)" value={zScore} tier={null} note="Process sigma" />
               )}
               {dpmo != null && (
-                <div className="min-w-0 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-medium text-gray-500">DPMO</span>
-                    <span className="text-2xl font-bold leading-none tabular-nums text-gray-800">{dpmo.toLocaleString()}</span>
-                    <span className="text-xs text-gray-400">1.5σ shift</span>
+                <div style={{ minWidth: 0, borderRadius: 4, border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer)', padding: '0.75rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--cds-text-secondary)' }}>DPMO</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: 'var(--cds-text-primary)' }}>{dpmo.toLocaleString()}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>1.5σ shift</span>
                   </div>
                 </div>
               )}
             </div>
 
             {cpkTier && cp != null && cpk != null && Math.abs(cp - cpk) > 0.05 && !isUnilateral && (
-              <p className="text-xs text-gray-500">
+              <p style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)', margin: 0 }}>
                 Process is {cpk < cp ? 'off-centre' : 'centred'} — Cp {cp.toFixed(2)} vs Cpk {cpk.toFixed(2)}
               </p>
             )}
             {isUnilateral && (
-              <p className="text-xs text-gray-400">Cp / Pp not defined for one-sided specification</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)', margin: 0 }}>Cp / Pp not defined for one-sided specification</p>
             )}
             {spc.capability?.specWarning && (
-              <p className="text-xs text-[#005776]">{spc.capability.specWarning}</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)', margin: 0 }}>{spc.capability.specWarning}</p>
             )}
 
             {!hasNoSpecification && (usesNonParametricCapability ? (
-              <div className="space-y-2">
-                <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--c-text-muted)]">Empirical percentile evidence</div>
-                <div className="grid grid-cols-3 gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+                  Empirical percentile evidence
+                </div>
+                <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
                   <MetricCard label="P0.135" value={empiricalP00135} tier={null} note="Empirical lower tail" />
                   <MetricCard label="P50" value={empiricalP50} tier={null} note="Empirical median" />
                   <MetricCard label="P99.865" value={empiricalP99865} tier={null} note="Empirical upper tail" />
@@ -199,9 +233,9 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
               <CapabilityHistogram spc={spc} />
             ))}
 
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem' }}>
               {CAPABILITY_TIERS.map((t, i) => (
-                <span key={i} className="rounded-full bg-slate-50 px-2 py-1" style={{ color: TIER_STYLES[t.status].color }}>
+                <span key={i} style={{ borderRadius: 999, background: 'var(--cds-layer)', padding: '2px 8px', color: TIER_STYLES[t.status].color }}>
                   {i < CAPABILITY_TIERS.length - 1 ? `≥ ${t.min.toFixed(2)} ${t.label}` : `< ${CAPABILITY_TIERS[i - 1]?.min.toFixed(2) ?? '1.33'} ${t.label}`}
                 </span>
               ))}

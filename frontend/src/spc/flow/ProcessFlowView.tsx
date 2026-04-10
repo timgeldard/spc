@@ -10,22 +10,20 @@ import {
   useNodesState,
   useEdgesState,
 } from '@xyflow/react'
-import { ArrowRight, Focus, GitBranch, Network, ScanSearch, X } from 'lucide-react'
+import ArrowRight from '@carbon/icons-react/es/ArrowRight.js'
+import Branch from '@carbon/icons-react/es/Branch.js'
+import Close from '@carbon/icons-react/es/Close.js'
+import Network_1 from '@carbon/icons-react/es/Network_1.js'
+import SearchAdvanced from '@carbon/icons-react/es/SearchAdvanced.js'
+import ZoomFit from '@carbon/icons-react/es/ZoomFit.js'
+import { Button } from '~/lib/carbon-forms'
+import { Stack, Tile } from '~/lib/carbon-layout'
 import { useSPC } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'
 import { layoutFlowGraph } from './layoutFlowGraph'
 import ProcessNode from './ProcessNode'
 import ProcessFlowLegend from './ProcessFlowLegend'
 import type { ProcessFlowEdgeData, ProcessFlowNodeData, ProcessFlowNodeRecord } from '../types'
-import {
-  cardSubClass,
-  cardTitleClass,
-  flowCanvasClass,
-  heroCardDenseClass,
-  moduleEyebrowClass,
-  moduleHeaderCardClass,
-  splitPanelClass,
-} from '../uiClasses'
 import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import ModuleEmptyState from '../components/ModuleEmptyState'
@@ -35,12 +33,12 @@ type FlowEdge = Edge
 type TraceDirection = 'upstream' | 'downstream' | null
 const nodeTypes = { processNode: ProcessNode }
 
-// Kerry brand palette — matches ProcessNode STATUS
+// Status colours aligned to Carbon support tokens
 const STATUS_COLOR = {
-  green: '#44CF93',  // Jade
-  amber: '#F9C20A',  // Sunrise
-  red:   '#F24A00',  // Sunset
-  grey:  '#99BCC8',  // Slate 40
+  green: 'var(--cds-support-success)',
+  amber: 'var(--cds-support-warning)',
+  red:   'var(--cds-support-error)',
+  grey:  'var(--cds-icon-secondary)',
 }
 
 function buildFlowElements(
@@ -100,7 +98,7 @@ function buildFlowElements(
       type: 'smoothstep',
       animated,
       style: {
-        stroke: animated ? '#F24A00' : '#CCDDE4',  // Sunset / Slate 20
+        stroke: animated ? 'var(--cds-support-error)' : 'var(--cds-border-subtle-01)',
         strokeWidth: animated ? 2 : 1.5,
       },
     }
@@ -260,28 +258,30 @@ export default function ProcessFlowView() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className={moduleHeaderCardClass}>
-        <div className={moduleEyebrowClass}>Material lineage review</div>
-        <h3 className={cardTitleClass}>Process Flow</h3>
-        <p className={cardSubClass}>
+    <Stack gap={4}>
+      <Tile>
+        <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)', marginBottom: '0.25rem' }}>
+          Material lineage review
+        </div>
+        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--cds-text-primary)' }}>Process Flow</h3>
+        <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
           Review upstream and downstream lineage around {state.selectedMaterial.material_name}. Use this to trace where quality risk may propagate across the network.
         </p>
-      </div>
+      </Tile>
 
-      <div className={splitPanelClass}>
-        <div className={flowCanvasClass}>
-          <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/92 px-3 py-2 text-xs shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/92">
-            <span className="font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+      <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'minmax(0, 1.5fr) 320px', alignItems: 'start' }}>
+        <div style={{ position: 'relative', minHeight: '500px', height: 'calc(100vh - 280px)', overflow: 'hidden', border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-background)' }}>
+          <div style={{ position: 'absolute', left: '0.75rem', top: '0.75rem', zIndex: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--cds-border-subtle-01)', background: 'var(--cds-layer)', padding: '0.5rem 0.75rem', fontSize: '0.75rem' }}>
+            <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cds-text-secondary)' }}>
               Flow Controls
             </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span style={{ background: 'var(--cds-layer-accent-01)', padding: '0.25rem 0.625rem', color: 'var(--cds-text-secondary)' }}>
               Drag to pan
             </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span style={{ background: 'var(--cds-layer-accent-01)', padding: '0.25rem 0.625rem', color: 'var(--cds-text-secondary)' }}>
               Scroll to zoom
             </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span style={{ background: 'var(--cds-layer-accent-01)', padding: '0.25rem 0.625rem', color: 'var(--cds-text-secondary)' }}>
               Click node to inspect
             </span>
           </div>
@@ -307,135 +307,133 @@ export default function ProcessFlowView() {
             nodesConnectable={false}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={'dots' as BackgroundVariant} gap={24} color="#e2e8f0" />
+            <Background variant={'dots' as BackgroundVariant} gap={24} color="var(--cds-border-subtle-01)" />
             <Controls />
             <MiniMap
-              nodeColor={n => STATUS_COLOR[(n.data?.status ?? 'grey') as keyof typeof STATUS_COLOR] ?? '#9ca3af'}
-              maskColor="rgba(248,250,252,0.85)"
+              nodeColor={n => {
+                const raw = STATUS_COLOR[(n.data?.status ?? 'grey') as keyof typeof STATUS_COLOR] ?? 'var(--cds-icon-secondary)'
+                return raw.startsWith('var(') ? '#99BCC8' : raw
+              }}
+              maskColor="rgba(0,0,0,0.05)"
               pannable
               zoomable
             />
             <ProcessFlowLegend />
           </ReactFlow>
         </div>
-        <aside className={`${heroCardDenseClass} space-y-4`}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className={moduleEyebrowClass}>Node Inspector</div>
-              <div className="text-sm text-[var(--c-text-muted)]">
-                Select a node to inspect its quality posture, then trace the surrounding lineage.
+        <Tile>
+          <Stack gap={4}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+                  Node Inspector
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)', marginTop: '0.25rem' }}>
+                  Select a node to inspect its quality posture, then trace the surrounding lineage.
+                </div>
               </div>
+              {selectedNode && (
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  hasIconOnly
+                  renderIcon={() => <Close size={16} />}
+                  iconDescription="Clear node selection"
+                  onClick={() => {
+                    setSelectedNodeId(null)
+                    setTraceDirection(null)
+                  }}
+                />
+              )}
             </div>
-            {selectedNode && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedNodeId(null)
-                  setTraceDirection(null)
-                }}
-                className="rounded-full border border-[var(--c-border)] p-1.5 text-[var(--c-text-muted)] transition hover:border-slate-400 hover:text-[var(--c-text)]"
-                aria-label="Clear node selection"
-              >
-                <X className="h-4 w-4" />
-              </button>
+
+            {!selectedNode && (
+              <Stack gap={3}>
+                <div style={{ border: '1px dashed var(--cds-border-subtle-01)', background: 'var(--cds-layer-accent-01)', padding: '1.25rem', fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
+                  Click any process node to inspect rejection rate, capability, and path tracing controls.
+                </div>
+                <Stack gap={2} style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                  <p style={{ margin: 0 }}><strong style={{ color: 'var(--cds-support-success)' }}>Green</strong> nodes are operationally healthy.</p>
+                  <p style={{ margin: 0 }}><strong style={{ color: 'var(--cds-support-warning)' }}>Amber</strong> nodes should be monitored for drift.</p>
+                  <p style={{ margin: 0 }}><strong style={{ color: 'var(--cds-support-error)' }}>Red</strong> nodes are likely risk hotspots.</p>
+                </Stack>
+              </Stack>
             )}
-          </div>
 
-          {!selectedNode && (
-            <>
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-5 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
-                Click any process node to inspect rejection rate, capability, and path tracing controls.
-              </div>
-              <div className="space-y-2 text-xs text-[var(--c-text-muted)]">
-                <p><span className="font-semibold" style={{ color: STATUS_COLOR.green }}>Green</span> nodes are operationally healthy.</p>
-                <p><span className="font-semibold" style={{ color: STATUS_COLOR.amber }}>Amber</span> nodes should be monitored for drift.</p>
-                <p><span className="font-semibold" style={{ color: STATUS_COLOR.red }}>Red</span> nodes are likely risk hotspots.</p>
-                <p><span className="font-semibold" style={{ color: '#F24A00' }}>Red-orange</span> borders indicate inferred OOC attention from current rejection or capability posture.</p>
-              </div>
-            </>
-          )}
+            {selectedNode && (
+              <Stack gap={4}>
+                <div style={{ border: '1px solid var(--cds-border-subtle-01)', padding: '1rem', background: 'var(--cds-layer)' }}>
+                  <div style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+                    {selectedNode.data.material_name ?? selectedNode.data.material_id}
+                  </div>
+                  <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)' }}>
+                    {selectedNode.data.plant_name ?? 'Plant not specified'}
+                  </div>
 
-          {selectedNode && (
-            <>
-              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
-                <div className="text-lg font-semibold text-[var(--c-text)]">
-                  {selectedNode.data.material_name ?? selectedNode.data.material_id}
-                </div>
-                <div className="mt-1 text-xs text-[var(--c-text-muted)]">
-                  {selectedNode.data.plant_name ?? 'Plant not specified'}
-                </div>
+                  <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.875rem' }}>
+                    {[
+                      { label: 'Rejection', value: selectedNode.data.rejection_rate_pct != null ? `${selectedNode.data.rejection_rate_pct.toFixed(1)}%` : 'Unavailable' },
+                      { label: 'Estimated Cpk', value: selectedNode.data.estimated_cpk != null ? selectedNode.data.estimated_cpk.toFixed(2) : 'Unavailable' },
+                      { label: 'Batches', value: String(selectedNode.data.total_batches ?? 0) },
+                      { label: 'Rejected', value: String(selectedNode.data.rejected_batches ?? 0) },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cds-text-secondary)' }}>{label}</div>
+                        <div style={{ marginTop: '0.25rem', fontWeight: 500, color: 'var(--cds-text-primary)' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">Rejection</div>
-                    <div className="mt-1 font-medium text-[var(--c-text)]">
-                      {selectedNode.data.rejection_rate_pct != null ? `${selectedNode.data.rejection_rate_pct.toFixed(1)}%` : 'Unavailable'}
+                  {selectedNode.data.has_ooc_signal && (
+                    <div style={{ marginTop: '1rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 500, background: 'var(--cds-notification-background-error)', color: 'var(--cds-support-error)', border: '1px solid var(--cds-support-error)' }}>
+                      {selectedNode.data.last_ooc
+                        ? `Latest OOC signal ${selectedNode.data.last_ooc}`
+                        : 'OOC attention inferred from current rejection or capability posture.'}
                     </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">Estimated Cpk</div>
-                    <div className="mt-1 font-medium text-[var(--c-text)]">
-                      {selectedNode.data.estimated_cpk != null ? selectedNode.data.estimated_cpk.toFixed(2) : 'Unavailable'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">Batches</div>
-                    <div className="mt-1 font-medium text-[var(--c-text)]">{selectedNode.data.total_batches ?? 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">Rejected</div>
-                    <div className="mt-1 font-medium text-[var(--c-text)]">{selectedNode.data.rejected_batches ?? 0}</div>
-                  </div>
+                  )}
                 </div>
 
-                {selectedNode.data.has_ooc_signal && (
-                  <div className="mt-4 rounded-xl bg-[#FCDBCC] px-3 py-2 text-sm font-medium text-[#F24A00] dark:bg-[#3D1200] dark:text-[#F56E33]">
-                    {selectedNode.data.last_ooc
-                      ? `Latest OOC signal ${selectedNode.data.last_ooc}`
-                      : 'OOC attention inferred from current rejection or capability posture.'}
+                <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: '1fr 1fr' }}>
+                  <Button
+                    kind="primary"
+                    size="md"
+                    renderIcon={() => <Branch size={16} />}
+                    onClick={() => setTraceDirection(current => current === 'upstream' ? null : 'upstream')}
+                  >
+                    Trace Upstream
+                  </Button>
+                  <Button
+                    kind="secondary"
+                    size="md"
+                    renderIcon={() => <Network_1 size={16} />}
+                    onClick={() => setTraceDirection(current => current === 'downstream' ? null : 'downstream')}
+                  >
+                    Trace Downstream
+                  </Button>
+                </div>
+
+                <Button
+                  kind="tertiary"
+                  size="md"
+                  renderIcon={() => <ArrowRight size={16} />}
+                  style={{ width: '100%' }}
+                  onClick={() => activateNode(selectedNode.data)}
+                >
+                  <SearchAdvanced size={16} style={{ marginRight: '0.5rem' }} />
+                  Open In Control Charts
+                </Button>
+
+                {traceDirection && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0.75rem', fontSize: '0.75rem', fontWeight: 500, color: 'var(--cds-text-secondary)', background: 'var(--cds-layer-accent-01)' }}>
+                    <ZoomFit size={14} />
+                    {traceDirection === 'upstream' ? 'Upstream path highlighted' : 'Downstream path highlighted'}
                   </div>
                 )}
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setTraceDirection(current => current === 'upstream' ? null : 'upstream')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-                >
-                  <GitBranch className="h-4 w-4" />
-                  Trace Upstream
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTraceDirection(current => current === 'downstream' ? null : 'downstream')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <Network className="h-4 w-4" />
-                  Trace Downstream
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => activateNode(selectedNode.data)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#CCDDE4] bg-[#D4EBEC] px-4 py-3 text-sm font-medium text-[#005776] transition hover:bg-[#A9D7DA] dark:border-[#337991] dark:bg-[#337991]/40 dark:text-[#44CF93] dark:hover:bg-[#337991]/60"
-              >
-                <ScanSearch className="h-4 w-4" />
-                Open In Control Charts
-                <ArrowRight className="h-4 w-4" />
-              </button>
-
-              {traceDirection && (
-                <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  <Focus className="h-3.5 w-3.5" />
-                  {traceDirection === 'upstream' ? 'Upstream path highlighted' : 'Downstream path highlighted'}
-                </div>
-              )}
-            </>
-          )}
-        </aside>
+              </Stack>
+            )}
+          </Stack>
+        </Tile>
       </div>
-    </div>
+    </Stack>
   )
 }

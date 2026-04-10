@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import type { IndexedChartPoint, LockedLimits, SPCComputationResult, SPCSignal } from '../types'
-import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 
 interface IndividualsChartProps {
   spc: SPCComputationResult | null | undefined
@@ -49,14 +48,14 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
       const isSignal = rules.length > 0 && !isOoc
       const isOutlier = Boolean(p.is_outlier && !isExcluded)
 
-      let color = '#1B3A4B'
+      let color = '#0f62fe'
       let symbolSize = 5
       let symbol = 'circle'
       if (isExcluded) {
         color = '#9ca3af'
         symbolSize = 7
       } else if (isOoc) {
-        color = '#ef4444'
+        color = '#da1e28'
         symbolSize = 9
       } else if (isSignal) {
         color = '#f59e0b'
@@ -78,9 +77,9 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
     const yMax = maxY + Math.abs(uclX - maxY) * 0.15
 
     const markLineData: Array<Record<string, unknown>> = [
-      { yAxis: uclX, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${uclX.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } },
-      { yAxis: xBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `X̄ ${xBar.toFixed(4)}`, position: 'end', color: '#1B3A4B', fontSize: 10 } },
-      { yAxis: lclX, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lclX.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } },
+      { yAxis: uclX, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${uclX.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } },
+      { yAxis: xBar, lineStyle: { color: '#0f62fe', type: 'solid', width: 2 }, label: { formatter: `X̄ ${xBar.toFixed(4)}`, position: 'end', color: '#0f62fe', fontSize: 10 } },
+      { yAxis: lclX, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lclX.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } },
     ]
     if (usl != null) markLineData.push({ yAxis: usl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `USL ${usl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
     if (lsl != null) markLineData.push({ yAxis: lsl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `LSL ${lsl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
@@ -133,7 +132,7 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
       series: [{
         type: 'line',
         data: seriesData,
-        lineStyle: { color: '#1B3A4B', width: 2 },
+        lineStyle: { color: '#0f62fe', width: 2 },
         showSymbol: true,
         markLine: { silent: true, symbol: ['none', 'none'], data: markLineData },
         markArea: {
@@ -161,17 +160,17 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
   if (!imr || !indexedPoints || !option) return null
 
   return (
-    <div className={chartPaneClass}>
-      <div className={chartPaneTitleClass}>
+    <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
+      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>
         Individuals Chart (X)
-        <span className={chartNClass}>n = {indexedPoints.length}</span>
+        <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>n = {indexedPoints.length}</span>
       </div>
       <EChart option={option} style={{ height: 280 }} theme="spc" notMerge onEvents={onEvents} ariaLabel="Individuals (I) control chart" />
-      <p className={chartHintClass}>
+      <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
         Sigma estimator: {imr.sigmaMethod === 'mssd' ? 'MSSD (trend-aware / low-n)' : 'Moving range (MR̄ / d2)'}
       </p>
       {onPointClick && (
-        <p className={chartHintClass}>Click any point to open the reviewed exclusion flow for control-limit calculation</p>
+        <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>Click any point to open the reviewed exclusion flow for control-limit calculation</p>
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
-import { emptyCardClass } from '../uiClasses'
+import { Tile } from '~/lib/carbon-layout'
 import type { CapabilityTrendChartProps, EventParamLike } from '../types'
 
 /**
@@ -81,9 +81,9 @@ export default function CapabilityTrendChart({ trendData, windowSize }: Capabili
 
   if (!option) {
     return (
-      <div className={emptyCardClass} style={{ minHeight: 180 }}>
-        <p>Not enough data for rolling window of {windowSize}.</p>
-      </div>
+      <Tile style={{ minHeight: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--cds-text-secondary)' }}>
+        <p style={{ margin: 0, fontSize: '0.875rem' }}>Not enough data for rolling window of {windowSize}.</p>
+      </Tile>
     )
   }
 

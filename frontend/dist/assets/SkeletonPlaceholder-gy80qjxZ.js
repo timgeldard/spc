@@ -1,1 +1,0 @@
-import{c as r,u as o}from"./index-Ce681rVb.js";import{j as a}from"./react-vendor-FcW3QCVF.js";import{P as t}from"./recharts-BQc6v6im.js";const p=({className:s,...e})=>a.jsx("div",{className:r({[`${o()}--skeleton__placeholder`]:!0},s),...e});p.propTypes={className:t.string};export{p as S};

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import { computeHistogram } from '../calculations'
-import { chartHintClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 import type { EventParamLike, SPCComputationResult } from '../types'
 
 interface CapabilityHistogramProps {
@@ -46,7 +45,7 @@ export default function CapabilityHistogram({ spc }: CapabilityHistogramProps) {
     const markLineData = []
     if (usl != null) markLineData.push({ xAxis: usl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: 'USL', position: 'insideEndTop', color: '#f59e0b', fontSize: 10 } })
     if (lsl != null) markLineData.push({ xAxis: lsl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: 'LSL', position: 'insideEndTop', color: '#f59e0b', fontSize: 10 } })
-    markLineData.push({ xAxis: xBar, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: 'X̄', position: 'insideEndTop', color: '#1B3A4B', fontSize: 10 } })
+    markLineData.push({ xAxis: xBar, lineStyle: { color: '#0f62fe', type: 'solid', width: 2 }, label: { formatter: 'X̄', position: 'insideEndTop', color: '#0f62fe', fontSize: 10 } })
 
     return {
       animation: false,
@@ -129,10 +128,10 @@ export default function CapabilityHistogram({ spc }: CapabilityHistogramProps) {
   if (!option) return null
 
   return (
-    <div className={chartPaneClass}>
-      <div className={chartPaneTitleClass}>Capability Histogram</div>
+    <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
+      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>Capability Histogram</div>
       <EChart option={option} style={{ height: 220 }} theme="spc" notMerge ariaLabel="Process capability histogram" />
-      <p className={chartHintClass}>Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
+      <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>Blue = in spec · Red = outside spec · Green curve = normal distribution</p>
     </div>
   )
 }

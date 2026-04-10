@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
 import type { LockedLimits, SPCComputationResult, SPCSignal } from '../types'
-import { chartHintClass, chartNClass, chartPaneClass, chartPaneTitleClass } from '../uiClasses'
 
 interface XbarChartProps {
   spc: SPCComputationResult | null | undefined
@@ -43,10 +42,10 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
       const rules = signalIndices.get(i) ?? []
       const isOoc = rules.includes('Rule 1')
       const isSignal = rules.length > 0 && !isOoc
-      let color = '#1B3A4B'
+      let color = '#0f62fe'
       let symbolSize = 5
       if (isOoc) {
-        color = '#ef4444'
+        color = '#da1e28'
         symbolSize = 9
       } else if (isSignal) {
         color = '#f59e0b'
@@ -61,11 +60,11 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
     const yMax = Math.max(...allY) + yPad
 
     const markLineData: Array<Record<string, unknown>> = [
-      { yAxis: grandMean, lineStyle: { color: '#1B3A4B', type: 'solid', width: 2 }, label: { formatter: `X̄̄ ${grandMean.toFixed(4)}`, position: 'end', color: '#1B3A4B', fontSize: 10 } },
+      { yAxis: grandMean, lineStyle: { color: '#0f62fe', type: 'solid', width: 2 }, label: { formatter: `X̄̄ ${grandMean.toFixed(4)}`, position: 'end', color: '#0f62fe', fontSize: 10 } },
     ]
     if (!mixedSubgroupSizes) {
-      markLineData.unshift({ yAxis: uclX, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${uclX.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } })
-      markLineData.push({ yAxis: lclX, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lclX.toFixed(4)}`, position: 'end', color: '#ef4444', fontSize: 10 } })
+      markLineData.unshift({ yAxis: uclX, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `UCL ${uclX.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } })
+      markLineData.push({ yAxis: lclX, lineStyle: { color: '#da1e28', type: 'dashed', width: 1.5 }, label: { formatter: `LCL ${lclX.toFixed(4)}`, position: 'end', color: '#da1e28', fontSize: 10 } })
     }
     if (usl != null) markLineData.push({ yAxis: usl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `USL ${usl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
     if (lsl != null) markLineData.push({ yAxis: lsl, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 }, label: { formatter: `LSL ${lsl.toFixed(3)}`, position: 'end', color: '#f59e0b', fontSize: 10 } })
@@ -73,7 +72,7 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
     const series: Array<Record<string, unknown>> = [{
       type: 'line',
       data: seriesData,
-      lineStyle: { color: '#1B3A4B', width: 2 },
+      lineStyle: { color: '#0f62fe', width: 2 },
       showSymbol: true,
       markLine: { silent: true, symbol: ['none', 'none'], data: markLineData },
       markArea: {
@@ -96,7 +95,7 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
           showSymbol: false,
           silent: true,
           tooltip: { show: false },
-          lineStyle: { color: '#ef4444', width: 1.25, type: 'dashed', opacity: 0.55 },
+          lineStyle: { color: '#da1e28', width: 1.25, type: 'dashed', opacity: 0.55 },
         },
         {
           type: 'line',
@@ -104,7 +103,7 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
           showSymbol: false,
           silent: true,
           tooltip: { show: false },
-          lineStyle: { color: '#ef4444', width: 1.25, type: 'dashed', opacity: 0.55 },
+          lineStyle: { color: '#da1e28', width: 1.25, type: 'dashed', opacity: 0.55 },
         },
       )
     }
@@ -151,14 +150,14 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
   if (!xbarR || !option) return null
 
   return (
-    <div className={chartPaneClass}>
-      <div className={chartPaneTitleClass}>
+    <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
+      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>
         X̄ Chart (Subgroup Means)
-        <span className={chartNClass}>{xbarR.subgroupStats.length} subgroups</span>
+        <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>{xbarR.subgroupStats.length} subgroups</span>
       </div>
       <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="X-bar chart — subgroup means" />
       {xbarR.mixedSubgroupSizes && (
-        <p className={chartHintClass}>
+        <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
           Subgroup sizes vary. Dashed red limits are calculated per subgroup; the centre band uses pooled σ with average n for reference.
         </p>
       )}
