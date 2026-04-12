@@ -1,6 +1,5 @@
 interface CacheEntry<T> {
   data?: T
-  promise?: Promise<T>
   timestamp?: number
 }
 
@@ -19,23 +18,15 @@ export function createRequestCache<T>(ttlMs = DEFAULT_TTL_MS) {
       return isFresh(entry, ttlMs) ? entry.data : null
     },
 
-    async load(key: string, loader: () => Promise<T>): Promise<T> {
+    async load(key: string, signal: AbortSignal, loader: (signal: AbortSignal) => Promise<T>): Promise<T> {
       const existing = entries.get(key)
       if (isFresh(existing, ttlMs)) return existing.data
-      if (existing?.promise) return existing.promise
+      if (signal.aborted) throw new DOMException('Request aborted', 'AbortError')
 
-      const promise = loader()
-        .then(data => {
-          entries.set(key, { data, timestamp: Date.now() })
-          return data
-        })
-        .catch(error => {
-          entries.delete(key)
-          throw error
-        })
-
-      entries.set(key, { ...existing, promise })
-      return promise
+      const data = await loader(signal)
+      if (signal.aborted) throw new DOMException('Request aborted', 'AbortError')
+      entries.set(key, { data, timestamp: Date.now() })
+      return data
     },
 
     invalidate(key: string): void {

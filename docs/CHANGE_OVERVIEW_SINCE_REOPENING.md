@@ -63,8 +63,20 @@ dimensions:
   consumer.
 - Moved heavy client-side control-chart analytics off the main thread into a
   web worker.
+- Added worker failure handling and fallback computation so chart analytics no
+  longer strand the UI in a permanent loading state when worker execution
+  fails.
+- Changed quantitative chart loading to progressive hydration so the first page
+  of history renders immediately while deeper history continues loading in the
+  background.
 - Added shared request caching for overview-to-detail SPC flows so repeated tab
   transitions reuse hot scorecard and process-flow results.
+- Extended true request cancellation and stale-request suppression across the
+  remaining high-cost analytical hooks, including correlation, scatter, P chart,
+  count chart, and plant lookups.
+- Replaced the full-framework Carbon stylesheet import with a curated set of
+  Carbon style modules, cutting the global CSS bundle and eliminating the IBM
+  Plex runtime font warnings in production builds.
 
 ### Business benefit
 

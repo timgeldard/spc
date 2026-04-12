@@ -50,10 +50,18 @@ dimensions:
   - name: spec_type
     expr: spec_type
     display_name: Spec Type
+  - name: normality_type
+    expr: normality_type
+    display_name: Normality Type
+    synonyms: ['distribution type', 'normality classification']
+  - name: normality_method
+    expr: normality_method
+    display_name: Normality Method
+    synonyms: ['normality method']
 
 measures:
   - name: subgroup_count
-    expr: COUNT(1)
+    expr: SUM(CASE WHEN subgroup_rep = 1 THEN 1 ELSE 0 END)
     display_name: Subgroup Count
     synonyms: ['subgroups', 'mic batch groups']
   - name: batch_count
@@ -61,34 +69,22 @@ measures:
     display_name: Batch Count
     synonyms: ['batches']
   - name: total_samples
-    expr: SUM(batch_n)
+    expr: COUNT(1)
     display_name: Sample Count
     synonyms: ['sample count', 'inspection count']
   - name: mean_value
-    expr: |
-      CASE
-      WHEN MEASURE(total_samples) = 0 THEN NULL
-      ELSE SUM(sum_value) / MEASURE(total_samples)
-      END
+    expr: AVG(value)
     display_name: Mean Value
     synonyms: ['average result', 'process mean']
   - name: stddev_overall
-    expr: |
-      CASE
-      WHEN MEASURE(total_samples) > 1
-      THEN SQRT(
-        (SUM(sum_squares) - POWER(SUM(sum_value), 2) / MEASURE(total_samples))
-        / (MEASURE(total_samples) - 1)
-      )
-      ELSE NULL
-      END
+    expr: STDDEV_SAMP(value)
     display_name: Overall Standard Deviation
     synonyms: ['overall sigma', 'long term sigma']
   - name: min_value
-    expr: MIN(min_value)
+    expr: MIN(value)
     display_name: Minimum Value
   - name: max_value
-    expr: MAX(max_value)
+    expr: MAX(value)
     display_name: Maximum Value
   - name: spec_upper
     expr: MAX(usl_spec)
@@ -108,6 +104,12 @@ measures:
   - name: spec_safe
     expr: CASE WHEN COUNT(DISTINCT spec_signature) = 1 THEN 1 ELSE 0 END
     display_name: Spec Safe Flag
+  - name: distinct_normality_count
+    expr: COUNT(DISTINCT normality_signature)
+    display_name: Distinct Normality Count
+  - name: normality_safe
+    expr: CASE WHEN COUNT(DISTINCT normality_signature) = 1 THEN 1 ELSE 0 END
+    display_name: Normality Safe Flag
   - name: rejected_batches
     expr: COUNT(DISTINCT CASE WHEN any_rejection = 1 THEN batch_id END)
     display_name: Rejected Batches
@@ -134,20 +136,20 @@ measures:
       END
     display_name: Avg Samples Per Batch
   - name: eligible_subgroup_count
-    expr: SUM(CASE WHEN batch_n >= 2 THEN 1 ELSE 0 END)
+    expr: SUM(CASE WHEN subgroup_rep = 1 AND batch_n >= 2 THEN 1 ELSE 0 END)
     display_name: Eligible Subgroup Count
   - name: avg_subgroup_range
     expr: |
       CASE
       WHEN MEASURE(eligible_subgroup_count) = 0 THEN NULL
-      ELSE SUM(CASE WHEN batch_n >= 2 THEN batch_range ELSE 0 END) / MEASURE(eligible_subgroup_count)
+      ELSE SUM(CASE WHEN subgroup_rep = 1 AND batch_n >= 2 THEN batch_range ELSE 0 END) / MEASURE(eligible_subgroup_count)
       END
     display_name: Avg Subgroup Range
   - name: avg_n_eligible
     expr: |
       CASE
       WHEN MEASURE(eligible_subgroup_count) = 0 THEN NULL
-      ELSE SUM(CASE WHEN batch_n >= 2 THEN batch_n ELSE 0 END) / MEASURE(eligible_subgroup_count)
+      ELSE SUM(CASE WHEN subgroup_rep = 1 AND batch_n >= 2 THEN batch_n ELSE 0 END) / MEASURE(eligible_subgroup_count)
       END
     display_name: Avg Eligible Subgroup Size
   - name: sigma_within
@@ -171,7 +173,17 @@ measures:
       END
     display_name: Within Sigma
     synonyms: ['within sigma', 'short term sigma']
-  - name: pp
+  - name: empirical_p00135
+    expr: percentile(value, 0.00135)
+    display_name: Empirical P0.135
+  - name: empirical_p50
+    expr: median(value)
+    display_name: Empirical Median
+    synonyms: ['median']
+  - name: empirical_p99865
+    expr: percentile(value, 0.99865)
+    display_name: Empirical P99.865
+  - name: pp_gaussian
     expr: |
       CASE
       WHEN MEASURE(spec_safe) = 1
@@ -181,8 +193,9 @@ measures:
       THEN (MEASURE(spec_upper) - MEASURE(spec_lower)) / (6 * MEASURE(stddev_overall))
       ELSE NULL
       END
-    display_name: Pp
-  - name: ppk
+    display_name: Pp Gaussian
+    synonyms: ['pp parametric']
+  - name: ppk_gaussian
     expr: |
       CASE
       WHEN MEASURE(spec_safe) <> 1 OR MEASURE(stddev_overall) <= 0 OR MEASURE(mean_value) IS NULL THEN NULL
@@ -197,8 +210,77 @@ measures:
       THEN (MEASURE(mean_value) - MEASURE(spec_lower)) / (3 * MEASURE(stddev_overall))
       ELSE NULL
       END
-    display_name: Ppk
-    synonyms: ['process performance', 'long term capability']
+    display_name: Ppk Gaussian
+    synonyms: ['ppk parametric', 'gaussian ppk']
+  - name: pp_non_parametric
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1
+       AND MEASURE(empirical_p99865) IS NOT NULL
+       AND MEASURE(empirical_p00135) IS NOT NULL
+       AND MEASURE(empirical_p99865) > MEASURE(empirical_p00135)
+       AND MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(spec_lower) IS NOT NULL
+      THEN (MEASURE(spec_upper) - MEASURE(spec_lower)) / (MEASURE(empirical_p99865) - MEASURE(empirical_p00135))
+      ELSE NULL
+      END
+    display_name: Pp Non Parametric
+    synonyms: ['pp percentile', 'pp non gaussian']
+  - name: ppk_non_parametric
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) <> 1 OR MEASURE(empirical_p50) IS NULL THEN NULL
+      WHEN MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(spec_lower) IS NOT NULL
+       AND MEASURE(empirical_p99865) IS NOT NULL
+       AND MEASURE(empirical_p00135) IS NOT NULL
+       AND MEASURE(empirical_p99865) > MEASURE(empirical_p50)
+       AND MEASURE(empirical_p50) > MEASURE(empirical_p00135)
+      THEN LEAST(
+        (MEASURE(spec_upper) - MEASURE(empirical_p50)) / (MEASURE(empirical_p99865) - MEASURE(empirical_p50)),
+        (MEASURE(empirical_p50) - MEASURE(spec_lower)) / (MEASURE(empirical_p50) - MEASURE(empirical_p00135))
+      )
+      WHEN MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(empirical_p99865) IS NOT NULL
+       AND MEASURE(empirical_p99865) > MEASURE(empirical_p50)
+      THEN (MEASURE(spec_upper) - MEASURE(empirical_p50)) / (MEASURE(empirical_p99865) - MEASURE(empirical_p50))
+      WHEN MEASURE(spec_lower) IS NOT NULL
+       AND MEASURE(empirical_p00135) IS NOT NULL
+       AND MEASURE(empirical_p50) > MEASURE(empirical_p00135)
+      THEN (MEASURE(empirical_p50) - MEASURE(spec_lower)) / (MEASURE(empirical_p50) - MEASURE(empirical_p00135))
+      ELSE NULL
+      END
+    display_name: Ppk Non Parametric
+    synonyms: ['ppk percentile', 'non normal ppk', 'iso 22514 ppk']
+  - name: performance_capability_method
+    expr: |
+      CASE
+      WHEN MEASURE(normality_safe) <> 1 THEN 'mixed'
+      WHEN MAX(normality_type) = 'non_normal' THEN 'non_parametric'
+      WHEN MAX(normality_type) = 'normal' THEN 'parametric'
+      ELSE 'unknown'
+      END
+    display_name: Performance Capability Method
+  - name: pp
+    expr: |
+      CASE
+      WHEN MEASURE(normality_safe) <> 1 THEN NULL
+      WHEN MAX(normality_type) = 'non_normal' THEN MEASURE(pp_non_parametric)
+      WHEN MAX(normality_type) = 'normal' THEN MEASURE(pp_gaussian)
+      ELSE NULL
+      END
+    display_name: Pp Governed
+    synonyms: ['pp governed']
+  - name: ppk
+    expr: |
+      CASE
+      WHEN MEASURE(normality_safe) <> 1 THEN NULL
+      WHEN MAX(normality_type) = 'non_normal' THEN MEASURE(ppk_non_parametric)
+      WHEN MAX(normality_type) = 'normal' THEN MEASURE(ppk_gaussian)
+      ELSE NULL
+      END
+    display_name: Ppk Governed
+    synonyms: ['process performance', 'long term capability', 'governed ppk']
   - name: cp
     expr: |
       CASE
@@ -230,14 +312,14 @@ measures:
   - name: z_score
     expr: |
       CASE
-      WHEN MEASURE(ppk) IS NULL THEN NULL
-      ELSE MEASURE(ppk) * 3
+      WHEN MEASURE(performance_capability_method) <> 'parametric' OR MEASURE(ppk_gaussian) IS NULL THEN NULL
+      ELSE MEASURE(ppk_gaussian) * 3
       END
     display_name: Z Score
   - name: dpmo
     expr: |
       CASE
-      WHEN MEASURE(z_score) IS NULL THEN NULL
+      WHEN MEASURE(performance_capability_method) <> 'parametric' OR MEASURE(z_score) IS NULL THEN NULL
       ELSE ROUND(
         (1 - (0.5 * (1 + ERF((MEASURE(z_score) - 1.5) / SQRT(2))))) * 1000000
       )

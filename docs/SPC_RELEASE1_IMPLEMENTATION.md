@@ -42,6 +42,8 @@ Release 1 excludes:
 ### 2. Quantitative SPC source layer
 
 - [x] Create [005_create_spc_quality_metric_subgroup_v.sql](/Users/timgeldard/spc-1/scripts/migrations/005_create_spc_quality_metric_subgroup_v.sql).
+- [x] Preserve sample-grain values alongside subgroup rollups so percentile-based governed performance remains possible in the metric view.
+- [x] Add `normality_type`, `normality_method`, and `normality_signature` columns for governed long-term performance switching.
 - [ ] Validate subgroup row counts against the legacy scorecard query.
 - [ ] Validate reconstructed `stddev_overall` against `STDDEV_SAMP(value)` on raw results.
 - [ ] Validate `batch_range`, `avg_n`, and mixed-spec detection against the legacy path.
@@ -50,6 +52,8 @@ Release 1 excludes:
 
 - [x] Create [006_create_spc_quality_metrics_mv.sql](/Users/timgeldard/spc-1/scripts/migrations/006_create_spc_quality_metrics_mv.sql).
 - [x] Include Genie-friendly semantic metadata and explicit off-target measures.
+- [x] Expose `pp_gaussian`, `ppk_gaussian`, `pp_non_parametric`, `ppk_non_parametric`, and governed `pp` / `ppk`.
+- [x] Null governed long-term performance when normality is mixed or unknown rather than silently assuming Gaussian behavior.
 - [ ] Validate `MEASURE(ppk)`, `MEASURE(cpk)`, `MEASURE(ooc_rate)`, and `MEASURE(rejected_batches)` against `/api/spc/scorecard`.
 - [ ] Confirm mixed-spec groups return `NULL` capability metrics and a `distinct_spec_count > 1`.
 

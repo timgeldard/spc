@@ -60,6 +60,17 @@ For non-normal data, the engine falls back to the **ISO 22514-2** (Percentile Me
 *   **Non-Parametric $P_{pk}$**:
     $$\min\left(\frac{USL - P_{50}}{P_{99.865} - P_{50}}, \frac{P_{50} - LSL}{P_{50} - P_{0.135}}\right)$$
 
+### Governed Metric-View Rule
+The semantic layer must not silently assume Gaussian long-term performance when normality is unknown, mixed, or explicitly non-normal.
+
+For Databricks metric views and Genie:
+*   **`pp_gaussian` / `ppk_gaussian`** remain available as explicit parametric measures.
+*   **`pp_non_parametric` / `ppk_non_parametric`** are computed from empirical percentiles on the raw sample distribution.
+*   **`pp` / `ppk`** are the governed measures and switch using source-level `normality_type`.
+*   If normality is mixed or not yet profiled, the governed measure returns `NULL` rather than defaulting to a Gaussian answer.
+
+This keeps AI/BI consumers aligned with the application's safety model instead of returning a mathematically convenient but misleading Gaussian performance value.
+
 ---
 
 ## 4. Nelson & WECO Rule Sets

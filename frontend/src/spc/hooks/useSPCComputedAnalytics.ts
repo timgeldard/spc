@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { computeAnalytics } from '../computeAnalytics'
 import type {
   ChartDataPoint,
   NormalityResult,
@@ -15,6 +16,7 @@ interface AnalyticsState {
   trendData: RollingCapabilityPoint[]
   stratumSections: StratumSection[]
   analyticsLoading: boolean
+  analyticsError: string | null
 }
 
 interface UseSPCComputedAnalyticsArgs {
@@ -33,6 +35,7 @@ interface ComputeResponse {
   spc: SPCComputationResult | null
   trendData: RollingCapabilityPoint[]
   stratumSections: StratumSection[]
+  error?: string | null
 }
 
 export function useSPCComputedAnalytics({
@@ -60,13 +63,18 @@ export function useSPCComputedAnalytics({
     trendData: [],
     stratumSections: [],
     analyticsLoading: false,
+    analyticsError: null,
   })
 
   useEffect(() => {
     if (typeof Worker === 'undefined') return
-    workerRef.current = new Worker(new URL('../workers/spcCompute.worker.ts', import.meta.url), {
-      type: 'module',
-    })
+    try {
+      workerRef.current = new Worker(new URL('../workers/spcCompute.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+    } catch {
+      workerRef.current = null
+    }
     return () => {
       workerRef.current?.terminate()
       workerRef.current = null
@@ -80,33 +88,14 @@ export function useSPCComputedAnalytics({
         trendData: [],
         stratumSections: [],
         analyticsLoading: false,
+        analyticsError: null,
       })
       return
     }
 
     const worker = workerRef.current
-    if (!worker) return
-
     const requestId = ++requestIdRef.current
-    startTransition(() => {
-      setState(prev => ({ ...prev, analyticsLoading: true }))
-    })
-
-    const handleMessage = (event: MessageEvent<ComputeResponse>) => {
-      if (event.data.requestId !== requestId) return
-      startTransition(() => {
-        setState({
-          spc: event.data.spc,
-          trendData: event.data.trendData,
-          stratumSections: event.data.stratumSections,
-          analyticsLoading: false,
-        })
-      })
-    }
-
-    worker.addEventListener('message', handleMessage)
-    worker.postMessage({
-      requestId,
+    const payload = {
       points: deferredPoints,
       chartType,
       excludedIndices: deferredExcludedIndexList,
@@ -115,10 +104,78 @@ export function useSPCComputedAnalytics({
       normality: deferredNormality,
       stratifyBy,
       rollingWindowSize: deferredRollingWindowSize,
+    }
+
+    startTransition(() => {
+      setState(prev => ({ ...prev, analyticsLoading: true, analyticsError: null }))
     })
+
+    const applySuccess = (event: ComputeResponse) => {
+      startTransition(() => {
+        setState({
+          spc: event.spc,
+          trendData: event.trendData,
+          stratumSections: event.stratumSections,
+          analyticsLoading: false,
+          analyticsError: null,
+        })
+      })
+    }
+
+    const applyFailure = (message: string) => {
+      startTransition(() => {
+        setState(prev => ({
+          ...prev,
+          analyticsLoading: false,
+          analyticsError: message,
+        }))
+      })
+    }
+
+    if (!worker) {
+      try {
+        applySuccess({
+          requestId,
+          ...computeAnalytics(payload),
+          error: null,
+        })
+      } catch (error) {
+        applyFailure(error instanceof Error ? error.message : 'Failed to compute SPC analytics.')
+      }
+      return
+    }
+
+    const handleMessage = (event: MessageEvent<ComputeResponse>) => {
+      if (event.data.requestId !== requestId) return
+      if (event.data.error) {
+        applyFailure(event.data.error)
+        return
+      }
+      applySuccess(event.data)
+    }
+    const handleWorkerError = () => {
+      applyFailure('SPC analytics worker failed. Try refreshing the chart or narrowing the scope.')
+    }
+    const handleWorkerMessageError = () => {
+      applyFailure('SPC analytics worker could not process chart data.')
+    }
+
+    worker.addEventListener('message', handleMessage)
+    worker.addEventListener('error', handleWorkerError)
+    worker.addEventListener('messageerror', handleWorkerMessageError)
+    try {
+      worker.postMessage({
+        requestId,
+        ...payload,
+      })
+    } catch (error) {
+      applyFailure(error instanceof Error ? error.message : 'Failed to start SPC analytics.')
+    }
 
     return () => {
       worker.removeEventListener('message', handleMessage)
+      worker.removeEventListener('error', handleWorkerError)
+      worker.removeEventListener('messageerror', handleWorkerMessageError)
     }
   }, [
     chartType,

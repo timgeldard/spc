@@ -1,4 +1,41 @@
-@use '@carbon/styles';
+@use '@carbon/styles/scss/config' with (
+  $font-path: '@ibm/plex'
+);
+@use '@carbon/styles/scss/reset';
+@use '@carbon/styles/scss/theme';
+@use '@carbon/styles/scss/type';
+@use '@carbon/styles/scss/grid';
+@use '@carbon/styles/scss/layer';
+@use '@carbon/styles/scss/components/accordion';
+@use '@carbon/styles/scss/components/button';
+@use '@carbon/styles/scss/components/checkbox';
+@use '@carbon/styles/scss/components/content-switcher';
+@use '@carbon/styles/scss/components/data-table';
+@use '@carbon/styles/scss/components/date-picker';
+@use '@carbon/styles/scss/components/dialog';
+@use '@carbon/styles/scss/components/form';
+@use '@carbon/styles/scss/components/inline-loading';
+@use '@carbon/styles/scss/components/list-box';
+@use '@carbon/styles/scss/components/loading';
+@use '@carbon/styles/scss/components/menu';
+@use '@carbon/styles/scss/components/modal';
+@use '@carbon/styles/scss/components/notification';
+@use '@carbon/styles/scss/components/overflow-menu';
+@use '@carbon/styles/scss/components/pagination';
+@use '@carbon/styles/scss/components/popover';
+@use '@carbon/styles/scss/components/radio-button';
+@use '@carbon/styles/scss/components/search';
+@use '@carbon/styles/scss/components/select';
+@use '@carbon/styles/scss/components/skeleton-styles';
+@use '@carbon/styles/scss/components/stack';
+@use '@carbon/styles/scss/components/tabs';
+@use '@carbon/styles/scss/components/tag';
+@use '@carbon/styles/scss/components/text-area';
+@use '@carbon/styles/scss/components/text-input';
+@use '@carbon/styles/scss/components/tile';
+@use '@carbon/styles/scss/components/toggle';
+@use '@carbon/styles/scss/components/tooltip';
+@use '@carbon/styles/scss/components/ui-shell';
 
 :root {
   --spc-shadow-base: 0 1px 2px rgb(0 0 0 / 0.16);
@@ -94,6 +131,11 @@ body {
   flex-direction: column;
 }
 
+.spc-genie-shell {
+  flex: 1;
+  min-height: 0;
+}
+
 .spc-genie-unconfigured {
   padding: 0.75rem 1rem;
   background: var(--cds-notification-background-warning, #fcf4d6);
@@ -108,4 +150,163 @@ body {
   flex: 1;
   width: 100%;
   height: 100%;
+  min-height: 0;
+}
+
+.spc-genie-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.spc-genie-eyebrow {
+  margin: 0 0 0.375rem;
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.spc-genie-title {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.spc-genie-subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--cds-text-secondary);
+  font-size: 0.875rem;
+}
+
+.spc-genie-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.spc-genie-scope-pill {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: 999px;
+  background: var(--cds-layer-accent-01, var(--cds-layer-accent));
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+}
+
+.spc-genie-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1rem;
+  border: 1px dashed var(--cds-border-subtle-01);
+  border-radius: 0.5rem;
+  background: linear-gradient(180deg, rgb(15 98 254 / 0.03), transparent 35%);
+}
+
+.spc-genie-empty-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.spc-genie-empty-subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--cds-text-secondary);
+  font-size: 0.875rem;
+}
+
+.spc-genie-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.spc-genie-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.spc-genie-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: min(52rem, 88%);
+}
+
+.spc-genie-message--user {
+  align-self: flex-end;
+}
+
+.spc-genie-message--assistant {
+  align-self: flex-start;
+}
+
+.spc-genie-message-meta {
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.spc-genie-message-body {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: 0.75rem;
+  background: var(--cds-layer);
+  color: var(--cds-text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.spc-genie-message--user .spc-genie-message-body {
+  background: rgb(15 98 254 / 0.09);
+  border-color: rgb(15 98 254 / 0.22);
+}
+
+.spc-genie-message--error .spc-genie-message-body {
+  background: rgb(218 30 40 / 0.08);
+  border-color: rgb(218 30 40 / 0.22);
+}
+
+.spc-genie-composer {
+  border-top: 1px solid var(--cds-border-subtle-01);
+  padding-top: 1rem;
+}
+
+.spc-genie-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .spc-genie-container {
+    height: auto;
+    min-height: 36rem;
+  }
+
+  .spc-genie-header {
+    flex-direction: column;
+  }
+
+  .spc-genie-message {
+    max-width: 100%;
+  }
+
+  .spc-genie-actions {
+    flex-direction: column;
+  }
 }

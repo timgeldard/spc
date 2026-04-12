@@ -621,5 +621,6 @@ export interface UseSPCChartDataResult {
   normality: NormalityResult | null
   dataTruncated: boolean
   loading: boolean
+  hydrating: boolean
   error: string | null
 }

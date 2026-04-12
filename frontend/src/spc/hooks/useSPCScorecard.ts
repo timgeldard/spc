@@ -48,7 +48,7 @@ export function useSPCScorecard(
     setError(null)
 
     scorecardCache
-      .load(cacheKey, async () => {
+      .load(cacheKey, controller.signal, async (signal) => {
         const res = await fetch('/api/spc/scorecard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -58,6 +58,7 @@ export function useSPCScorecard(
             date_to: dateTo || null,
             plant_id: plantId ?? null,
           }),
+          signal,
         })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))

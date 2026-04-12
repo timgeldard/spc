@@ -4,7 +4,7 @@ import {
   Button,
   Checkbox,
 } from '~/lib/carbon-forms'
-import { InlineNotification, SkeletonPlaceholder } from '~/lib/carbon-feedback'
+import { InlineLoading, InlineNotification, SkeletonPlaceholder } from '~/lib/carbon-feedback'
 import { Column, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useControlChartsController } from '../hooks/useControlChartsController'
@@ -301,7 +301,7 @@ export default function ControlChartsView() {
     )
   }
 
-  if (ctrl.loading || ctrl.analyticsLoading) {
+  if (ctrl.loading || (ctrl.analyticsLoading && (ctrl.points.length === 0 || (ctrl.isQuantitative && !ctrl.spc)))) {
     return (
       <div aria-live="polite" aria-busy="true">
         <SkeletonPlaceholder style={{ width: '100%', height: '600px' }} />
@@ -330,6 +330,16 @@ export default function ControlChartsView() {
   }
 
   if (ctrl.isQuantitative && !ctrl.spc) {
+    if (ctrl.analyticsError) {
+      return (
+        <InlineNotification
+          kind="error"
+          title="Failed to compute SPC analytics"
+          subtitle={ctrl.analyticsError}
+          hideCloseButton
+        />
+      )
+    }
     return (
       <ModuleEmptyState
         title="Insufficient data"
@@ -371,6 +381,21 @@ export default function ControlChartsView() {
         dataTruncated={ctrl.dataTruncated}
         exclusionAudit={state.exclusionAudit}
       />
+
+      {ctrl.analyticsError ? (
+        <InlineNotification
+          kind="error"
+          title="Analytics refresh failed"
+          subtitle={ctrl.analyticsError}
+          hideCloseButton
+        />
+      ) : null}
+
+      {ctrl.hydrating ? (
+        <Tile>
+          <InlineLoading description="Loading more chart history..." status="active" />
+        </Tile>
+      ) : null}
 
       {/*
        * Two-column layout:

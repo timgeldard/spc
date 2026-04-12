@@ -20,6 +20,7 @@ export interface ChartDataResult {
   quantPoints: ChartDataPoint[]
   quantNormality: NormalityResult | null
   dataTruncated: boolean
+  hydrating: boolean
   attrPoints: AttributeChartPoint[]
   countPoints: AttributeChartPoint[]
   points: Array<ChartDataPoint | AttributeChartPoint>
@@ -60,6 +61,7 @@ export function useChartData(
     normality: quantNormality,
     dataTruncated,
     loading: quantLoading,
+    hydrating,
     error: quantError,
   } = useSPCChartData(
     isQuantitative ? materialId : null,
@@ -111,6 +113,7 @@ export function useChartData(
     quantPoints,
     quantNormality,
     dataTruncated,
+    hydrating,
     attrPoints,
     countPoints,
     points,

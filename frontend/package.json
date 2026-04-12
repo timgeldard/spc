@@ -6,6 +6,7 @@
   "scripts": {
     "carbon:audit": "node ./scripts/carbon-audit.mjs",
     "carbon:audit:strict": "node ./scripts/carbon-audit.mjs --strict",
+    "bundle:check": "node ./scripts/check-bundle-budgets.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

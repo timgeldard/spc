@@ -2,6 +2,11 @@
 
 Technical reference for the SPC App backend and frontend.
 
+Related references:
+
+- [Statistical Methods Reference](./STATISTICAL_METHODS.md)
+- [SPC Tab & Visual Calculations Reference](./SPC_TAB_VISUAL_CALCULATIONS.md)
+
 ---
 
 ## Overview
@@ -112,9 +117,13 @@ This keeps domain integrity rules in one place while avoiding app-wide rerenders
 The SPC frontend now treats expensive capabilities as explicit runtime boundaries instead of letting them accumulate in the main page shell.
 
 *   **Thin SPC Shell**: `SPCPage.tsx` only owns the primary navigation and the default analysis tabs. Advanced tools (`Compare`, `MSA`, `Correlation`, `Genie`) are loaded through a second lazy boundary in `AdvancedTabView.tsx`.
-*   **Deferred Genie Runtime**: `GenieView.tsx` loads the Carbon AI Chat runtime only when the Genie tab mounts. This keeps the SPC shell and Genie wrapper tiny while isolating the large chat runtime in its own deferred chunk.
-*   **Worker-based Analytics**: Heavy chart analytics run in `spcCompute.worker.ts` via `useSPCComputedAnalytics`, which keeps large quantitative recalculations off the main thread.
-*   **Shared Request Reuse**: Overview and detail tabs share hot scorecard and process-flow results through a lightweight request cache instead of immediately re-querying the same backend endpoints.
+*   **Native Genie Panel**: `GenieView.tsx` is now a lightweight native SPC chat surface that talks directly to the backend Genie endpoint instead of loading the Carbon AI Chat runtime. This preserves the governed conversational workflow while removing a large web-component and editor stack from the shipped frontend.
+*   **Worker-based Analytics with Fallbacks**: Heavy chart analytics run in `spcCompute.worker.ts` via `useSPCComputedAnalytics`, which keeps large quantitative recalculations off the main thread. The hook now also traps worker startup, messaging, and execution failures so the chart surface exits loading cleanly and can fall back to in-process computation when needed.
+*   **Progressive Chart Hydration**: `useSPCChartData` publishes the first page of quantitative history immediately, then continues hydrating later pages in the background up to the configured cap. This improves time-to-first-chart for high-volume materials without sacrificing full-history analysis.
+*   **Shared Request Reuse and Cancellation**: Overview and detail tabs share hot scorecard and process-flow results through a lightweight request cache, and the remaining analytical hooks now pass `AbortSignal` through to the underlying fetch so superseded requests stop consuming backend resources.
+*   **Explicit Runtime Families**: `vite.config.js` now assigns Carbon table, Carbon layout, Carbon date-picker, Carbon icon families, Carbon app, Carbon web, Genie, CodeMirror, markdown, ECharts, and process-flow dependencies to explicit chunk families instead of relying on a broad catch-all. This keeps large transitive packages out of app-facing entry chunks and makes bundle growth easier to reason about.
+*   **Bundle Budget Guardrails**: `frontend/scripts/check-bundle-budgets.mjs` validates the key shell, chart, Carbon, Genie, and CSS assets after build so regressions are caught as part of routine verification instead of being discovered only during manual bundle inspection.
+*   **Governed Performance Switching**: The quantitative metric-view source preserves sample-grain values plus subgroup rollups so the semantic layer can expose both Gaussian and non-parametric long-term performance and switch between them conservatively for Genie-facing queries.
 
 ### Chart Rendering
 
@@ -124,7 +133,17 @@ The SPC frontend now treats expensive capabilities as explicit runtime boundarie
 | **ag-Grid** | Performance-optimized Capability Scorecards |
 | **ReactFlow** | Interactive Process Flow DAGs |
 
-The Carbon-based shell remains the design system baseline, but production builds currently still include the full Carbon stylesheet and IBM Plex font references. That path is functional, but further CSS/font slimming remains a follow-on optimisation target.
+The Carbon-based shell remains the design system baseline, but the stylesheet is now curated instead of importing the entire framework wholesale. This cut the main CSS payload materially and removed the IBM Plex runtime font-resolution warnings during production builds. Further Carbon pruning is still possible, but the frontend no longer pays the full-framework default tax.
+
+### Metric-View Safety Notes
+
+Release 1 quantitative metric views now separate:
+
+*   **Gaussian performance** (`pp_gaussian`, `ppk_gaussian`)
+*   **Non-parametric performance** (`pp_non_parametric`, `ppk_non_parametric`)
+*   **Governed performance** (`pp`, `ppk`)
+
+The governed measures switch using source-level normality metadata and return `NULL` when the normality classification is mixed or unavailable. This is deliberate: Genie and dashboards should not infer a Gaussian performance answer when the application itself would treat the distribution as unsafe or unclassified.
 
 ---
 

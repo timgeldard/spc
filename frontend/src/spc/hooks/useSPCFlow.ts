@@ -46,7 +46,7 @@ export function useSPCFlow(
     setError(null)
 
     processFlowCache
-      .load(cacheKey, async () => {
+      .load(cacheKey, controller.signal, async (signal) => {
         const res = await fetch('/api/spc/process-flow', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -55,6 +55,7 @@ export function useSPCFlow(
             date_from: dateFrom || null,
             date_to: dateTo || null,
           }),
+          signal,
         })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))

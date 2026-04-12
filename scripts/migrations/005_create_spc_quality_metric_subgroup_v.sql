@@ -1,12 +1,13 @@
--- Migration 005: create the quantitative SPC subgroup source view.
+-- Migration 005: create the quantitative SPC governed source view.
 --
 -- Release 1 scope:
 --   * Preserve current scorecard semantics from backend/dal/spc_analysis_dal.py
 --   * Push reusable sufficient statistics upstream for metric-view consumption
+--   * Preserve sample-grain values for non-parametric governed performance measures
 --   * Defer security / consumption views to Release 2
 
 CREATE OR REPLACE VIEW `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_quality_metric_subgroup_v`
-COMMENT 'Quantitative SPC subgroup source view preserving one row per material/batch/MIC for governed capability metrics.'
+COMMENT 'Quantitative SPC governed source view at sample grain with subgroup rollups preserved for capability metrics and non-parametric performance measures.'
 AS
 WITH batch_metadata AS (
     SELECT
@@ -153,6 +154,61 @@ resolved_specs AS (
         any_rejection,
         any_acceptance
     FROM subgroup_rollup
+),
+sample_grain AS (
+    SELECT
+        fr.material_id,
+        fr.material_name,
+        fr.batch_id,
+        fr.first_posting_date,
+        fr.last_posting_date,
+        fr.batch_date,
+        fr.batch_week,
+        fr.batch_month,
+        fr.plant_id,
+        fr.plant_name,
+        fr.mic_id,
+        fr.mic_name,
+        fr.inspection_method,
+        fr.value,
+        sg.batch_n,
+        sg.sum_value,
+        sg.sum_squares,
+        sg.min_value,
+        sg.max_value,
+        sg.nominal_target,
+        sg.lsl_spec,
+        sg.usl_spec,
+        sg.tolerance_half_width,
+        sg.raw_tolerance,
+        sg.any_rejection,
+        sg.any_acceptance,
+        ROW_NUMBER() OVER (
+            PARTITION BY
+                fr.material_id,
+                fr.batch_id,
+                fr.plant_id,
+                fr.mic_id,
+                fr.inspection_method
+            ORDER BY
+                fr.value,
+                COALESCE(fr.valuation, ''),
+                COALESCE(fr.raw_tolerance, '')
+        ) AS subgroup_row_number
+    FROM filtered_results fr
+    INNER JOIN resolved_specs sg
+        ON sg.material_id = fr.material_id
+       AND sg.batch_id = fr.batch_id
+       AND sg.first_posting_date = fr.first_posting_date
+       AND sg.last_posting_date = fr.last_posting_date
+       AND sg.batch_date = fr.batch_date
+       AND sg.batch_week = fr.batch_week
+       AND sg.batch_month = fr.batch_month
+       AND sg.plant_id = fr.plant_id
+       AND sg.plant_name = fr.plant_name
+       AND sg.mic_id = fr.mic_id
+       AND sg.mic_name = fr.mic_name
+       AND sg.inspection_method = fr.inspection_method
 )
 SELECT
     material_id,
@@ -168,37 +224,136 @@ SELECT
     mic_id,
     mic_name,
     inspection_method,
+    value,
     batch_n,
     sum_value,
     sum_squares,
     min_value,
     max_value,
-    batch_range,
+    CASE WHEN batch_n >= 2 THEN max_value - min_value END AS batch_range,
     nominal_target,
-    resolved_lsl AS lsl_spec,
-    resolved_usl AS usl_spec,
+    CASE
+        WHEN lsl_spec IS NOT NULL THEN lsl_spec
+        WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+        THEN nominal_target - tolerance_half_width
+        ELSE NULL
+    END AS lsl_spec,
+    CASE
+        WHEN usl_spec IS NOT NULL THEN usl_spec
+        WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+        THEN nominal_target + tolerance_half_width
+        ELSE NULL
+    END AS usl_spec,
     tolerance_half_width,
     raw_tolerance,
     CONCAT_WS(
         '|',
-        COALESCE(CAST(resolved_lsl AS STRING), '_'),
-        COALESCE(CAST(resolved_usl AS STRING), '_'),
+        COALESCE(
+            CAST(
+                CASE
+                    WHEN lsl_spec IS NOT NULL THEN lsl_spec
+                    WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                    THEN nominal_target - tolerance_half_width
+                    ELSE NULL
+                END
+                AS STRING
+            ),
+            '_'
+        ),
+        COALESCE(
+            CAST(
+                CASE
+                    WHEN usl_spec IS NOT NULL THEN usl_spec
+                    WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                    THEN nominal_target + tolerance_half_width
+                    ELSE NULL
+                END
+                AS STRING
+            ),
+            '_'
+        ),
         COALESCE(CAST(nominal_target AS STRING), '_')
     ) AS spec_signature,
     any_rejection,
     any_acceptance,
+    CASE WHEN subgroup_row_number = 1 THEN 1 ELSE 0 END AS subgroup_rep,
+    'unknown' AS normality_type,
+    'shapiro_wilk_profile_pending' AS normality_method,
+    CONCAT_WS('|', 'unknown', 'shapiro_wilk_profile_pending') AS normality_signature,
     CASE
-        WHEN resolved_usl IS NOT NULL
-         AND resolved_lsl IS NOT NULL
+        WHEN (
+            CASE
+                WHEN usl_spec IS NOT NULL THEN usl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target + tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
+         AND (
+            CASE
+                WHEN lsl_spec IS NOT NULL THEN lsl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target - tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
          AND nominal_target IS NOT NULL
-         AND ABS((resolved_usl - nominal_target) - (nominal_target - resolved_lsl)) <= 1e-6
+         AND ABS(
+            (
+                CASE
+                    WHEN usl_spec IS NOT NULL THEN usl_spec
+                    WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                    THEN nominal_target + tolerance_half_width
+                    ELSE NULL
+                END
+            ) - nominal_target
+            - (
+                nominal_target - (
+                    CASE
+                        WHEN lsl_spec IS NOT NULL THEN lsl_spec
+                        WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                        THEN nominal_target - tolerance_half_width
+                        ELSE NULL
+                    END
+                )
+            )
+         ) <= 1e-6
         THEN 'bilateral_symmetric'
-        WHEN resolved_usl IS NOT NULL AND resolved_lsl IS NOT NULL
+        WHEN (
+            CASE
+                WHEN usl_spec IS NOT NULL THEN usl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target + tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
+         AND (
+            CASE
+                WHEN lsl_spec IS NOT NULL THEN lsl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target - tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
         THEN 'bilateral_asymmetric'
-        WHEN resolved_usl IS NOT NULL
+        WHEN (
+            CASE
+                WHEN usl_spec IS NOT NULL THEN usl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target + tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
         THEN 'unilateral_upper'
-        WHEN resolved_lsl IS NOT NULL
+        WHEN (
+            CASE
+                WHEN lsl_spec IS NOT NULL THEN lsl_spec
+                WHEN nominal_target IS NOT NULL AND tolerance_half_width IS NOT NULL
+                THEN nominal_target - tolerance_half_width
+                ELSE NULL
+            END
+        ) IS NOT NULL
         THEN 'unilateral_lower'
         ELSE 'unspecified'
     END AS spec_type
-FROM resolved_specs;
+FROM sample_grain;

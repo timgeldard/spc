@@ -45,11 +45,13 @@ export interface ControlChartsController {
   quantPoints: ChartDataPoint[]
   quantNormality: NormalityResult | null
   dataTruncated: boolean
+  hydrating: boolean
   attrPoints: AttributeChartPoint[]
   countPoints: AttributeChartPoint[]
   points: Array<ChartDataPoint | AttributeChartPoint>
   loading: boolean
   analyticsLoading: boolean
+  analyticsError: string | null
   error: string | null
 
   // SPC computation
@@ -143,7 +145,7 @@ export function useControlChartsController(): ControlChartsController {
   // ── Data fetching ───────────────────────────────────────────────────────
   const {
     isAttributeChart, isPChart, isCountChart, isQuantitative, effectiveChartType,
-    quantPoints, quantNormality, dataTruncated,
+    quantPoints, quantNormality, dataTruncated, hydrating,
     attrPoints, countPoints, points, loading, error,
   } = useChartData(
     selectedMaterial?.material_id,
@@ -165,6 +167,7 @@ export function useControlChartsController(): ControlChartsController {
     trendData,
     stratumSections,
     analyticsLoading,
+    analyticsError,
   } = useSPCComputedAnalytics({
     points: isQuantitative ? quantPoints : [],
     chartType: isQuantitative ? (effectiveChartType ?? 'imr') : null,
@@ -268,8 +271,8 @@ export function useControlChartsController(): ControlChartsController {
     isAttributeChart, isPChart, isCountChart, isQuantitative, effectiveChartType,
     attrChartType, setAttrChartType,
     // Raw data
-    quantPoints, quantNormality, dataTruncated,
-    attrPoints, countPoints, points, loading, analyticsLoading, error,
+    quantPoints, quantNormality, dataTruncated, hydrating,
+    attrPoints, countPoints, points, loading, analyticsLoading, analyticsError, error,
     // SPC computation
     spc, trendData, stratumSections, currentExcludedPoints,
     // Exclusions

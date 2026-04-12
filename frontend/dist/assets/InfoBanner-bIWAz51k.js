@@ -1,1 +1,0 @@
-import{j as o}from"./react-vendor-DXKu7ynx.js";import{b7 as n}from"./carbon-react-BEthLbBI.js";const e={error:"error",warn:"warning",info:"info",neutral:"info-square"};function a({variant:r="neutral",children:t}){return o.jsx(n,{kind:e[r],title:"",subtitle:t,hideCloseButton:!0,lowContrast:!0,role:r==="error"?"alert":"status"})}export{a as I};

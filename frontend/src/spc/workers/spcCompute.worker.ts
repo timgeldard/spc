@@ -1,4 +1,4 @@
-import { computeAll, computeRollingCapability } from '../calculations'
+import { computeAnalytics } from '../computeAnalytics'
 import type {
   ChartDataPoint,
   NormalityResult,
@@ -27,73 +27,26 @@ interface ComputeResponse {
   spc: SPCComputationResult | null
   trendData: RollingCapabilityPoint[]
   stratumSections: StratumSection[]
-}
-
-function buildAnalytics({
-  points,
-  chartType,
-  excludedIndices,
-  ruleSet,
-  excludeOutliers,
-  normality,
-  stratifyBy,
-  rollingWindowSize,
-}: Omit<ComputeRequest, 'requestId'>): Omit<ComputeResponse, 'requestId'> {
-  const effectiveExclusions = new Set<number>(excludedIndices)
-  if (excludeOutliers) {
-    points.forEach((point, index) => {
-      if (point.is_outlier) effectiveExclusions.add(index)
-    })
-  }
-
-  const activePoints = points.filter((_, index) => !effectiveExclusions.has(index))
-  if (!activePoints.length) {
-    return { spc: null, trendData: [], stratumSections: [] }
-  }
-
-  const spc = computeAll(activePoints, chartType, ruleSet, { normality })
-  spc.filteredPointCount = activePoints.length
-  spc.excludedPointCount = effectiveExclusions.size
-  spc.indexedPoints = points.map((point, index) => ({
-    ...point,
-    originalIndex: index,
-    excluded: effectiveExclusions.has(index),
-  }))
-
-  const trendData = spc.sorted
-    ? computeRollingCapability(spc.sorted, rollingWindowSize, spc.specConfig ?? {})
-    : []
-
-  let stratumSections: StratumSection[] = []
-  if (stratifyBy) {
-    const grouped = new Map<string, ChartDataPoint[]>()
-    activePoints.forEach(point => {
-      const key = point.stratify_value ?? 'Unassigned'
-      const nextGroup = grouped.get(key) ?? []
-      nextGroup.push(point)
-      grouped.set(key, nextGroup)
-    })
-
-    stratumSections = [...grouped.entries()]
-      .map(([label, groupedPoints]) => ({
-        label,
-        pointCount: groupedPoints.length,
-        spc: groupedPoints.length > 0
-          ? computeAll(groupedPoints, chartType, ruleSet, { normality })
-          : null,
-      }))
-      .filter(section => (section.spc?.values?.length ?? 0) > 0)
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }
-
-  return { spc, trendData, stratumSections }
+  error?: string | null
 }
 
 self.onmessage = (event: MessageEvent<ComputeRequest>) => {
   const { requestId, ...payload } = event.data
-  const response: ComputeResponse = {
-    requestId,
-    ...buildAnalytics(payload),
+  try {
+    const response: ComputeResponse = {
+      requestId,
+      ...computeAnalytics(payload),
+      error: null,
+    }
+    self.postMessage(response)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to compute SPC analytics.'
+    self.postMessage({
+      requestId,
+      spc: null,
+      trendData: [],
+      stratumSections: [],
+      error: message,
+    } satisfies ComputeResponse)
   }
-  self.postMessage(response)
 }

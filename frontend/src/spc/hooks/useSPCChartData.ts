@@ -42,12 +42,14 @@ export function useSPCChartData(
   const [normality, setNormality] = useState<NormalityResult | null>(null)
   const [dataTruncated, setDataTruncated] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [hydrating, setHydrating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setPoints([])
     setNormality(null)
     setDataTruncated(false)
+    setHydrating(false)
     setError(null)
     if (!materialId || !micId) {
       setLoading(false)
@@ -57,6 +59,7 @@ export function useSPCChartData(
     let cancelled = false
     const controller = new AbortController()
     setLoading(true)
+    setHydrating(false)
 
     const payload = {
       material_id: materialId,
@@ -75,6 +78,7 @@ export function useSPCChartData(
       let hasMore = true
       let summaryNormality: NormalityResult | null = null
       let truncated = false
+      let firstPageLoaded = false
 
       while (hasMore && !cancelled && allPoints.length < MAX_CHART_POINTS) {
         const url = new URL('/api/spc/chart-data', window.location.origin)
@@ -99,6 +103,22 @@ export function useSPCChartData(
         hasMore = Boolean(data.has_more)
         nextCursor = data.next_cursor ?? null
         if (data.normality) summaryNormality = data.normality
+
+        if (!cancelled) {
+          setPoints(assignBatchSequence(allPoints))
+          setNormality(summaryNormality)
+          setDataTruncated(false)
+        }
+
+        if (!firstPageLoaded) {
+          firstPageLoaded = true
+          if (!cancelled) {
+            setLoading(false)
+            setHydrating(hasMore)
+          }
+        } else if (!cancelled) {
+          setHydrating(hasMore)
+        }
       }
 
       if (hasMore && allPoints.length >= MAX_CHART_POINTS) {
@@ -106,18 +126,24 @@ export function useSPCChartData(
       }
 
       if (!cancelled) {
-        setPoints(assignBatchSequence(allPoints))
-        setNormality(summaryNormality)
         setDataTruncated(truncated)
+        setHydrating(false)
       }
     }
 
     fetchAllPages()
       .catch(err => {
-        if (!cancelled && err?.name !== 'AbortError') setError(String(err))
+        if (!cancelled && err?.name !== 'AbortError') {
+          setError(String(err))
+          setHydrating(false)
+          setLoading(false)
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setHydrating(false)
+        }
       })
 
     return () => {
@@ -126,5 +152,5 @@ export function useSPCChartData(
     }
   }, [materialId, micId, operationId, dateFrom, dateTo, plantId, stratifyBy])
 
-  return { points, normality, dataTruncated, loading, error }
+  return { points, normality, dataTruncated, loading, hydrating, error }
 }

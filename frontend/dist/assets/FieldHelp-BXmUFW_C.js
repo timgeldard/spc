@@ -1,1 +1,0 @@
-import{j as a}from"./react-vendor-DXKu7ynx.js";function r({id:s,error:e=!1,live:t=!1,children:o}){return a.jsx("span",{id:s,style:{fontSize:"0.75rem",color:e?"var(--cds-support-error)":"var(--cds-text-secondary)",fontWeight:e?600:400},role:e&&t?"alert":void 0,"aria-live":t?e?"assertive":"polite":void 0,children:o})}export{r as F};

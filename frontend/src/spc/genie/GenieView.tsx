@@ -1,33 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import type { ChatInstance, MessageRequest, CustomSendMessageOptions } from '@carbon/ai-chat'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button, TextArea } from '~/lib/carbon-forms'
+import { InlineLoading, InlineNotification } from '~/lib/carbon-feedback'
+import { Stack, Tile } from '~/lib/carbon-layout'
 import { shallowEqual, useSPCSelector } from '../SPCContext'
 import type { SPCState } from '../types'
 
 const GENIE_SPACE_ID = (import.meta as { env: Record<string, string> }).env?.VITE_GENIE_SPACE_ID ?? ''
+const STARTER_PROMPTS = [
+  'OOC summary for current material',
+  'Which MICs have Cpk below 1.33?',
+  'Show recent batches with signals',
+  'Compare process capability by plant',
+] as const
 
-interface CarbonChatProps {
-  key?: string
-  className?: string
-  assistantName: string
-  openChatByDefault?: boolean
-  messaging: {
-    customSendMessage: (
-      request: MessageRequest,
-      opts: CustomSendMessageOptions,
-      instance: ChatInstance,
-    ) => Promise<void>
-    skipWelcome?: boolean
-    messageTimeoutSecs?: number
-  }
-  onBeforeRender?: (instance: ChatInstance) => Promise<void> | void
-  disableCustomElementMobileEnhancements?: boolean
-  homescreen?: {
-    isEnabled: boolean
-    starterButtons?: {
-      isEnabled: boolean
-      buttons: Array<{ label: string }>
-    }
-  }
+interface GenieMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  error?: boolean
 }
 
 function buildContextPrefix(
@@ -65,6 +55,25 @@ function buildContextPrefix(
   return `[Analysis context — ${parts.join(', ')}]\n\n`
 }
 
+function buildScopeSummary(
+  state: Pick<SPCState, 'selectedMaterial' | 'selectedPlant' | 'selectedMIC' | 'dateFrom' | 'dateTo'>,
+): string[] {
+  const summary: string[] = []
+  if (state.selectedMaterial) {
+    summary.push(`Material: ${state.selectedMaterial.material_name ?? state.selectedMaterial.material_id}`)
+  }
+  if (state.selectedPlant) {
+    summary.push(`Plant: ${state.selectedPlant.plant_name ?? state.selectedPlant.plant_id}`)
+  }
+  if (state.selectedMIC) {
+    summary.push(`Characteristic: ${state.selectedMIC.mic_name ?? state.selectedMIC.mic_id}`)
+  }
+  if (state.dateFrom || state.dateTo) {
+    summary.push(`Date range: ${state.dateFrom ?? '—'} to ${state.dateTo ?? '—'}`)
+  }
+  return summary
+}
+
 async function sendToGenie(
   text: string,
   conversationId: string | null,
@@ -83,6 +92,15 @@ async function sendToGenie(
   return res.json()
 }
 
+function createMessage(role: GenieMessage['role'], text: string, error = false): GenieMessage {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    text,
+    error,
+  }
+}
+
 export default function GenieView() {
   const state = useSPCSelector(
     current => ({
@@ -95,9 +113,13 @@ export default function GenieView() {
     shallowEqual,
   )
   const conversationIdRef = useRef<string | null>(null)
-  const [chatClass] = useState('spc-genie-chat')
-  const [ChatCustomElement, setChatCustomElement] = useState<ComponentType<CarbonChatProps> | null>(null)
-  const [chatLoadError, setChatLoadError] = useState<string | null>(null)
+  const requestControllerRef = useRef<AbortController | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const [messages, setMessages] = useState<GenieMessage[]>([])
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const [composerError, setComposerError] = useState<string | null>(null)
+
   const scopeKey = useMemo(
     () =>
       JSON.stringify({
@@ -117,72 +139,71 @@ export default function GenieView() {
       state.dateTo,
     ],
   )
+  const scopeSummary = useMemo(() => buildScopeSummary(state), [state])
 
   useEffect(() => {
+    requestControllerRef.current?.abort()
+    requestControllerRef.current = null
     conversationIdRef.current = null
+    setMessages([])
+    setDraft('')
+    setSending(false)
+    setComposerError(null)
   }, [scopeKey])
 
   useEffect(() => {
-    let cancelled = false
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, sending])
 
-    import('@carbon/ai-chat')
-      .then(module => {
-        if (cancelled) return
-        setChatCustomElement(() => module.ChatCustomElement as ComponentType<CarbonChatProps>)
-        setChatLoadError(null)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        const message = err instanceof Error ? err.message : 'Unable to load Genie chat runtime'
-        setChatLoadError(message)
-      })
-
-    return () => {
-      cancelled = true
-    }
+  useEffect(() => () => {
+    requestControllerRef.current?.abort()
   }, [])
 
-  const customSendMessage = useCallback(
-    async (
-      request: MessageRequest,
-      opts: CustomSendMessageOptions,
-      instance: ChatInstance,
-    ): Promise<void> => {
-      const text = (request as { input?: { text?: string } }).input?.text ?? ''
-      if (!text.trim()) return
+  const submitPrompt = useCallback(async (rawText: string) => {
+    const text = rawText.trim()
+    if (!text || sending) return
 
-      // Prepend SPC context on the first message of each conversation so Genie
-      // knows which material, plant, MIC and date window the user is looking at.
-      const isFirstMessage = conversationIdRef.current === null
-      const contextPrefix = isFirstMessage ? buildContextPrefix(state) : ''
-      const messageWithContext = `${contextPrefix}${text}`
+    setComposerError(null)
+    setMessages(prev => [...prev, createMessage('user', text)])
+    setDraft('')
+    setSending(true)
 
-      try {
-        const data = await sendToGenie(messageWithContext, conversationIdRef.current, opts.signal as AbortSignal)
-        conversationIdRef.current = data.conversation_id
+    requestControllerRef.current?.abort()
+    const controller = new AbortController()
+    requestControllerRef.current = controller
 
-        await instance.messaging.addMessage({
-          output: {
-            generic: [{ response_type: 'text', text: data.answer }],
-          },
-        })
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return
-        const msg = err instanceof Error ? err.message : 'Unexpected error'
-        await instance.messaging.addMessage({
-          output: {
-            generic: [{ response_type: 'text', text: `Genie error: ${msg}` }],
-          },
-        })
+    const isFirstMessage = conversationIdRef.current === null
+    const contextPrefix = isFirstMessage ? buildContextPrefix(state) : ''
+    const messageWithContext = `${contextPrefix}${text}`
+
+    try {
+      const data = await sendToGenie(messageWithContext, conversationIdRef.current, controller.signal)
+      if (requestControllerRef.current !== controller) return
+      conversationIdRef.current = data.conversation_id
+      setMessages(prev => [...prev, createMessage('assistant', data.answer)])
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      const message = error instanceof Error ? error.message : 'Unexpected error'
+      setMessages(prev => [...prev, createMessage('assistant', `Genie error: ${message}`, true)])
+      setComposerError(message)
+    } finally {
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null
+        setSending(false)
       }
-    },
-    [state],
-  )
+    }
+  }, [sending, state])
 
-  const handleBeforeRender = useCallback(async (_instance: ChatInstance) => {
-    // Reset conversation when the view re-mounts (new material/MIC selection)
-    conversationIdRef.current = null
-  }, [])
+  const handleSubmit = useCallback(() => {
+    void submitPrompt(draft)
+  }, [draft, submitPrompt])
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault()
+      void submitPrompt(draft)
+    }
+  }, [draft, submitPrompt])
 
   return (
     <div className="spc-genie-container">
@@ -196,44 +217,125 @@ export default function GenieView() {
           </p>
         </div>
       )}
-      {chatLoadError && (
-        <div className="spc-genie-unconfigured">
-          <p>
-            <strong>Genie chat failed to load.</strong> {chatLoadError}
-          </p>
-        </div>
-      )}
-      {ChatCustomElement ? (
-        <ChatCustomElement
-          key={scopeKey}
-          className={chatClass}
-          assistantName="Databricks Genie"
-          openChatByDefault
-          messaging={{
-            customSendMessage,
-            skipWelcome: true,
-            messageTimeoutSecs: 90,
-          }}
-          onBeforeRender={handleBeforeRender}
-          disableCustomElementMobileEnhancements
-          homescreen={{
-            isEnabled: true,
-            starterButtons: {
-              isEnabled: true,
-              buttons: [
-                { label: 'OOC summary for current material' },
-                { label: 'Which MICs have Cpk below 1.33?' },
-                { label: 'Show recent batches with signals' },
-                { label: 'Compare process capability by plant' },
-              ],
-            },
-          }}
-        />
-      ) : (
-        <div className="spc-page-shell__loading">
-          Loading Genie workspace…
-        </div>
-      )}
+
+      <Tile className="spc-genie-shell">
+        <Stack gap={5} style={{ height: '100%' }}>
+          <div className="spc-genie-header">
+            <div>
+              <p className="spc-genie-eyebrow">Databricks Genie</p>
+              <h3 className="spc-genie-title">Governed SPC assistant</h3>
+              <p className="spc-genie-subtitle">
+                Ask about capability, drift, OOC signals, or recent batches in the current SPC scope.
+              </p>
+            </div>
+            <Button
+              kind="ghost"
+              size="sm"
+              disabled={messages.length === 0 && !sending}
+              onClick={() => {
+                requestControllerRef.current?.abort()
+                requestControllerRef.current = null
+                conversationIdRef.current = null
+                setMessages([])
+                setSending(false)
+                setComposerError(null)
+              }}
+            >
+              New conversation
+            </Button>
+          </div>
+
+          {scopeSummary.length > 0 ? (
+            <div className="spc-genie-scope">
+              {scopeSummary.map(item => (
+                <span key={item} className="spc-genie-scope-pill">{item}</span>
+              ))}
+            </div>
+          ) : null}
+
+          {composerError ? (
+            <InlineNotification
+              kind="error"
+              title="Genie request failed"
+              subtitle={composerError}
+              hideCloseButton
+            />
+          ) : null}
+
+          <div className="spc-genie-chat">
+            {messages.length === 0 ? (
+              <div className="spc-genie-empty">
+                <p className="spc-genie-empty-title">Start with a guided prompt</p>
+                <p className="spc-genie-empty-subtitle">
+                  The first message automatically includes the current material, plant, MIC, and date scope.
+                </p>
+                <div className="spc-genie-starters">
+                  {STARTER_PROMPTS.map(prompt => (
+                    <Button
+                      key={prompt}
+                      kind="tertiary"
+                      size="sm"
+                      onClick={() => {
+                        void submitPrompt(prompt)
+                      }}
+                      disabled={sending}
+                    >
+                      {prompt}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="spc-genie-messages" aria-live="polite">
+                {messages.map(message => (
+                  <div
+                    key={message.id}
+                    className={`spc-genie-message spc-genie-message--${message.role}${message.error ? ' spc-genie-message--error' : ''}`}
+                  >
+                    <div className="spc-genie-message-meta">
+                      {message.role === 'user' ? 'You' : 'Genie'}
+                    </div>
+                    <div className="spc-genie-message-body">
+                      {message.text}
+                    </div>
+                  </div>
+                ))}
+                {sending ? (
+                  <div className="spc-genie-message spc-genie-message--assistant">
+                    <div className="spc-genie-message-meta">Genie</div>
+                    <div className="spc-genie-message-body">
+                      <InlineLoading description="Thinking through the current SPC scope..." status="active" />
+                    </div>
+                  </div>
+                ) : null}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          <div className="spc-genie-composer">
+            <TextArea
+              id="spc-genie-composer"
+              labelText="Ask Genie about the current SPC scope"
+              placeholder="Ask about capability, signals, drift, or recent batches…"
+              rows={3}
+              value={draft}
+              onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={sending}
+              helperText="Press Cmd/Ctrl + Enter to send."
+            />
+            <div className="spc-genie-actions">
+              <Button kind="secondary" size="sm" onClick={() => setDraft('')} disabled={sending || draft.trim().length === 0}>
+                Clear
+              </Button>
+              <Button kind="primary" size="sm" onClick={handleSubmit} disabled={sending || draft.trim().length === 0}>
+                Send to Genie
+              </Button>
+            </div>
+          </div>
+        </Stack>
+      </Tile>
     </div>
   )
 }
