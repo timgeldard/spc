@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, TextArea } from '~/lib/carbon-forms'
 import { InlineNotification } from '~/lib/carbon-feedback'
 import { Stack, Tile } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import { computeGRR, computeGRR_ANOVA } from './msaCalculations'
 import { useMSASave } from '../hooks/useMSASave'
 import type { MSAResult } from '../types'
@@ -148,7 +148,13 @@ const STEP_STYLE = {
 }
 
 export default function MSAView() {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedMIC: current.selectedMIC,
+    }),
+    shallowEqual,
+  )
   const [method, setMethod] = useState<'average_range' | 'anova'>('average_range')
   const [nOperators, setNOperators] = useState(3)
   const [nParts, setNParts] = useState(10)

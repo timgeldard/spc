@@ -24,8 +24,17 @@ EXCLUSIONS_MIGRATION ?= $(MIGRATIONS_DIR)/001_create_spc_exclusions.sql
 QUERY_AUDIT_MIGRATION ?= $(MIGRATIONS_DIR)/002_create_query_audit.sql
 ADD_OPERATION_ID_LOCKED_LIMITS_MIGRATION ?= $(MIGRATIONS_DIR)/003_add_operation_id_to_locked_limits.sql
 ADD_OPERATION_ID_EXCLUSIONS_MIGRATION ?= $(MIGRATIONS_DIR)/004_add_operation_id_to_spc_exclusions.sql
+QUALITY_SUBGROUP_MIGRATION ?= $(MIGRATIONS_DIR)/005_create_spc_quality_metric_subgroup_v.sql
+QUALITY_MV_MIGRATION ?= $(MIGRATIONS_DIR)/006_create_spc_quality_metrics_mv.sql
+ATTRIBUTE_SOURCE_MIGRATION ?= $(MIGRATIONS_DIR)/007_create_spc_attribute_metric_source_v.sql
+ATTRIBUTE_MV_MIGRATION ?= $(MIGRATIONS_DIR)/008_create_spc_attribute_quality_metrics_mv.sql
+PROCESS_FLOW_SOURCE_MIGRATION ?= $(MIGRATIONS_DIR)/009_create_spc_process_flow_source_v.sql
+PROCESS_FLOW_MV_MIGRATION ?= $(MIGRATIONS_DIR)/010_create_spc_process_flow_metrics_mv.sql
+CORRELATION_SOURCE_MIGRATION ?= $(MIGRATIONS_DIR)/011_create_spc_correlation_source_v.sql
+NORMAL_CDF_UDF_MIGRATION ?= $(MIGRATIONS_DIR)/012_create_spc_normal_cdf_udf.sql
+GENIE_METADATA ?= true
 
-.PHONY: apply-migration build check-env deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions
+.PHONY: apply-migration build check-env check-metric-view-support deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions setup-metric-views
 
 check-env:
 	@databricks current-user me --profile $(PROFILE) -o json > /dev/null 2>&1 || \
@@ -51,6 +60,7 @@ deploy: check-env build render-app-config
 	$(MAKE) setup-query-audit PROFILE=$(PROFILE)
 	$(MAKE) setup-operation-id-locked-limits PROFILE=$(PROFILE)
 	$(MAKE) setup-operation-id-exclusions PROFILE=$(PROFILE)
+	$(MAKE) setup-metric-views PROFILE=$(PROFILE)
 
 apply-migration: check-env
 	@echo "Applying $(NAME) migration from $(FILE)..."
@@ -63,6 +73,17 @@ apply-migration: check-env
 	 MSYS_NO_PATHCONV=1 databricks api post /api/2.0/sql/statements --profile $(PROFILE) --json "@$$TMPFILE" && \
 	 rm -f "$$TMPFILE"
 	@echo "✓ $(NAME) table ready"
+
+check-metric-view-support: check-env
+	@echo "Checking warehouse metric view support..."
+	@export TRACE_CATALOG="$${TRACE_CATALOG:-$(TRACE_CATALOG_DEFAULT)}" && \
+	 export TRACE_SCHEMA="$${TRACE_SCHEMA:-$(TRACE_SCHEMA_DEFAULT)}" && \
+	 python3 scripts/check_metric_view_support.py \
+	   --catalog "$$TRACE_CATALOG" \
+	   --schema "$$TRACE_SCHEMA" \
+	   --warehouse-id "$(WAREHOUSE_ID)" \
+	   --profile "$(PROFILE)" \
+	   --genie-metadata "$(GENIE_METADATA)"
 
 setup-locked-limits:
 	@$(MAKE) apply-migration NAME=spc_locked_limits FILE=$(LOCKED_LIMITS_MIGRATION) PROFILE=$(PROFILE)
@@ -93,3 +114,14 @@ setup-operation-id-locked-limits:
 
 setup-operation-id-exclusions:
 	@$(MAKE) apply-migration NAME=spc_exclusions_operation_id FILE=$(ADD_OPERATION_ID_EXCLUSIONS_MIGRATION) PROFILE=$(PROFILE)
+
+setup-metric-views: check-metric-view-support
+	@[ "$(GENIE_METADATA)" = "true" ] || \
+	  (echo "ERROR: Release 1 metric-view migrations are authored with YAML 1.1 Genie metadata. Use GENIE_METADATA=true for setup-metric-views." && exit 1)
+	@$(MAKE) apply-migration NAME=spc_quality_metric_subgroup FILE=$(QUALITY_SUBGROUP_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_quality_metrics FILE=$(QUALITY_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_attribute_metric_source FILE=$(ATTRIBUTE_SOURCE_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_attribute_quality_metrics FILE=$(ATTRIBUTE_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_process_flow_source FILE=$(PROCESS_FLOW_SOURCE_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_process_flow_metrics FILE=$(PROCESS_FLOW_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_correlation_source FILE=$(CORRELATION_SOURCE_MIGRATION) PROFILE=$(PROFILE)

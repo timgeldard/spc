@@ -2,7 +2,7 @@ import { Button, TextInput } from '~/lib/carbon-forms'
 import { Grid, Column, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useMemo, useState } from 'react'
 import '../charts/ensureEChartsTheme'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import ModuleEmptyState from '../components/ModuleEmptyState'
 import FieldHelp from '../components/FieldHelp'
 import InfoBanner from '../components/InfoBanner'
@@ -11,7 +11,14 @@ import { useCompareScorecard } from '../hooks/useCompareScorecard'
 import GroupedBarChart from './GroupedBarChart'
 
 export default function CompareView() {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+      selectedPlant: current.selectedPlant,
+    }),
+    shallowEqual,
+  )
   const [materialInputs, setMaterialInputs] = useState<string[]>(['', ''])
 
   const validIds = useMemo(

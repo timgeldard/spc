@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import { PREF_EXCLUDE_OUTLIERS, PREF_LIMITS_MODE, PREF_RULE_SET } from '../SPCContext'
 
 /**
@@ -11,7 +11,14 @@ import { PREF_EXCLUDE_OUTLIERS, PREF_LIMITS_MODE, PREF_RULE_SET } from '../SPCCo
  * This hook only handles the write direction: state → localStorage.
  */
 export function useSPCPreferences(): void {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      ruleSet: current.ruleSet,
+      excludeOutliers: current.excludeOutliers,
+      limitsMode: current.limitsMode,
+    }),
+    shallowEqual,
+  )
 
   useEffect(() => {
     try { localStorage.setItem(PREF_RULE_SET, state.ruleSet) } catch { /* ignore */ }

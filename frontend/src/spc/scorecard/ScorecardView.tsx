@@ -7,7 +7,7 @@ import {
 import { InlineNotification } from '~/lib/carbon-feedback'
 import { DataTableSkeleton } from '~/lib/carbon-data-table'
 import { Column, ContentSwitcher, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
 import type { ScorecardRow } from '../types'
 import MetricCard from '../components/MetricCard'
@@ -159,7 +159,19 @@ function TriagePanel({ rows, onViewChart }: TriagePanelProps) {
 // ── Main view ──────────────────────────────────────────────────────────────
 
 export default function ScorecardView() {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      roleMode: current.roleMode,
+      selectedMaterial: current.selectedMaterial,
+      selectedPlant: current.selectedPlant,
+      selectedMIC: current.selectedMIC,
+      exclusionAudit: current.exclusionAudit,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+    }),
+    shallowEqual,
+  )
   const [viewMode, setViewMode] = useState<'table' | 'matrix'>('table')
   const { scorecard, loading, error } = useSPCScorecard(
     state.selectedMaterial?.material_id,

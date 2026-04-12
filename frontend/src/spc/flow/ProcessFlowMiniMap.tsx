@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { ReactFlow, Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { ReactFlow, Handle, Position, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import { layoutFlowGraph } from './layoutFlowGraph'
 import type { ProcessFlowResult } from '../types'
 
@@ -24,6 +24,7 @@ interface MiniNodeData extends Record<string, unknown> {
 }
 
 type MiniFlowNode = Node<MiniNodeData, 'miniNode'>
+type MiniFlowEdge = Edge<Record<string, never>, 'smoothstep'>
 
 const MiniNode = memo(function MiniNode({ data }: NodeProps<MiniFlowNode>) {
   const s = STATUS_STYLE[data.status] ?? STATUS_STYLE.grey
@@ -112,8 +113,11 @@ const NODE_TYPES = { miniNode: MiniNode }
 
 // ── Graph builder ─────────────────────────────────────────────────────────────
 
-function buildMiniElements(flowData: ProcessFlowResult | null) {
-  if (!flowData?.nodes?.length) return { nodes: [] as MiniFlowNode[], edges: [] as object[] }
+function buildMiniElements(flowData: ProcessFlowResult | null): {
+  nodes: MiniFlowNode[]
+  edges: MiniFlowEdge[]
+} {
+  if (!flowData?.nodes?.length) return { nodes: [], edges: [] }
 
   const positioned = layoutFlowGraph(flowData.nodes, flowData.edges ?? [])
 
@@ -136,7 +140,7 @@ function buildMiniElements(flowData: ProcessFlowResult | null) {
     }
   })
 
-  const edges = (flowData.edges ?? []).map((e, i) => {
+  const edges: MiniFlowEdge[] = (flowData.edges ?? []).map((e, i) => {
     const sourceNode = flowData.nodes.find(n => n.id === e.source)
     const isRed = sourceNode?.status === 'red'
     return {

@@ -3,10 +3,16 @@ import { Tile } from '~/lib/carbon-layout'
 import ArrowRight from '@carbon/icons-react/es/ArrowRight.js'
 import WarningFilled from '@carbon/icons-react/es/WarningFilled.js'
 import EmptyState from '../../components/EmptyState'
-import { useSPC } from '../SPCContext'
+import { useSPCDispatch } from '../SPCContext'
+import type { RecentViolationItem } from '../types'
 
-export default function RecentViolations() {
-  const { state, dispatch } = useSPC()
+interface RecentViolationsProps {
+  hasMaterial: boolean
+  violations: RecentViolationItem[]
+}
+
+export default function RecentViolations({ hasMaterial, violations }: RecentViolationsProps) {
+  const dispatch = useSPCDispatch()
 
   return (
     <Tile style={{ height: '100%', padding: '1.5rem' }}>
@@ -46,9 +52,9 @@ export default function RecentViolations() {
       </div>
 
       {/* Violation list */}
-      {state.selectedMaterial && state.recentViolations.length > 0 ? (
+      {hasMaterial && violations.length > 0 ? (
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-          {state.recentViolations.map((violation, index) => (
+          {violations.map((violation, index) => (
             <li
               key={violation.id}
               style={{
@@ -57,7 +63,7 @@ export default function RecentViolations() {
                 justifyContent: 'space-between',
                 padding: '0.75rem 0',
                 borderBottom:
-                  index < state.recentViolations.length - 1
+                  index < violations.length - 1
                     ? '1px solid var(--cds-border-subtle-01)'
                     : 'none',
               }}

@@ -1,0 +1,290 @@
+-- Migration 006: create the quantitative SPC metric view for dashboards and Genie.
+
+CREATE OR REPLACE VIEW `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_quality_metrics`
+WITH METRICS
+LANGUAGE YAML
+AS $$
+version: 1.1
+comment: "Governed quantitative SPC metrics for capability, drift, control, and batch disposition."
+source: ${TRACE_CATALOG}.${TRACE_SCHEMA}.spc_quality_metric_subgroup_v
+
+dimensions:
+  - name: material_id
+    expr: material_id
+    display_name: Material ID
+    synonyms: ['material', 'sku']
+  - name: material_name
+    expr: material_name
+    display_name: Material Name
+  - name: plant_id
+    expr: plant_id
+    display_name: Plant ID
+    synonyms: ['plant', 'site']
+  - name: plant_name
+    expr: plant_name
+    display_name: Plant Name
+  - name: mic_id
+    expr: mic_id
+    display_name: MIC ID
+    synonyms: ['characteristic id', 'inspection characteristic']
+  - name: mic_name
+    expr: mic_name
+    display_name: MIC Name
+    synonyms: ['characteristic', 'quality characteristic']
+  - name: inspection_method
+    expr: inspection_method
+    display_name: Inspection Method
+  - name: batch_id
+    expr: batch_id
+    display_name: Batch ID
+    synonyms: ['batch']
+  - name: batch_date
+    expr: batch_date
+    display_name: Batch Date
+  - name: batch_week
+    expr: batch_week
+    display_name: Batch Week
+  - name: batch_month
+    expr: batch_month
+    display_name: Batch Month
+  - name: spec_type
+    expr: spec_type
+    display_name: Spec Type
+
+measures:
+  - name: subgroup_count
+    expr: COUNT(1)
+    display_name: Subgroup Count
+    synonyms: ['subgroups', 'mic batch groups']
+  - name: batch_count
+    expr: COUNT(DISTINCT batch_id)
+    display_name: Batch Count
+    synonyms: ['batches']
+  - name: total_samples
+    expr: SUM(batch_n)
+    display_name: Sample Count
+    synonyms: ['sample count', 'inspection count']
+  - name: mean_value
+    expr: |
+      CASE
+      WHEN MEASURE(total_samples) = 0 THEN NULL
+      ELSE SUM(sum_value) / MEASURE(total_samples)
+      END
+    display_name: Mean Value
+    synonyms: ['average result', 'process mean']
+  - name: stddev_overall
+    expr: |
+      CASE
+      WHEN MEASURE(total_samples) > 1
+      THEN SQRT(
+        (SUM(sum_squares) - POWER(SUM(sum_value), 2) / MEASURE(total_samples))
+        / (MEASURE(total_samples) - 1)
+      )
+      ELSE NULL
+      END
+    display_name: Overall Standard Deviation
+    synonyms: ['overall sigma', 'long term sigma']
+  - name: min_value
+    expr: MIN(min_value)
+    display_name: Minimum Value
+  - name: max_value
+    expr: MAX(max_value)
+    display_name: Maximum Value
+  - name: spec_upper
+    expr: MAX(usl_spec)
+    display_name: Upper Spec Limit
+    synonyms: ['usl']
+  - name: spec_lower
+    expr: MAX(lsl_spec)
+    display_name: Lower Spec Limit
+    synonyms: ['lsl']
+  - name: nominal_target
+    expr: MAX(nominal_target)
+    display_name: Nominal Target
+    synonyms: ['nominal', 'target']
+  - name: distinct_spec_count
+    expr: COUNT(DISTINCT spec_signature)
+    display_name: Distinct Spec Count
+  - name: spec_safe
+    expr: CASE WHEN COUNT(DISTINCT spec_signature) = 1 THEN 1 ELSE 0 END
+    display_name: Spec Safe Flag
+  - name: rejected_batches
+    expr: COUNT(DISTINCT CASE WHEN any_rejection = 1 THEN batch_id END)
+    display_name: Rejected Batches
+    synonyms: ['failed batches', 'bad batches', 'ooc batches']
+  - name: accepted_batches
+    expr: COUNT(DISTINCT CASE WHEN any_acceptance = 1 THEN batch_id END)
+    display_name: Accepted Batches
+    synonyms: ['passed batches']
+  - name: ooc_rate
+    expr: |
+      CASE
+      WHEN MEASURE(batch_count) = 0 THEN NULL
+      ELSE MEASURE(rejected_batches) / MEASURE(batch_count)
+      END
+    display_name: Out of Control Rate
+    synonyms: ['out of control rate', 'reject rate', 'rejection rate']
+    format:
+      type: percentage
+  - name: avg_samples_per_batch
+    expr: |
+      CASE
+      WHEN MEASURE(batch_count) = 0 THEN NULL
+      ELSE MEASURE(total_samples) / MEASURE(batch_count)
+      END
+    display_name: Avg Samples Per Batch
+  - name: eligible_subgroup_count
+    expr: SUM(CASE WHEN batch_n >= 2 THEN 1 ELSE 0 END)
+    display_name: Eligible Subgroup Count
+  - name: avg_subgroup_range
+    expr: |
+      CASE
+      WHEN MEASURE(eligible_subgroup_count) = 0 THEN NULL
+      ELSE SUM(CASE WHEN batch_n >= 2 THEN batch_range ELSE 0 END) / MEASURE(eligible_subgroup_count)
+      END
+    display_name: Avg Subgroup Range
+  - name: avg_n_eligible
+    expr: |
+      CASE
+      WHEN MEASURE(eligible_subgroup_count) = 0 THEN NULL
+      ELSE SUM(CASE WHEN batch_n >= 2 THEN batch_n ELSE 0 END) / MEASURE(eligible_subgroup_count)
+      END
+    display_name: Avg Eligible Subgroup Size
+  - name: sigma_within
+    expr: |
+      CASE ROUND(MEASURE(avg_n_eligible), 0)
+      WHEN 2 THEN MEASURE(avg_subgroup_range) / 1.128
+      WHEN 3 THEN MEASURE(avg_subgroup_range) / 1.693
+      WHEN 4 THEN MEASURE(avg_subgroup_range) / 2.059
+      WHEN 5 THEN MEASURE(avg_subgroup_range) / 2.326
+      WHEN 6 THEN MEASURE(avg_subgroup_range) / 2.534
+      WHEN 7 THEN MEASURE(avg_subgroup_range) / 2.704
+      WHEN 8 THEN MEASURE(avg_subgroup_range) / 2.847
+      WHEN 9 THEN MEASURE(avg_subgroup_range) / 2.970
+      WHEN 10 THEN MEASURE(avg_subgroup_range) / 3.078
+      WHEN 11 THEN MEASURE(avg_subgroup_range) / 3.173
+      WHEN 12 THEN MEASURE(avg_subgroup_range) / 3.258
+      WHEN 13 THEN MEASURE(avg_subgroup_range) / 3.336
+      WHEN 14 THEN MEASURE(avg_subgroup_range) / 3.407
+      WHEN 15 THEN MEASURE(avg_subgroup_range) / 3.472
+      ELSE NULL
+      END
+    display_name: Within Sigma
+    synonyms: ['within sigma', 'short term sigma']
+  - name: pp
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1
+       AND MEASURE(stddev_overall) > 0
+       AND MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(spec_lower) IS NOT NULL
+      THEN (MEASURE(spec_upper) - MEASURE(spec_lower)) / (6 * MEASURE(stddev_overall))
+      ELSE NULL
+      END
+    display_name: Pp
+  - name: ppk
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) <> 1 OR MEASURE(stddev_overall) <= 0 OR MEASURE(mean_value) IS NULL THEN NULL
+      WHEN MEASURE(spec_upper) IS NOT NULL AND MEASURE(spec_lower) IS NOT NULL
+      THEN LEAST(
+        (MEASURE(spec_upper) - MEASURE(mean_value)) / (3 * MEASURE(stddev_overall)),
+        (MEASURE(mean_value) - MEASURE(spec_lower)) / (3 * MEASURE(stddev_overall))
+      )
+      WHEN MEASURE(spec_upper) IS NOT NULL
+      THEN (MEASURE(spec_upper) - MEASURE(mean_value)) / (3 * MEASURE(stddev_overall))
+      WHEN MEASURE(spec_lower) IS NOT NULL
+      THEN (MEASURE(mean_value) - MEASURE(spec_lower)) / (3 * MEASURE(stddev_overall))
+      ELSE NULL
+      END
+    display_name: Ppk
+    synonyms: ['process performance', 'long term capability']
+  - name: cp
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1
+       AND MEASURE(sigma_within) > 0
+       AND MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(spec_lower) IS NOT NULL
+      THEN (MEASURE(spec_upper) - MEASURE(spec_lower)) / (6 * MEASURE(sigma_within))
+      ELSE NULL
+      END
+    display_name: Cp
+  - name: cpk
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) <> 1 OR MEASURE(sigma_within) <= 0 OR MEASURE(mean_value) IS NULL THEN NULL
+      WHEN MEASURE(spec_upper) IS NOT NULL AND MEASURE(spec_lower) IS NOT NULL
+      THEN LEAST(
+        (MEASURE(spec_upper) - MEASURE(mean_value)) / (3 * MEASURE(sigma_within)),
+        (MEASURE(mean_value) - MEASURE(spec_lower)) / (3 * MEASURE(sigma_within))
+      )
+      WHEN MEASURE(spec_upper) IS NOT NULL
+      THEN (MEASURE(spec_upper) - MEASURE(mean_value)) / (3 * MEASURE(sigma_within))
+      WHEN MEASURE(spec_lower) IS NOT NULL
+      THEN (MEASURE(mean_value) - MEASURE(spec_lower)) / (3 * MEASURE(sigma_within))
+      ELSE NULL
+      END
+    display_name: Cpk
+    synonyms: ['process capability', 'short term capability']
+  - name: z_score
+    expr: |
+      CASE
+      WHEN MEASURE(ppk) IS NULL THEN NULL
+      ELSE MEASURE(ppk) * 3
+      END
+    display_name: Z Score
+  - name: dpmo
+    expr: |
+      CASE
+      WHEN MEASURE(z_score) IS NULL THEN NULL
+      ELSE ROUND(
+        (1 - (0.5 * (1 + ERF((MEASURE(z_score) - 1.5) / SQRT(2))))) * 1000000
+      )
+      END
+    display_name: DPMO
+    synonyms: ['defects per million', 'ppm defects']
+  - name: mean_minus_nominal
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1 AND MEASURE(nominal_target) IS NOT NULL
+      THEN MEASURE(mean_value) - MEASURE(nominal_target)
+      ELSE NULL
+      END
+    display_name: Mean Minus Nominal
+    synonyms: ['mean offset', 'target bias', 'off target']
+  - name: abs_mean_offset
+    expr: |
+      CASE
+      WHEN MEASURE(mean_minus_nominal) IS NULL THEN NULL
+      ELSE ABS(MEASURE(mean_minus_nominal))
+      END
+    display_name: Absolute Mean Offset
+    synonyms: ['absolute bias', 'absolute target deviation']
+  - name: pct_mean_offset_of_spec_width
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1
+       AND MEASURE(spec_upper) IS NOT NULL
+       AND MEASURE(spec_lower) IS NOT NULL
+       AND (MEASURE(spec_upper) - MEASURE(spec_lower)) <> 0
+      THEN 100 * ABS(MEASURE(mean_value) - MEASURE(nominal_target)) / (MEASURE(spec_upper) - MEASURE(spec_lower))
+      ELSE NULL
+      END
+    display_name: Percent Mean Offset of Spec Width
+    synonyms: ['percent off target', 'offset vs tolerance']
+  - name: mean_out_of_spec_flag
+    expr: |
+      CASE
+      WHEN MEASURE(spec_safe) = 1
+       AND MEASURE(mean_value) IS NOT NULL
+       AND (
+         (MEASURE(spec_upper) IS NOT NULL AND MEASURE(mean_value) > MEASURE(spec_upper))
+         OR (MEASURE(spec_lower) IS NOT NULL AND MEASURE(mean_value) < MEASURE(spec_lower))
+       )
+      THEN 1
+      ELSE 0
+      END
+    display_name: Mean Out of Spec Flag
+    synonyms: ['mean out of spec', 'out of spec mean']
+$$;

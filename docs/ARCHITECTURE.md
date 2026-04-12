@@ -103,7 +103,18 @@ The frontend is fully migrated to **TypeScript** to ensure mathematical correctn
 
 ### State Management (`SPCContext.tsx`)
 
-All SPC state lives in a strictly-typed `useReducer` context. Cascading resets ensure data integrity—e.g., changing the selected Material automatically clears MIC selections and calculated indices.
+All SPC state still originates from a strictly typed reducer, but consumers now subscribe through selector-based accessors built on `useSyncExternalStore` rather than receiving the full mutable state object.
+
+This keeps domain integrity rules in one place while avoiding app-wide rerenders for unrelated state changes such as tab switches, loading flags, or exclusion updates.
+
+### Frontend Performance Boundaries
+
+The SPC frontend now treats expensive capabilities as explicit runtime boundaries instead of letting them accumulate in the main page shell.
+
+*   **Thin SPC Shell**: `SPCPage.tsx` only owns the primary navigation and the default analysis tabs. Advanced tools (`Compare`, `MSA`, `Correlation`, `Genie`) are loaded through a second lazy boundary in `AdvancedTabView.tsx`.
+*   **Deferred Genie Runtime**: `GenieView.tsx` loads the Carbon AI Chat runtime only when the Genie tab mounts. This keeps the SPC shell and Genie wrapper tiny while isolating the large chat runtime in its own deferred chunk.
+*   **Worker-based Analytics**: Heavy chart analytics run in `spcCompute.worker.ts` via `useSPCComputedAnalytics`, which keeps large quantitative recalculations off the main thread.
+*   **Shared Request Reuse**: Overview and detail tabs share hot scorecard and process-flow results through a lightweight request cache instead of immediately re-querying the same backend endpoints.
 
 ### Chart Rendering
 
@@ -112,6 +123,8 @@ All SPC state lives in a strictly-typed `useReducer` context. Cascading resets e
 | **ECharts** | Control charts (I-MR, X̄-R, P) and Histograms |
 | **ag-Grid** | Performance-optimized Capability Scorecards |
 | **ReactFlow** | Interactive Process Flow DAGs |
+
+The Carbon-based shell remains the design system baseline, but production builds currently still include the full Carbon stylesheet and IBM Plex font references. That path is functional, but further CSS/font slimming remains a follow-on optimisation target.
 
 ---
 

@@ -1,16 +1,38 @@
-import { useCallback, useRef, useState } from 'react'
-import {
-  ChatCustomElement,
-  type ChatInstance,
-  type MessageRequest,
-  type CustomSendMessageOptions,
-} from '@carbon/ai-chat'
-import { useSPC } from '../SPCContext'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import type { ChatInstance, MessageRequest, CustomSendMessageOptions } from '@carbon/ai-chat'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import type { SPCState } from '../types'
 
 const GENIE_SPACE_ID = (import.meta as { env: Record<string, string> }).env?.VITE_GENIE_SPACE_ID ?? ''
 
-function buildContextPrefix(state: SPCState): string {
+interface CarbonChatProps {
+  key?: string
+  className?: string
+  assistantName: string
+  openChatByDefault?: boolean
+  messaging: {
+    customSendMessage: (
+      request: MessageRequest,
+      opts: CustomSendMessageOptions,
+      instance: ChatInstance,
+    ) => Promise<void>
+    skipWelcome?: boolean
+    messageTimeoutSecs?: number
+  }
+  onBeforeRender?: (instance: ChatInstance) => Promise<void> | void
+  disableCustomElementMobileEnhancements?: boolean
+  homescreen?: {
+    isEnabled: boolean
+    starterButtons?: {
+      isEnabled: boolean
+      buttons: Array<{ label: string }>
+    }
+  }
+}
+
+function buildContextPrefix(
+  state: Pick<SPCState, 'selectedMaterial' | 'selectedPlant' | 'selectedMIC' | 'dateFrom' | 'dateTo'>,
+): string {
   const parts: string[] = []
 
   if (state.selectedMaterial) {
@@ -62,9 +84,63 @@ async function sendToGenie(
 }
 
 export default function GenieView() {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedPlant: current.selectedPlant,
+      selectedMIC: current.selectedMIC,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+    }),
+    shallowEqual,
+  )
   const conversationIdRef = useRef<string | null>(null)
   const [chatClass] = useState('spc-genie-chat')
+  const [ChatCustomElement, setChatCustomElement] = useState<ComponentType<CarbonChatProps> | null>(null)
+  const [chatLoadError, setChatLoadError] = useState<string | null>(null)
+  const scopeKey = useMemo(
+    () =>
+      JSON.stringify({
+        materialId: state.selectedMaterial?.material_id ?? null,
+        plantId: state.selectedPlant?.plant_id ?? null,
+        micId: state.selectedMIC?.mic_id ?? null,
+        operationId: state.selectedMIC?.operation_id ?? null,
+        dateFrom: state.dateFrom ?? null,
+        dateTo: state.dateTo ?? null,
+      }),
+    [
+      state.selectedMaterial?.material_id,
+      state.selectedPlant?.plant_id,
+      state.selectedMIC?.mic_id,
+      state.selectedMIC?.operation_id,
+      state.dateFrom,
+      state.dateTo,
+    ],
+  )
+
+  useEffect(() => {
+    conversationIdRef.current = null
+  }, [scopeKey])
+
+  useEffect(() => {
+    let cancelled = false
+
+    import('@carbon/ai-chat')
+      .then(module => {
+        if (cancelled) return
+        setChatCustomElement(() => module.ChatCustomElement as ComponentType<CarbonChatProps>)
+        setChatLoadError(null)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : 'Unable to load Genie chat runtime'
+        setChatLoadError(message)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const customSendMessage = useCallback(
     async (
@@ -120,30 +196,44 @@ export default function GenieView() {
           </p>
         </div>
       )}
-      <ChatCustomElement
-        className={chatClass}
-        assistantName="Databricks Genie"
-        openChatByDefault
-        messaging={{
-          customSendMessage,
-          skipWelcome: true,
-          messageTimeoutSecs: 90,
-        }}
-        onBeforeRender={handleBeforeRender}
-        disableCustomElementMobileEnhancements
-        homescreen={{
-          isEnabled: true,
-          starterButtons: {
+      {chatLoadError && (
+        <div className="spc-genie-unconfigured">
+          <p>
+            <strong>Genie chat failed to load.</strong> {chatLoadError}
+          </p>
+        </div>
+      )}
+      {ChatCustomElement ? (
+        <ChatCustomElement
+          key={scopeKey}
+          className={chatClass}
+          assistantName="Databricks Genie"
+          openChatByDefault
+          messaging={{
+            customSendMessage,
+            skipWelcome: true,
+            messageTimeoutSecs: 90,
+          }}
+          onBeforeRender={handleBeforeRender}
+          disableCustomElementMobileEnhancements
+          homescreen={{
             isEnabled: true,
-            buttons: [
-              { label: 'OOC summary for current material' },
-              { label: 'Which MICs have Cpk below 1.33?' },
-              { label: 'Show recent batches with signals' },
-              { label: 'Compare process capability by plant' },
-            ],
-          },
-        }}
-      />
+            starterButtons: {
+              isEnabled: true,
+              buttons: [
+                { label: 'OOC summary for current material' },
+                { label: 'Which MICs have Cpk below 1.33?' },
+                { label: 'Show recent batches with signals' },
+                { label: 'Compare process capability by plant' },
+              ],
+            },
+          }}
+        />
+      ) : (
+        <div className="spc-page-shell__loading">
+          Loading Genie workspace…
+        </div>
+      )}
     </div>
   )
 }

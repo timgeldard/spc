@@ -72,6 +72,7 @@ DATABRICKS_HOST: str = os.environ.get("DATABRICKS_HOST", "")
 WAREHOUSE_HTTP_PATH: str = os.environ.get("DATABRICKS_WAREHOUSE_HTTP_PATH", "")
 TRACE_CATALOG: str = os.environ.get("TRACE_CATALOG", "connected_plant_uat")
 TRACE_SCHEMA: str = os.environ.get("TRACE_SCHEMA", "gold")
+USE_METRIC_VIEWS: bool = os.environ.get("USE_METRIC_VIEWS", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 # ---------------------------------------------------------------------------

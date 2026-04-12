@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '~/lib/carbon-forms'
 import { Pagination } from '~/lib/carbon-data-table'
 import { Stack, Tag, Tile } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { useSPCDispatch } from '../SPCContext'
 import type { IndexedChartPoint, SPCSignal } from '../types'
 
 const PAGE_SIZES = [10, 25, 50]
@@ -57,7 +57,7 @@ export default function SignalsPanel({
   indexedPoints = [],
   ruleSet = 'weco',
 }: SignalsPanelProps) {
-  const { dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
   const rules = ruleSet === 'nelson' ? NELSON_RULES : WECO_RULES
   const label = ruleSet === 'nelson' ? 'Nelson' : 'WECO'
 

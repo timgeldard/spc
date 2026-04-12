@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { getLimitsSnapshot, mapExcludedPointsToIndices, recomputeForExcludedSet, toExcludedPoints } from '../exclusions'
 import { useSPCExclusions } from './useSPCExclusions'
 import type {
@@ -68,8 +68,14 @@ export function useExclusionWorkflow({
   spc,
   setAutoCleanLog,
 }: UseExclusionWorkflowArgs): ExclusionWorkflowResult {
-  const { state, dispatch } = useSPC()
-  const { excludedIndices, exclusionDialog } = state
+  const dispatch = useSPCDispatch()
+  const { excludedIndices, exclusionDialog } = useSPCSelector(
+    state => ({
+      excludedIndices: state.excludedIndices,
+      exclusionDialog: state.exclusionDialog,
+    }),
+    shallowEqual,
+  )
 
   const {
     snapshot: exclusionsSnapshot,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 
 /**
  * Keeps window.location.search in sync with the active analysis context.
@@ -23,8 +23,17 @@ import { useSPC } from '../SPCContext'
  * so this hook is write-only: state → URL.
  */
 export function useSPCUrlSync(): void {
-  const { state } = useSPC()
-  const { activeTab, selectedMaterial, selectedPlant, selectedMIC, dateFrom, dateTo } = state
+  const { activeTab, selectedMaterial, selectedPlant, selectedMIC, dateFrom, dateTo } = useSPCSelector(
+    state => ({
+      activeTab: state.activeTab,
+      selectedMaterial: state.selectedMaterial,
+      selectedPlant: state.selectedPlant,
+      selectedMIC: state.selectedMIC,
+      dateFrom: state.dateFrom,
+      dateTo: state.dateTo,
+    }),
+    shallowEqual,
+  )
 
   useEffect(() => {
     try {

@@ -11,7 +11,7 @@ import {
 import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import Edit from '@carbon/icons-react/es/Edit.js'
 import Filter from '@carbon/icons-react/es/Filter.js'
-import { useSPC } from './SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from './SPCContext'
 import { useValidateMaterial } from './hooks/useMaterials'
 import { usePlants } from './hooks/usePlants'
 import { useCharacteristics } from './hooks/useCharacteristics'
@@ -96,7 +96,18 @@ interface SPCFilterBarProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedPlant: current.selectedPlant,
+      selectedMIC: current.selectedMIC,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+      stratifyBy: current.stratifyBy,
+    }),
+    shallowEqual,
+  )
   const { validateMaterial, clearError, validating, error: validateError } = useValidateMaterial()
   const { plants, loading: plantsLoading }                                 = usePlants(state.selectedMaterial?.material_id)
   const { characteristics, attrCharacteristics, loading: charsLoading }   = useCharacteristics(

@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ScorecardRow } from '../types'
+import { createRequestCache } from './requestCache'
 
 interface UseSPCScorecardResult {
   scorecard: ScorecardRow[]
   loading: boolean
   error: string | null
 }
+
+const scorecardCache = createRequestCache<ScorecardRow[]>()
 
 export function useSPCScorecard(
   materialId: string | null | undefined,
@@ -18,40 +21,63 @@ export function useSPCScorecard(
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const cacheKey = JSON.stringify({
+      materialId,
+      dateFrom: dateFrom ?? null,
+      dateTo: dateTo ?? null,
+      plantId: plantId ?? null,
+    })
+
     if (!materialId) {
       setScorecard([])
-      return
+      setError(null)
+      setLoading(false)
+      return () => controller.abort()
     }
 
-    let cancelled = false
+    const cachedScorecard = scorecardCache.get(cacheKey)
+    if (cachedScorecard) {
+      setScorecard(cachedScorecard)
+      setError(null)
+      setLoading(false)
+      return () => controller.abort()
+    }
+
     setLoading(true)
     setError(null)
 
-    fetch('/api/spc/scorecard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        material_id: materialId,
-        date_from: dateFrom || null,
-        date_to: dateTo || null,
-        plant_id: plantId ?? null,
-      }),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(b => Promise.reject(b.detail ?? `Error ${res.status}`))
-        return res.json()
+    scorecardCache
+      .load(cacheKey, async () => {
+        const res = await fetch('/api/spc/scorecard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            material_id: materialId,
+            date_from: dateFrom || null,
+            date_to: dateTo || null,
+            plant_id: plantId ?? null,
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.detail ?? `Error ${res.status}`)
+        }
+        const data = await res.json()
+        return (data.scorecard ?? []) as ScorecardRow[]
       })
-      .then(data => {
-        if (!cancelled) setScorecard((data.scorecard ?? []) as ScorecardRow[])
+      .then(nextScorecard => {
+        if (!controller.signal.aborted) setScorecard(nextScorecard)
       })
       .catch(err => {
-        if (!cancelled) setError(String(err))
+        if (err?.name === 'AbortError' || controller.signal.aborted) return
+        setError(String(err))
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
 
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [materialId, dateFrom, dateTo, plantId])
 
   return { scorecard, loading, error }

@@ -1,0 +1,1 @@
+import{j as r}from"./react-vendor-DXKu7ynx.js";import{_ as a}from"./echarts-react-Bth1tTZz.js";import"./echartsCore-DQigXqkd.js";import{m as i}from"./echarts-core-DnP_FaWr.js";function f({ariaLabel:t,...o}){return r.jsx("div",{role:"img","aria-label":t,children:r.jsx(a,{echarts:i,...o})})}export{f as E};

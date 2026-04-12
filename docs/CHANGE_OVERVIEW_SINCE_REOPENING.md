@@ -31,7 +31,8 @@ dimensions:
 4. **Backend architecture** was refactored from a monolithic router into a
    layered design with routers, schemas, and DAL modules, making the service
    easier to maintain and safer to extend.
-5. **Performance and resilience** improved through pagination, caching, bundle
+5. **Performance and resilience** improved through pagination, request
+   cancellation, shared result caching, worker-based analytics, tighter bundle
    splitting, stricter data validation, and safer runtime dependency handling.
 6. **Deployment and operational readiness** improved through repeatable
    migrations, documented runtime requirements, and a more robust Databricks
@@ -53,6 +54,17 @@ dimensions:
   loading behaviour.
 - Added code splitting and vendor chunk optimisation for large frontend
   dependencies such as ECharts and ag-Grid.
+- Split advanced SPC modules behind a second lazy boundary so the base SPC
+  shell no longer carries the full tab loader map.
+- Deferred the Carbon Genie runtime until the Genie tab is actually opened,
+  instead of shipping that runtime in the main SPC page entry.
+- Added selector-based SPC state subscriptions and removed broad app-wide
+  rerenders caused by publishing the full mutable state object to every SPC
+  consumer.
+- Moved heavy client-side control-chart analytics off the main thread into a
+  web worker.
+- Added shared request caching for overview-to-detail SPC flows so repeated tab
+  transitions reuse hot scorecard and process-flow results.
 
 ### Business benefit
 
@@ -69,6 +81,13 @@ dimensions:
 - Removal of CSS sprawl and JS forwarder stubs reduces maintenance overhead.
 - Code splitting lowers the main bundle size and improves perceived
   performance.
+- The main SPC shell is now a thin coordinator rather than a large dependency
+  registry, which improves first-load behaviour and keeps advanced tooling out
+  of the default path.
+- Heavy SPC computations no longer compete with input handling on the main UI
+  thread, reducing chart interaction jank on larger datasets.
+- Shared result caching avoids reissuing identical warehouse-backed calls when
+  users move from overview into detail tabs.
 
 ---
 

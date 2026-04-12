@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import EChart from './EChart'
-import { useSPC } from '../SPCContext'
+import { useSPCDispatch } from '../SPCContext'
 import { Tile } from '~/lib/carbon-layout'
 import type { CapabilityMatrixDatum, CapabilityMatrixProps, EventParamLike, ScorecardRow } from '../types'
 import ModuleEmptyState from '../components/ModuleEmptyState'
@@ -11,7 +11,7 @@ import ModuleEmptyState from '../components/ModuleEmptyState'
  * On click: dispatch SET_MIC + SET_ACTIVE_TAB: 'charts'.
  */
 export default function CapabilityMatrix({ rows }: CapabilityMatrixProps) {
-  const { dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
 
   const data = useMemo(
     () => rows

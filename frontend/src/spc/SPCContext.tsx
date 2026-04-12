@@ -1,7 +1,23 @@
-import { createContext, useContext, useEffect, useReducer } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useSyncExternalStore,
+  type Dispatch,
+} from 'react'
 import type { SPCAction, SPCContextValue, SPCProviderProps, SPCState } from './types'
 
-const SPCContext = createContext<SPCContextValue | null>(null)
+interface SPCStore {
+  getState: () => SPCState
+  dispatch: Dispatch<SPCAction>
+  subscribe: (listener: () => void) => () => void
+}
+
+const SPCContext = createContext<SPCStore | null>(null)
 
 // ── Preference keys (localStorage) ───────────────────────────────────────────
 const PREF_RULE_SET = 'spc_rule_set'
@@ -146,6 +162,17 @@ export const initialState: SPCState = {
   stratifyBy: null,
   exclusionAudit: null,
   exclusionDialog: null,
+}
+
+export function shallowEqual<T>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false
+
+  const aKeys = Object.keys(a) as Array<keyof T>
+  const bKeys = Object.keys(b) as Array<keyof T>
+  if (aKeys.length !== bKeys.length) return false
+
+  return aKeys.every(key => Object.is(a[key], b[key]))
 }
 
 export function reducer(state: SPCState, action: SPCAction): SPCState {
@@ -300,6 +327,26 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
 
 export function SPCProvider({ children }: SPCProviderProps) {
   const [state, dispatch] = useReducer(reducer, null, buildInitialState)
+  const stateRef = useRef(state)
+  const dispatchRef = useRef(dispatch)
+  const listenersRef = useRef(new Set<() => void>())
+  const storeRef = useRef<SPCStore | null>(null)
+
+  stateRef.current = state
+  dispatchRef.current = dispatch
+
+  if (!storeRef.current) {
+    storeRef.current = {
+      getState: () => stateRef.current,
+      dispatch: action => dispatchRef.current(action),
+      subscribe: listener => {
+        listenersRef.current.add(listener)
+        return () => {
+          listenersRef.current.delete(listener)
+        }
+      },
+    }
+  }
 
   useEffect(() => {
     try {
@@ -310,17 +357,57 @@ export function SPCProvider({ children }: SPCProviderProps) {
     }
   }, [state.roleMode, state.savedViews])
 
+  useLayoutEffect(() => {
+    listenersRef.current.forEach(listener => listener())
+  }, [state])
+
   return (
-    <SPCContext.Provider value={{ state, dispatch }}>
+    <SPCContext.Provider value={storeRef.current}>
       {children}
     </SPCContext.Provider>
   )
 }
 
+function useSPCStore(): SPCStore {
+  const store = useContext(SPCContext)
+  if (!store) throw new Error('SPC hooks must be used within SPCProvider')
+  return store
+}
+
+export function useSPCDispatch(): Dispatch<SPCAction> {
+  return useSPCStore().dispatch
+}
+
+export function useSPCSelector<T>(
+  selector: (state: SPCState) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+): T {
+  const store = useSPCStore()
+  const selectorRef = useRef(selector)
+  const equalityRef = useRef(isEqual)
+  const snapshotRef = useRef<T | null>(null)
+  const hasSnapshotRef = useRef(false)
+
+  selectorRef.current = selector
+  equalityRef.current = isEqual
+
+  const getSnapshot = () => {
+    const nextSnapshot = selectorRef.current(store.getState())
+    if (hasSnapshotRef.current && equalityRef.current(snapshotRef.current as T, nextSnapshot)) {
+      return snapshotRef.current as T
+    }
+    snapshotRef.current = nextSnapshot
+    hasSnapshotRef.current = true
+    return nextSnapshot
+  }
+
+  return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
+}
+
 export function useSPC(): SPCContextValue {
-  const ctx = useContext(SPCContext)
-  if (!ctx) throw new Error('useSPC must be used within SPCProvider')
-  return ctx
+  const state = useSPCSelector(current => current)
+  const dispatch = useSPCDispatch()
+  return useMemo(() => ({ state, dispatch }), [state, dispatch])
 }
 
 // ── Preference key constants (used by useSPCPreferences hook) ────────────────

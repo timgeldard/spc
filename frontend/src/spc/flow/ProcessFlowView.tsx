@@ -18,7 +18,7 @@ import SearchAdvanced from '@carbon/icons-react/es/SearchAdvanced.js'
 import ZoomFit from '@carbon/icons-react/es/ZoomFit.js'
 import { Button } from '~/lib/carbon-forms'
 import { Stack, Tile } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'
 import { layoutFlowGraph } from './layoutFlowGraph'
 import ProcessNode from './ProcessNode'
@@ -135,7 +135,15 @@ function collectLinkedNodeIds(
 }
 
 export default function ProcessFlowView() {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+    }),
+    shallowEqual,
+  )
   const { flowData, loading, error } = useSPCFlow(
     state.selectedMaterial?.material_id,
     state.dateFrom,

@@ -2,7 +2,7 @@ import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 're
 import { AnimatePresence, motion } from 'framer-motion'
 import { Tab, TabList, Tabs } from '~/lib/carbon-shell'
 import { AppShell } from '../components/layout'
-import { SPCProvider, useSPC } from './SPCContext'
+import { SPCProvider, shallowEqual, useSPCDispatch, useSPCSelector } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
 import { useSPCUrlSync } from './hooks/useSPCUrlSync'
 import { useSPCPreferences } from './hooks/useSPCPreferences'
@@ -21,10 +21,7 @@ const OverviewPage = lazy(() => import('./overview/OverviewPage'))
 const ProcessFlowView = lazy(() => import('./flow/ProcessFlowView'))
 const ControlChartsView = lazy(() => import('./charts/ControlChartsView'))
 const ScorecardView = lazy(() => import('./scorecard/ScorecardView'))
-const CompareView = lazy(() => import('./compare/CompareView'))
-const MSAView = lazy(() => import('./msa/MSAView'))
-const CorrelationView = lazy(() => import('./correlation/CorrelationView'))
-const GenieView = lazy(() => import('./genie/GenieView'))
+const AdvancedTabView = lazy(() => import('./AdvancedTabView'))
 
 const PRIMARY_TABS: TabDefinition[] = [
   { id: 'overview', label: 'Overview' },
@@ -40,15 +37,15 @@ const ADVANCED_TABS: TabDefinition[] = [
   { id: 'genie', label: 'Ask Genie' },
 ]
 
-const TAB_COMPONENTS: Record<TabId, LazyExoticComponent<ComponentType>> = {
+const PRIMARY_TAB_COMPONENTS: Record<Extract<TabId, 'overview' | 'flow' | 'charts' | 'scorecard'>, LazyExoticComponent<ComponentType>> = {
   overview: OverviewPage,
   flow: ProcessFlowView,
   charts: ControlChartsView,
   scorecard: ScorecardView,
-  compare: CompareView,
-  msa: MSAView,
-  correlation: CorrelationView,
-  genie: GenieView,
+}
+
+function isAdvancedTab(tabId: TabId): tabId is Extract<TabId, 'compare' | 'msa' | 'correlation' | 'genie'> {
+  return tabId === 'compare' || tabId === 'msa' || tabId === 'correlation' || tabId === 'genie'
 }
 
 function TabLoadingState() {
@@ -81,7 +78,10 @@ interface SPCPageProps {
 }
 
 
-function getTabUnavailableReason(tabId: TabId, state: SPCState): string | null {
+function getTabUnavailableReason(
+  tabId: TabId,
+  state: Pick<SPCState, 'selectedMaterial' | 'selectedMIC'>,
+): string | null {
   if (tabId === 'overview') return null
   if (!state.selectedMaterial) return 'Select a material first'
   if (tabId === 'charts' && !state.selectedMIC) return 'Select a characteristic to view control charts'
@@ -90,7 +90,16 @@ function getTabUnavailableReason(tabId: TabId, state: SPCState): string | null {
 }
 
 function ModuleTabs() {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      roleMode: current.roleMode,
+      activeTab: current.activeTab,
+      selectedMaterial: current.selectedMaterial,
+      selectedMIC: current.selectedMIC,
+    }),
+    shallowEqual,
+  )
   const visibleTabs = state.roleMode === 'operator' ? PRIMARY_TABS : [...PRIMARY_TABS, ...ADVANCED_TABS]
   const selectedIndex = Math.max(visibleTabs.findIndex(tab => tab.id === state.activeTab), 0)
 
@@ -124,10 +133,11 @@ function ModuleTabs() {
 }
 
 function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
-  const { state } = useSPC()
+  const activeTab = useSPCSelector(state => state.activeTab)
   useSPCUrlSync()
   useSPCPreferences()
-  const ActiveView = TAB_COMPONENTS[state.activeTab]
+  const isAdvanced = isAdvancedTab(activeTab)
+  const ActivePrimaryView = isAdvanced ? null : PRIMARY_TAB_COMPONENTS[activeTab]
   const filterBar = (
     <Suspense fallback={<FilterBarLoadingState />}>
       <SPCFilterBar embedded />
@@ -147,17 +157,21 @@ function SPCContent({ dark = false, onToggleDark }: SPCPageProps) {
           <SPCPageHeader />
         </Suspense>
         <div className="spc-page-shell__panel">
-          <SPCErrorBoundary key={state.activeTab}>
+          <SPCErrorBoundary key={activeTab}>
             <AnimatePresence mode="wait">
               <motion.div
-                key={state.activeTab}
+                key={activeTab}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <Suspense fallback={<TabLoadingState />}>
-                  <ActiveView />
+                  {isAdvanced ? (
+                    <AdvancedTabView tabId={activeTab} />
+                  ) : ActivePrimaryView ? (
+                    <ActivePrimaryView />
+                  ) : null}
                 </Suspense>
               </motion.div>
             </AnimatePresence>

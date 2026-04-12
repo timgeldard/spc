@@ -2,7 +2,7 @@ import { Button, TextInput } from '~/lib/carbon-forms'
 import { Grid, Column, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { useState } from 'react'
 import '../charts/ensureEChartsTheme'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import FieldHelp from '../components/FieldHelp'
 import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
@@ -80,7 +80,15 @@ function DriverRanking({ pairs, n = 5 }: { pairs: CorrelationPair[]; n?: number 
 }
 
 export default function CorrelationView() {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedPlant: current.selectedPlant,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+    }),
+    shallowEqual,
+  )
   const { result, loading, error, fetchCorrelation } = useCorrelation()
   const { result: scatterResult, loading: scatterLoading, error: scatterError, fetchScatter } = useCorrelationScatter()
   const [minBatches, setMinBatches] = useState(10)

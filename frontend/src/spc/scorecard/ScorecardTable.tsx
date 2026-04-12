@@ -17,7 +17,7 @@ import {
 } from '~/lib/carbon-data-table'
 import { Button } from '~/lib/carbon-forms'
 import { Tag } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
 
@@ -130,7 +130,16 @@ function StatusTag({ value }: { value: string | null | undefined }) {
 interface ScorecardTableProps { rows: ScorecardRow[] }
 
 export default function ScorecardTable({ rows }: ScorecardTableProps) {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedPlant: current.selectedPlant,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+    }),
+    shallowEqual,
+  )
   const { exportData, exporting } = useExport()
 
   const [sortKey,       setSortKey]       = useState<HeaderKey>('cpk')

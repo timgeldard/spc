@@ -3,7 +3,7 @@ import Activity from '@carbon/icons-react/es/Activity.js'
 import Chemistry from '@carbon/icons-react/es/Chemistry.js'
 import Security from '@carbon/icons-react/es/Security.js'
 import { Tag } from '~/lib/carbon-layout'
-import { useSPC } from './SPCContext'
+import { shallowEqual, useSPCSelector } from './SPCContext'
 import type { StratifyByKey } from './types'
 
 const TAB_LABELS = {
@@ -48,7 +48,22 @@ function StatusChip({
 }
 
 export default function SPCPageHeader() {
-  const { state } = useSPC()
+  const state = useSPCSelector(
+    current => ({
+      activeTab: current.activeTab,
+      selectedMaterial: current.selectedMaterial,
+      selectedMIC: current.selectedMIC,
+      exclusionAudit: current.exclusionAudit,
+      excludedIndices: current.excludedIndices,
+      stratifyBy: current.stratifyBy,
+      ruleSet: current.ruleSet,
+      limitsMode: current.limitsMode,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+      selectedPlant: current.selectedPlant,
+    }),
+    shallowEqual,
+  )
   const tabLabel = TAB_LABELS[state.activeTab]
   const material = state.selectedMaterial
   const mic = state.selectedMIC

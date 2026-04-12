@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import {
   Button,
 } from '~/lib/carbon-forms'
@@ -10,7 +10,7 @@ import Group from '@carbon/icons-react/es/Group.js'
 import Growth from '@carbon/icons-react/es/Growth.js'
 import WarningFilled from '@carbon/icons-react/es/WarningFilled.js'
 import EmptyState from '../../components/EmptyState'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useSPCFlow } from '../hooks/useSPCFlow'
 import { useSPCScorecard } from '../hooks/useSPCScorecard'
 import ProcessFlowMiniMap from '../flow/ProcessFlowMiniMap'
@@ -18,29 +18,45 @@ import KPICard from './KPICard'
 import RecentViolations from './RecentViolations'
 
 export default function OverviewPage() {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const {
+    selectedMaterial,
+    selectedPlant,
+    selectedMIC,
+    dateFrom,
+    dateTo,
+  } = useSPCSelector(
+    state => ({
+      selectedMaterial: state.selectedMaterial,
+      selectedPlant: state.selectedPlant,
+      selectedMIC: state.selectedMIC,
+      dateFrom: state.dateFrom,
+      dateTo: state.dateTo,
+    }),
+    shallowEqual,
+  )
 
   const materialLabel =
-    state.selectedMaterial?.material_name ||
-    state.selectedMaterial?.material_id ||
+    selectedMaterial?.material_name ||
+    selectedMaterial?.material_id ||
     'No material selected'
   const plantLabel =
-    state.selectedPlant?.plant_name || state.selectedPlant?.plant_id || 'All plants'
+    selectedPlant?.plant_name || selectedPlant?.plant_id || 'All plants'
   const characteristicLabel =
-    state.selectedMIC?.mic_name || state.selectedMIC?.mic_id || 'No characteristic selected'
-  const hasScope = Boolean(state.selectedMaterial)
-  const hasCharacteristic = Boolean(state.selectedMIC)
+    selectedMIC?.mic_name || selectedMIC?.mic_id || 'No characteristic selected'
+  const hasScope = Boolean(selectedMaterial)
+  const hasCharacteristic = Boolean(selectedMIC)
 
   const { scorecard, loading: scorecardLoading } = useSPCScorecard(
-    state.selectedMaterial?.material_id,
-    state.dateFrom,
-    state.dateTo,
-    state.selectedPlant?.plant_id,
+    selectedMaterial?.material_id,
+    dateFrom,
+    dateTo,
+    selectedPlant?.plant_id,
   )
   const { flowData, loading: flowLoading } = useSPCFlow(
-    state.selectedMaterial?.material_id,
-    state.dateFrom,
-    state.dateTo,
+    selectedMaterial?.material_id,
+    dateFrom,
+    dateTo,
   )
 
   const derivedKpis = useMemo(() => {
@@ -122,19 +138,7 @@ export default function OverviewPage() {
       }))
   }, [flowData?.nodes, scorecard])
 
-  useEffect(() => {
-    dispatch({ type: 'SET_LOADING', payload: hasScope && (scorecardLoading || flowLoading) })
-  }, [dispatch, flowLoading, hasScope, scorecardLoading])
-
-  useEffect(() => {
-    if (!hasScope) {
-      dispatch({ type: 'SET_KPIS', payload: { processHealth: 0, avgCpk: 0, oocPoints: 0, affectedBatches: 0 } })
-      dispatch({ type: 'SET_RECENT_VIOLATIONS', payload: [] })
-      return
-    }
-    dispatch({ type: 'SET_KPIS', payload: derivedKpis })
-    dispatch({ type: 'SET_RECENT_VIOLATIONS', payload: derivedViolations })
-  }, [derivedKpis, derivedViolations, dispatch, hasScope])
+  const isLoading = hasScope && (scorecardLoading || flowLoading)
 
   const openFlow = () => {
     if (!hasScope) return
@@ -142,7 +146,7 @@ export default function OverviewPage() {
   }
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
-  if (state.isLoading) {
+  if (isLoading) {
     return (
       <Grid>
         {/* KPI row skeletons */}
@@ -162,7 +166,7 @@ export default function OverviewPage() {
     )
   }
 
-  if (hasScope && scorecard.length === 0 && state.recentViolations.length === 0) {
+  if (hasScope && scorecard.length === 0 && derivedViolations.length === 0) {
     return <EmptyState message="No process data available for the selected filters" />
   }
 
@@ -173,12 +177,12 @@ export default function OverviewPage() {
       <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Process Health"
-          value={hasScope ? `${state.kpis.processHealth}%` : '—'}
+          value={hasScope ? `${derivedKpis.processHealth}%` : '—'}
           status={
             hasScope
-              ? state.kpis.processHealth >= 85
+              ? derivedKpis.processHealth >= 85
                 ? 'good'
-                : state.kpis.processHealth >= 65
+                : derivedKpis.processHealth >= 65
                   ? 'warning'
                   : 'bad'
               : 'neutral'
@@ -190,12 +194,12 @@ export default function OverviewPage() {
       <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Avg Cpk"
-          value={hasCharacteristic || hasScope ? state.kpis.avgCpk || '—' : '—'}
+          value={hasCharacteristic || hasScope ? derivedKpis.avgCpk || '—' : '—'}
           status={
             hasScope
-              ? state.kpis.avgCpk >= 1.33
+              ? derivedKpis.avgCpk >= 1.33
                 ? 'good'
-                : state.kpis.avgCpk >= 1
+                : derivedKpis.avgCpk >= 1
                   ? 'warning'
                   : 'bad'
               : 'neutral'
@@ -207,9 +211,9 @@ export default function OverviewPage() {
       <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Out of Control"
-          value={hasScope ? state.kpis.oocPoints : '—'}
+          value={hasScope ? derivedKpis.oocPoints : '—'}
           unit={hasScope ? 'points' : undefined}
-          status={hasScope ? (state.kpis.oocPoints > 0 ? 'warning' : 'good') : 'neutral'}
+          status={hasScope ? (derivedKpis.oocPoints > 0 ? 'warning' : 'good') : 'neutral'}
           icon={WarningFilled}
         />
       </Column>
@@ -217,9 +221,9 @@ export default function OverviewPage() {
       <Column sm={4} md={4} lg={4}>
         <KPICard
           title="Affected Batches"
-          value={hasScope ? state.kpis.affectedBatches : '—'}
+          value={hasScope ? derivedKpis.affectedBatches : '—'}
           status={
-            hasScope ? (state.kpis.affectedBatches > 0 ? 'bad' : 'good') : 'neutral'
+            hasScope ? (derivedKpis.affectedBatches > 0 ? 'bad' : 'good') : 'neutral'
           }
           icon={Group}
         />
@@ -291,8 +295,8 @@ export default function OverviewPage() {
       </Column>
 
       <Column sm={4} md={8} lg={6}>
-        <RecentViolations />
-      </Column>
+          <RecentViolations hasMaterial={hasScope} violations={derivedViolations} />
+        </Column>
 
       {/* Row 3: CTA Buttons */}
       <Column sm={4} md={4} lg={8}>

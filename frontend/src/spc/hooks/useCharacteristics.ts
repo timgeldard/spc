@@ -18,17 +18,23 @@ export function useCharacteristics(
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const controller = new AbortController()
+
     setCharacteristics([])
     setAttrCharacteristics([])
-    if (!materialId) return
+    if (!materialId) {
+      setError(null)
+      setLoading(false)
+      return () => controller.abort()
+    }
 
-    let cancelled = false
     setLoading(true)
     setError(null)
 
     fetch('/api/spc/characteristics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({ material_id: materialId, plant_id: plantId ?? null }),
     })
       .then(res => {
@@ -36,19 +42,20 @@ export function useCharacteristics(
         return res.json()
       })
       .then(data => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setCharacteristics((data.characteristics ?? []) as MicRef[])
           setAttrCharacteristics((data.attr_characteristics ?? []) as MicRef[])
         }
       })
       .catch(err => {
-        if (!cancelled) setError(String(err))
+        if (err?.name === 'AbortError' || controller.signal.aborted) return
+        setError(String(err))
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
 
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [materialId, plantId])
 
   return { characteristics, attrCharacteristics, loading, error }

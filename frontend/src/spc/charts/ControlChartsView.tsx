@@ -6,7 +6,7 @@ import {
 } from '~/lib/carbon-forms'
 import { InlineNotification, SkeletonPlaceholder } from '~/lib/carbon-feedback'
 import { Column, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
-import { useSPC } from '../SPCContext'
+import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useControlChartsController } from '../hooks/useControlChartsController'
 import type { LockedLimits, SPCComputationResult } from '../types'
 import ModuleEmptyState from '../components/ModuleEmptyState'
@@ -206,7 +206,26 @@ function AutoCleanLog({
 // ── Main view ─────────────────────────────────────────────────────────────
 
 export default function ControlChartsView() {
-  const { state, dispatch } = useSPC()
+  const dispatch = useSPCDispatch()
+  const state = useSPCSelector(
+    current => ({
+      selectedMaterial: current.selectedMaterial,
+      selectedMIC: current.selectedMIC,
+      selectedPlant: current.selectedPlant,
+      dateFrom: current.dateFrom,
+      dateTo: current.dateTo,
+      excludedIndices: current.excludedIndices,
+      exclusionDialog: current.exclusionDialog,
+      exclusionAudit: current.exclusionAudit,
+      chartTypeOverride: current.chartTypeOverride,
+      excludeOutliers: current.excludeOutliers,
+      limitsMode: current.limitsMode,
+      roleMode: current.roleMode,
+      ruleSet: current.ruleSet,
+      stratifyBy: current.stratifyBy,
+    }),
+    shallowEqual,
+  )
   const {
     selectedMaterial, selectedMIC, selectedPlant, dateFrom, dateTo,
     excludedIndices, exclusionDialog, limitsMode,
@@ -283,7 +302,7 @@ export default function ControlChartsView() {
     )
   }
 
-  if (ctrl.loading) {
+  if (ctrl.loading || ctrl.analyticsLoading) {
     return (
       <div aria-live="polite" aria-busy="true">
         <SkeletonPlaceholder style={{ width: '100%', height: '600px' }} />

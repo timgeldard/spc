@@ -1,13 +1,12 @@
 import { useCallback, useMemo } from 'react'
-import { useSPC } from '../SPCContext'
-import { computeAll, computeRollingCapability } from '../calculations'
+import { shallowEqual, useSPCSelector } from '../SPCContext'
 import { toExcludedPoints } from '../exclusions'
-import { useSPCCalculations } from './useSPCCalculations'
 import { useLockedLimits } from './useLockedLimits'
 import { useExport } from './useExport'
 import { useChartSettings } from './useChartSettings'
 import { useChartData } from './useChartData'
 import { useExclusionWorkflow } from './useExclusionWorkflow'
+import { useSPCComputedAnalytics } from './useSPCComputedAnalytics'
 import type {
   AttributeChartPoint,
   ChartDataPoint,
@@ -15,6 +14,7 @@ import type {
   ExclusionAuditSnapshot,
   LockedLimits,
   NormalityResult,
+  RollingCapabilityPoint,
   SPCComputationResult,
 } from '../types'
 import type { AttributeChartType, QuantChartType } from '../charts/ChartSettingsRail'
@@ -49,11 +49,12 @@ export interface ControlChartsController {
   countPoints: AttributeChartPoint[]
   points: Array<ChartDataPoint | AttributeChartPoint>
   loading: boolean
+  analyticsLoading: boolean
   error: string | null
 
   // SPC computation
   spc: SPCComputationResult | null
-  trendData: ReturnType<typeof computeRollingCapability>
+  trendData: RollingCapabilityPoint[]
   stratumSections: StratumSection[]
   currentExcludedPoints: ExcludedPoint[]
 
@@ -100,7 +101,6 @@ export interface ControlChartsController {
 }
 
 export function useControlChartsController(): ControlChartsController {
-  const { state } = useSPC()
   const {
     selectedMaterial,
     selectedMIC,
@@ -114,8 +114,23 @@ export function useControlChartsController(): ControlChartsController {
     exclusionAudit,
     stratifyBy,
     limitsMode,
-  } = state
-
+  } = useSPCSelector(
+    state => ({
+      selectedMaterial: state.selectedMaterial,
+      selectedMIC: state.selectedMIC,
+      selectedPlant: state.selectedPlant,
+      dateFrom: state.dateFrom,
+      dateTo: state.dateTo,
+      chartTypeOverride: state.chartTypeOverride,
+      excludedIndices: state.excludedIndices,
+      ruleSet: state.ruleSet,
+      excludeOutliers: state.excludeOutliers,
+      exclusionAudit: state.exclusionAudit,
+      stratifyBy: state.stratifyBy,
+      limitsMode: state.limitsMode,
+    }),
+    shallowEqual,
+  )
   const { exportData, exporting } = useExport()
 
   // ── Local UI state ──────────────────────────────────────────────────────
@@ -145,14 +160,21 @@ export function useControlChartsController(): ControlChartsController {
   )
 
   // ── SPC computation ─────────────────────────────────────────────────────
-  const spc = useSPCCalculations(
-    isQuantitative ? quantPoints : [],
-    effectiveChartType ?? 'imr',
+  const {
+    spc,
+    trendData,
+    stratumSections,
+    analyticsLoading,
+  } = useSPCComputedAnalytics({
+    points: isQuantitative ? quantPoints : [],
+    chartType: isQuantitative ? (effectiveChartType ?? 'imr') : null,
     excludedIndices,
     ruleSet,
     excludeOutliers,
-    quantNormality,
-  )
+    normality: quantNormality,
+    stratifyBy,
+    rollingWindowSize,
+  })
 
   // ── Exclusion workflow ──────────────────────────────────────────────────
   const {
@@ -187,45 +209,6 @@ export function useControlChartsController(): ControlChartsController {
   )
 
   // ── Derived values ──────────────────────────────────────────────────────
-  const trendData = useMemo(
-    () => (spc?.sorted ? computeRollingCapability(spc.sorted, rollingWindowSize, spc.specConfig ?? {}) : []),
-    [spc, rollingWindowSize],
-  )
-
-  const stratumSections = useMemo<StratumSection[]>(() => {
-    if (!stratifyBy || !isQuantitative || !effectiveChartType || !quantPoints.length) return []
-
-    const effectiveExclusions = new Set<number>(excludedIndices)
-    if (excludeOutliers) {
-      quantPoints.forEach((point, index) => {
-        if (point.is_outlier) effectiveExclusions.add(index)
-      })
-    }
-
-    const grouped = new Map<string, ChartDataPoint[]>()
-    quantPoints.forEach((point, index) => {
-      if (effectiveExclusions.has(index)) return
-      const key = point.stratify_value ?? 'Unassigned'
-      const next = grouped.get(key) ?? []
-      next.push(point)
-      grouped.set(key, next)
-    })
-
-    return [...grouped.entries()]
-      .map(([label, groupedPoints]) => ({
-        label,
-        pointCount: groupedPoints.length,
-        spc: groupedPoints.length > 0
-          ? computeAll(groupedPoints, effectiveChartType, ruleSet, { normality: quantNormality })
-          : null,
-      }))
-      .filter(section => (section.spc?.values?.length ?? 0) > 0)
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [
-    stratifyBy, isQuantitative, effectiveChartType, quantPoints,
-    excludedIndices, excludeOutliers, ruleSet, quantNormality,
-  ])
-
   const currentExcludedPoints = useMemo(
     () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
     [isQuantitative, quantPoints, excludedIndices],
@@ -286,7 +269,7 @@ export function useControlChartsController(): ControlChartsController {
     attrChartType, setAttrChartType,
     // Raw data
     quantPoints, quantNormality, dataTruncated,
-    attrPoints, countPoints, points, loading, error,
+    attrPoints, countPoints, points, loading, analyticsLoading, error,
     // SPC computation
     spc, trendData, stratumSections, currentExcludedPoints,
     // Exclusions
