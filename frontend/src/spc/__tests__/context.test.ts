@@ -30,6 +30,15 @@ describe('SPC reducer', () => {
     expect(next.dateFrom).toBe('2026-01-01')
   })
 
+  it('SET_MATERIAL clears multivariate variable selections', () => {
+    const next = reducer(
+      { ...initialState, selectedMultivariateMicIds: ['TEMP', 'PRESS'] },
+      { type: 'SET_MATERIAL', payload: { material_id: 'MAT-1', material_name: 'Material 1' } },
+    )
+
+    expect(next.selectedMultivariateMicIds).toEqual([])
+  })
+
   it('SET_STRATIFY_BY clears exclusions', () => {
     const next = reducer(
       { ...initialState, excludedIndices: new Set([4, 5]) },
@@ -38,5 +47,14 @@ describe('SPC reducer', () => {
 
     expect([...next.excludedIndices]).toEqual([])
     expect(next.stratifyBy).toBe('operation_id')
+  })
+
+  it('SET_MULTIVARIATE_MIC_IDS stores the chosen multivariate variables', () => {
+    const next = reducer(
+      initialState,
+      { type: 'SET_MULTIVARIATE_MIC_IDS', payload: ['TEMP', 'PRESS', 'FLOW'] },
+    )
+
+    expect(next.selectedMultivariateMicIds).toEqual(['TEMP', 'PRESS', 'FLOW'])
   })
 })

@@ -121,7 +121,7 @@ The SPC frontend now treats expensive capabilities as explicit runtime boundarie
 *   **Worker-based Analytics with Fallbacks**: Heavy chart analytics run in `spcCompute.worker.ts` via `useSPCComputedAnalytics`, which keeps large quantitative recalculations off the main thread. The hook now also traps worker startup, messaging, and execution failures so the chart surface exits loading cleanly and can fall back to in-process computation when needed.
 *   **Progressive Chart Hydration**: `useSPCChartData` publishes the first page of quantitative history immediately, then continues hydrating later pages in the background up to the configured cap. This improves time-to-first-chart for high-volume materials without sacrificing full-history analysis.
 *   **Shared Request Reuse and Cancellation**: Overview and detail tabs share hot scorecard and process-flow results through a lightweight request cache, and the remaining analytical hooks now pass `AbortSignal` through to the underlying fetch so superseded requests stop consuming backend resources.
-*   **Explicit Runtime Families**: `vite.config.js` now assigns Carbon table, Carbon layout, Carbon date-picker, Carbon icon families, Carbon app, Carbon web, Genie, CodeMirror, markdown, ECharts, and process-flow dependencies to explicit chunk families instead of relying on a broad catch-all. This keeps large transitive packages out of app-facing entry chunks and makes bundle growth easier to reason about.
+*   **Explicit Runtime Families**: `vite.config.js` now assigns Carbon table, Carbon layout, Carbon date-picker, Carbon icon families, Carbon app, ECharts, and process-flow dependencies to explicit chunk families instead of relying on a broad catch-all. This keeps large transitive packages out of app-facing entry chunks and makes bundle growth easier to reason about.
 *   **Bundle Budget Guardrails**: `frontend/scripts/check-bundle-budgets.mjs` validates the key shell, chart, Carbon, Genie, and CSS assets after build so regressions are caught as part of routine verification instead of being discovered only during manual bundle inspection.
 *   **Governed Performance Switching**: The quantitative metric-view source preserves sample-grain values plus subgroup rollups so the semantic layer can expose both Gaussian and non-parametric long-term performance and switch between them conservatively for Genie-facing queries.
 
@@ -130,7 +130,7 @@ The SPC frontend now treats expensive capabilities as explicit runtime boundarie
 | Library | Used for |
 |---|---|
 | **ECharts** | Control charts (I-MR, X̄-R, P) and Histograms |
-| **ag-Grid** | Performance-optimized Capability Scorecards |
+| **Carbon DataTable** | Sortable capability scorecards and scorecard drill-in |
 | **ReactFlow** | Interactive Process Flow DAGs |
 
 The Carbon-based shell remains the design system baseline, but the stylesheet is now curated instead of importing the entire framework wholesale. This cut the main CSS payload materially and removed the IBM Plex runtime font-resolution warnings during production builds. Further Carbon pruning is still possible, but the frontend no longer pays the full-framework default tax.
@@ -184,8 +184,9 @@ The API uses `slowapi` limits to protect the warehouse from accidental UI storms
 ## Deployment Notes
 
 - `databricks.yml` now defines both `uat` and `prod` targets.
-- `make deploy` remains the supported path because bundle deploy resets `user_api_scopes`.
-- `scripts/post-deploy.sh` is still required until Databricks bundle schema supports persisted app scopes.
+- `databricks.yml` declares `user_api_scopes: ["sql"]` directly on the app resource.
+- `make deploy` remains the supported path because it builds the frontend, renders app config, deploys the bundle, and applies SPC support migrations in order.
+- `scripts/post-deploy.sh` is retained only as a manual recovery path for older CLI / bundle versions.
 
 ## Implementation Rationale
 
@@ -206,7 +207,7 @@ No automated deployment — push to UAT is a manual step via `make deploy`.
 |---|---|
 | Databricks connector | Not used — REST API polling adds ~2s latency vs native driver |
 | In-process SQL cache | `TTLCache` is per app instance; multi-instance deployments do not share cache state |
-| App scopes | `user_api_scopes: ["sql"]` still requires post-deploy re-application via script |
+| App scopes | Declarative in `databricks.yml`; older CLI versions may still need the compatibility script |
 | Plant filter in chart-data | Uses INNER JOIN on batch_dates — batches with no mass balance record are excluded |
 | Histogram bins | Binning follows Freedman-Diaconis and may still need UX tuning for very small samples |
 | Scorecard stability | Cpk shown without per-MIC stability check (requires full chart-data fetch per MIC) |

@@ -261,7 +261,7 @@ export default function ProcessFlowView() {
   }
 
   if (error) {
-    return <InfoBanner variant="error">Failed to load process flow: {error}</InfoBanner>
+    return <InfoBanner variant="error">{`Failed to load process flow: ${error}`}</InfoBanner>
   }
 
   if (!nodes.length) {

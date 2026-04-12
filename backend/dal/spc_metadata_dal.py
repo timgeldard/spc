@@ -112,34 +112,26 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
 
 async def fetch_attribute_characteristics(token: str, material_id: str, plant_id: Optional[str] = None) -> list[dict]:
     params = [sql_param("material_id", material_id)]
-    plant_filter = ""
+    filters = ["material_id = :material_id"]
     if plant_id:
-        plant_filter = f"""
-              AND BATCH_ID IN (
-                  SELECT DISTINCT BATCH_ID
-                  FROM {tbl('gold_batch_mass_balance_v')}
-                  WHERE PLANT_ID = :plant_id
-                    AND MOVEMENT_CATEGORY = 'Production'
-              )"""
+        filters.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
+    where_sql = "WHERE " + " AND ".join(filters)
 
     query = f"""
         SELECT
-            MIC_ID                              AS mic_id,
-            OPERATION_ID                        AS operation_id,
-            MIC_NAME                            AS mic_name,
-            COUNT(DISTINCT BATCH_ID)            AS batch_count,
-            COUNT(*)                            AS total_inspected,
-            SUM(CASE WHEN INSPECTION_RESULT_VALUATION = 'R' THEN 1 ELSE 0 END)
-                                                AS total_nonconforming
-        FROM {tbl('gold_batch_quality_result_v')}
-        WHERE MATERIAL_ID = :material_id
-          AND QUALITATIVE_RESULT IS NOT NULL
-          AND QUALITATIVE_RESULT != ''
-          AND INSPECTION_RESULT_VALUATION IN ('A', 'R')
-          {plant_filter}
-        GROUP BY MIC_ID, MIC_NAME, OPERATION_ID
-        HAVING COUNT(DISTINCT BATCH_ID) >= 3
+            mic_id,
+            operation_id,
+            mic_name,
+            inspection_method,
+            MEASURE(batch_count)               AS batch_count,
+            MEASURE(total_inspected)           AS total_inspected,
+            MEASURE(total_nonconforming)       AS total_nonconforming,
+            MEASURE(p_bar)                     AS p_bar
+        FROM {tbl('spc_attribute_quality_metrics')}
+        {where_sql}
+        GROUP BY mic_id, mic_name, operation_id, inspection_method
+        HAVING MEASURE(batch_count) >= 3
         ORDER BY mic_name
     """
     rows = await run_sql_async(token, query, params)
@@ -147,7 +139,7 @@ async def fetch_attribute_characteristics(token: str, material_id: str, plant_id
         for field in ("batch_count", "total_inspected", "total_nonconforming"):
             value = row.get(field)
             row[field] = int(float(value)) if value is not None else 0
-        total = row["total_inspected"] or 1
-        row["p_bar"] = round(row["total_nonconforming"] / total, 4)
+        p_bar = row.get("p_bar")
+        row["p_bar"] = round(float(p_bar), 4) if p_bar is not None else None
         row["chart_type"] = "p_chart"
     return rows

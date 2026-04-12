@@ -16,8 +16,12 @@ Databricks SQL Warehouse and Unity Catalog.
 - **P-Chart / nP-Chart** — Proportion nonconforming charts for attribute data
 - **Dynamic Stratification** — Slice charts and scorecards by **Plant, Lot, or Operation**
 - **Process Flow** — DAG showing upstream/downstream material lineage with health colouring
+- **Multivariate SPC** — Hotelling's T² control chart for coordinated drift across multiple characteristics
+- **Root-Cause Suggestions** — Contributor ranking for multivariate anomalies using covariance-weighted decomposition
+- **Correlation Explorer** — Interactive heatmap showing pairwise coupling across the same shared-batch population
 - **Manual Point Exclusion** — Click any point to exclude it from limit recalculation with audit justification
 - **Cursor-based Pagination** — High-performance data fetching for massive batch histories
+- **Exports** — Excel and CSV export for scorecards, chart data, and signals
 
 ### Traceability Module
 - **Recursive Batch Trace** — Top-down/Bottom-up trace up to 10 levels deep with cycle detection
@@ -44,12 +48,12 @@ Databricks Apps Runtime
           └── /assets + /*         Serves React SPA (frontend/dist/)
 
 React SPA (Vite + TypeScript)
-    ├── SPCPage              Tab shell: Flow | Charts | Scorecard
+    ├── SPCPage              Tab shell: Overview | Flow | Charts | Scorecard | Advanced analysis
     ├── SPCFilterBar         Material → Dynamic Stratification → Date range
     ├── SPCContext           useReducer state (Strictly Typed)
     ├── spc/dal/             Data Access Layer (PyPika SQL Builders)
-    ├── spc/charts/          IMR, XbarR, P, Capability & Signals Panels
-    └── spc/scorecard/       ScorecardView (ag-Grid with sorting)
+    ├── spc/charts/          IMR, XbarR, P, Capability, T² & Signals Panels
+    └── spc/scorecard/       ScorecardView (Carbon DataTable with sorting)
 ```
 
 The FastAPI backend is built with a layered architecture:
@@ -132,6 +136,7 @@ Calculations strictly follow the **AIAG SPC Reference Manual (4th Edition)** and
 | **Cpk** | Within-subgroup capability using pooled standard deviation or $\bar{R}/d_2$ |
 | **Ppk** | Overall performance using sample standard deviation ($N-1$) |
 | **Non-Parametric** | Percentile-based capability for non-gaussian distributions ($p < 0.05$ on Shapiro-Wilk) |
+| **Hotelling's T²** | Multivariate anomaly detection across shared-batch characteristic vectors |
 
 See [`docs/STATISTICAL_METHODS.md`](docs/STATISTICAL_METHODS.md) for full mathematical definitions.
 
@@ -158,7 +163,7 @@ make deploy PROFILE=prod
 
 Important deployment notes:
 - `databricks bundle deploy` alone is not sufficient for this app
-- Databricks bundle config cannot currently persist `user_api_scopes: ["sql"]`
-- `scripts/post-deploy.sh` is still required to re-apply the SQL scope after each deploy
+- `databricks.yml` now declares `user_api_scopes: ["sql"]` directly on the app resource
+- `scripts/post-deploy.sh` is retained only as a manual compatibility fallback for older CLI / bundle versions
 - `/api/ready` requires `DATABRICKS_READINESS_TOKEN` in the target environment for a real warehouse probe
 - the in-process SQL cache is per app instance, so multi-instance deployments should treat it as a latency optimisation rather than a shared consistency layer

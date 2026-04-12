@@ -1,17 +1,19 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import type { SPCState } from './types'
 
-type AdvancedTabId = Extract<SPCState['activeTab'], 'compare' | 'msa' | 'correlation' | 'genie'>
+type AdvancedTabId = Extract<SPCState['activeTab'], 'compare' | 'msa' | 'correlation' | 'multivariate' | 'genie'>
 
 const CompareView = lazy(() => import('./compare/CompareView'))
 const MSAView = lazy(() => import('./msa/MSAView'))
 const CorrelationView = lazy(() => import('./correlation/CorrelationView'))
+const MultivariateView = lazy(() => import('./multivariate/MultivariateView'))
 const GenieView = lazy(() => import('./genie/GenieView'))
 
 const ADVANCED_TAB_COMPONENTS: Record<AdvancedTabId, LazyExoticComponent<ComponentType>> = {
   compare: CompareView,
   msa: MSAView,
   correlation: CorrelationView,
+  multivariate: MultivariateView,
   genie: GenieView,
 }
 

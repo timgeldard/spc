@@ -14,7 +14,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
-    "@carbon/ai-chat": "^1.10.0",
     "@carbon/icons-react": "^11.78.0",
     "@carbon/react": "^1.105.0",
     "@carbon/styles": "^1.104.0",

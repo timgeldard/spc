@@ -53,11 +53,12 @@ dimensions:
 - Added recent-material handling, improved interaction flows, and cleaner
   loading behaviour.
 - Added code splitting and vendor chunk optimisation for large frontend
-  dependencies such as ECharts and ag-Grid.
+  dependencies such as ECharts and Carbon table/layout runtimes.
 - Split advanced SPC modules behind a second lazy boundary so the base SPC
   shell no longer carries the full tab loader map.
-- Deferred the Carbon Genie runtime until the Genie tab is actually opened,
-  instead of shipping that runtime in the main SPC page entry.
+- Replaced the Carbon AI Chat runtime with a native Genie panel so the
+  governed conversational workflow remains available without shipping the
+  large Carbon AI Chat dependency stack.
 - Added selector-based SPC state subscriptions and removed broad app-wide
   rerenders caused by publishing the full mutable state object to every SPC
   consumer.
@@ -306,10 +307,10 @@ dimensions:
 ### What changed
 
 - Hardened the Databricks deployment path around `make deploy`.
-- Ensured required post-deploy SQL scope re-application remains part of the
-  workflow.
+- Moved SQL token passthrough scopes into declarative bundle config and retained
+  the post-deploy script only as a compatibility fallback.
 - Added missing root runtime dependencies required by the deployed app:
-  `openpyxl`, `scipy`, `cachetools`, and `pypika`.
+  `openpyxl`, `numpy`, `pandas`, `scipy`, `cachetools`, and `pypika`.
 - Removed stale dependency assumptions around `databricks-sql-connector`,
   because the app now uses the Databricks REST SQL Statements API instead.
 

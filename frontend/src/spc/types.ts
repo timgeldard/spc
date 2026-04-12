@@ -373,6 +373,57 @@ export interface CorrelationScatterPoint {
   [key: string]: unknown
 }
 
+export interface MultivariateContribution {
+  mic_id: string
+  mic_name: string
+  contribution?: number | null
+  share_abs?: number | null
+  value?: number | null
+}
+
+export interface MultivariatePoint {
+  index: number
+  batch_id?: string | null
+  batch_date?: string | null
+  t2?: number | null
+  is_anomaly: boolean
+  top_contributors: MultivariateContribution[]
+  contributions: MultivariateContribution[]
+  values: Record<string, number | null>
+}
+
+export interface MultivariateAnomaly {
+  index: number
+  batch_id?: string | null
+  batch_date?: string | null
+  t2?: number | null
+  summary: string
+  top_contributors: MultivariateContribution[]
+}
+
+export interface MultivariateMeanVectorEntry {
+  mic_id: string
+  mic_name: string
+  mean?: number | null
+}
+
+export interface MultivariateResult {
+  material_id?: string | null
+  plant_id?: string | null
+  date_from?: string | null
+  date_to?: string | null
+  variables: CorrelationMic[]
+  ucl?: number | null
+  alpha?: number | null
+  n_observations: number
+  n_variables: number
+  excluded_incomplete_batches?: number | null
+  points: MultivariatePoint[]
+  anomalies: MultivariateAnomaly[]
+  correlation: CorrelationResult
+  mean_vector: MultivariateMeanVectorEntry[]
+}
+
 export interface CompareScorecardMaterial {
   material_id: string
   material_name?: string | null
@@ -525,7 +576,7 @@ export interface MSAResult {
   [key: string]: unknown
 }
 
-export type SPCTabId = 'overview' | 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation' | 'genie'
+export type SPCTabId = 'overview' | 'flow' | 'charts' | 'scorecard' | 'compare' | 'msa' | 'correlation' | 'multivariate' | 'genie'
 
 export interface OverviewKpis {
   processHealth: number
@@ -546,6 +597,7 @@ export interface SPCState {
   selectedMaterial: MaterialRef | null
   selectedPlant: PlantRef | null
   selectedMIC: MicRef | null
+  selectedMultivariateMicIds: string[]
   dateFrom: string
   dateTo: string
   activeTab: SPCTabId
@@ -574,6 +626,7 @@ export interface SavedView {
   selectedMaterial: MaterialRef | null
   selectedPlant: PlantRef | null
   selectedMIC: MicRef | null
+  selectedMultivariateMicIds: string[]
   dateFrom: string
   dateTo: string
   stratifyBy: StratifyByKey | null
@@ -583,6 +636,7 @@ export type SPCAction =
   | { type: 'SET_MATERIAL'; payload: MaterialRef | null }
   | { type: 'SET_PLANT'; payload: PlantRef | null }
   | { type: 'SET_MIC'; payload: MicRef | null }
+  | { type: 'SET_MULTIVARIATE_MIC_IDS'; payload: string[] }
   | { type: 'SET_DATE_FROM'; payload: string }
   | { type: 'SET_DATE_TO'; payload: string }
   | { type: 'SET_GLOBAL_SEARCH'; payload: string }

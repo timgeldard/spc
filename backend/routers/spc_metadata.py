@@ -132,14 +132,9 @@ async def spc_attribute_characteristics(
     except Exception as exc:
         handle_sql_error(exc)
 
-    source_views = ["gold_batch_quality_result_v"]
-    if body.plant_id:
-        source_views.append("gold_batch_mass_balance_v")
-
     return await attach_data_freshness(
         {"characteristics": rows},
         token,
-        source_views,
+        ["spc_attribute_quality_metrics"],
         request_path=request.url.path,
     )
-

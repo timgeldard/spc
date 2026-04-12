@@ -6,6 +6,7 @@ from backend.dal.spc_analysis_dal import (
     fetch_compare_scorecard,
     fetch_correlation,
     fetch_correlation_scatter,
+    fetch_multivariate,
     fetch_process_flow,
     fetch_scorecard,
     save_msa_session,
@@ -15,6 +16,7 @@ from backend.schemas.spc_schemas import (
     CompareScorecardsRequest,
     CorrelationRequest,
     CorrelationScatterRequest,
+    MultivariateRequest,
     ProcessFlowRequest,
     SaveMSARequest,
     ScorecardRequest,
@@ -43,7 +45,7 @@ async def spc_process_flow(
     return await attach_data_freshness(
         payload,
         token,
-        ["gold_batch_lineage", "gold_material", "gold_plant", "gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["gold_batch_lineage", "spc_process_flow_source_v"],
         request_path=request.url.path,
     )
 
@@ -66,7 +68,7 @@ async def spc_scorecard(
     return await attach_data_freshness(
         {"scorecard": rows, "material_id": body.material_id},
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["spc_quality_metrics"],
         request_path=request.url.path,
     )
 
@@ -140,7 +142,7 @@ async def spc_correlation(
     return await attach_data_freshness(
         payload,
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["spc_correlation_source_v"],
         request_path=request.url.path,
     )
 
@@ -167,3 +169,33 @@ async def spc_correlation_scatter(
         )
     except Exception as exc:
         handle_sql_error(exc)
+
+
+@router.post("/multivariate")
+@limiter.limit("10/minute")
+async def spc_multivariate(
+    request: Request,
+    body: MultivariateRequest,
+    x_forwarded_access_token: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    token = resolve_token(x_forwarded_access_token, authorization)
+    check_warehouse_config()
+    try:
+        payload = await fetch_multivariate(
+            token,
+            body.material_id,
+            body.mic_ids,
+            body.plant_id,
+            body.date_from,
+            body.date_to,
+        )
+    except Exception as exc:
+        handle_sql_error(exc)
+
+    return await attach_data_freshness(
+        payload,
+        token,
+        ["spc_correlation_source_v"],
+        request_path=request.url.path,
+    )

@@ -3,7 +3,7 @@ import asyncio
 from backend.dal import spc_analysis_dal
 
 
-def test_fetch_scorecard_uses_sample_stddev_and_calculates_cpk(monkeypatch):
+def test_fetch_scorecard_queries_metric_view_and_preserves_capability_fields(monkeypatch):
     calls = []
 
     async def fake_run_sql_async(_token, query, params=None):
@@ -19,15 +19,21 @@ def test_fetch_scorecard_uses_sample_stddev_and_calculates_cpk(monkeypatch):
                 "min_value": 7.5,
                 "max_value": 12.5,
                 "nominal_target": 10.0,
-                "tolerance_half_width": 3.0,
-                "lsl_spec": None,
-                "usl_spec": None,
+                "lsl": 7.0,
+                "usl": 13.0,
                 "ooc_batches": 0,
                 "accepted_batches": 5,
-                "distinct_nominal_count": 1,
-                "distinct_tolerance_count": 1,
-                "r_bar": 1.128,
-                "avg_n": 2.0,
+                "ooc_rate": 0.0,
+                "sigma_within": 1.0,
+                "pp": 0.667,
+                "ppk": 0.667,
+                "cp": 1.0,
+                "cpk": 1.0,
+                "z_score": 2.0,
+                "dpmo": 308538,
+                "distinct_spec_count": 1,
+                "performance_capability_method": "parametric",
+                "mean_out_of_spec_flag": 0,
             }
         ]
 
@@ -36,7 +42,8 @@ def test_fetch_scorecard_uses_sample_stddev_and_calculates_cpk(monkeypatch):
     rows = asyncio.run(spc_analysis_dal.fetch_scorecard("token", "MAT-1", None, None, None))
 
     query, _params = calls[0]
-    assert "STDDEV_SAMP" in query
+    assert "MEASURE(batch_count)" in query
+    assert "spc_quality_metrics" in query
     assert rows[0]["spec_type"] == "bilateral_symmetric"
     assert rows[0]["cpk"] == 1.0
     assert rows[0]["ppk"] == 0.667
@@ -55,15 +62,21 @@ def test_fetch_scorecard_marks_unspecified_specs(monkeypatch):
                 "min_value": 7.5,
                 "max_value": 12.5,
                 "nominal_target": None,
-                "tolerance_half_width": None,
-                "lsl_spec": None,
-                "usl_spec": None,
+                "lsl": None,
+                "usl": None,
                 "ooc_batches": 0,
                 "accepted_batches": 5,
-                "distinct_nominal_count": 0,
-                "distinct_tolerance_count": 0,
-                "r_bar": None,
-                "avg_n": None,
+                "ooc_rate": 0.0,
+                "sigma_within": None,
+                "pp": None,
+                "ppk": None,
+                "cp": None,
+                "cpk": None,
+                "z_score": None,
+                "dpmo": None,
+                "distinct_spec_count": 0,
+                "performance_capability_method": "unknown",
+                "mean_out_of_spec_flag": 0,
             }
         ]
 
@@ -89,15 +102,21 @@ def test_fetch_scorecard_marks_out_of_spec_mean_distinctly(monkeypatch):
                 "min_value": 12.0,
                 "max_value": 16.0,
                 "nominal_target": 10.0,
-                "tolerance_half_width": 2.0,
-                "lsl_spec": None,
-                "usl_spec": None,
+                "lsl": 8.0,
+                "usl": 12.0,
                 "ooc_batches": 4,
                 "accepted_batches": 1,
-                "distinct_nominal_count": 1,
-                "distinct_tolerance_count": 1,
-                "r_bar": 1.128,
-                "avg_n": 2.0,
+                "ooc_rate": 0.8,
+                "sigma_within": 1.0,
+                "pp": -0.667,
+                "ppk": -0.667,
+                "cp": -0.667,
+                "cpk": -0.667,
+                "z_score": -2.0,
+                "dpmo": 933193,
+                "distinct_spec_count": 1,
+                "performance_capability_method": "parametric",
+                "mean_out_of_spec_flag": 1,
             }
         ]
 

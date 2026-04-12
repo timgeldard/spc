@@ -17,10 +17,6 @@ const budgets = [
   { label: 'Carbon chart icons', pattern: /^carbon-icons-chart-.*\.js$/, maxKb: 40, required: false },
   { label: 'Carbon table runtime', pattern: /^carbon-table-.*\.js$/, maxKb: 60, required: true },
   { label: 'Carbon app runtime', pattern: /^carbon-app-.*\.js$/, maxKb: 1100, required: true },
-  { label: 'Genie runtime', pattern: /^genie-runtime-.*\.js$/, maxKb: 1650, required: false },
-  { label: 'CodeMirror runtime', pattern: /^codemirror-runtime-.*\.js$/, maxKb: 1650, required: false },
-  { label: 'Carbon web runtime', pattern: /^carbon-web-.*\.js$/, maxKb: 1900, required: false },
-  { label: 'Markdown runtime', pattern: /^markdown-runtime-.*\.js$/, maxKb: 120, required: false },
   { label: 'Main stylesheet', pattern: /^index-.*\.css$/, maxKb: 500, required: true },
 ]
 

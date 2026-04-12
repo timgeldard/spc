@@ -23,12 +23,13 @@ import { shallowEqual, useSPCSelector } from '../SPCContext'
  * so this hook is write-only: state → URL.
  */
 export function useSPCUrlSync(): void {
-  const { activeTab, selectedMaterial, selectedPlant, selectedMIC, dateFrom, dateTo } = useSPCSelector(
+  const { activeTab, selectedMaterial, selectedPlant, selectedMIC, selectedMultivariateMicIds, dateFrom, dateTo } = useSPCSelector(
     state => ({
       activeTab: state.activeTab,
       selectedMaterial: state.selectedMaterial,
       selectedPlant: state.selectedPlant,
       selectedMIC: state.selectedMIC,
+      selectedMultivariateMicIds: state.selectedMultivariateMicIds,
       dateFrom: state.dateFrom,
       dateTo: state.dateTo,
     }),
@@ -62,6 +63,10 @@ export function useSPCUrlSync(): void {
         if (selectedMIC.chart_type) params.set('mic_ct', selectedMIC.chart_type)
       }
 
+      if (selectedMultivariateMicIds.length > 0) {
+        params.set('mv', selectedMultivariateMicIds.join(','))
+      }
+
       // Date range
       if (dateFrom) params.set('from', dateFrom)
       if (dateTo) params.set('to', dateTo)
@@ -70,5 +75,5 @@ export function useSPCUrlSync(): void {
       const url = search ? `?${search}` : window.location.pathname
       window.history.replaceState(null, '', url)
     } catch { /* no window.history (e.g., test environment) */ }
-  }, [activeTab, selectedMaterial, selectedPlant, selectedMIC, dateFrom, dateTo])
+  }, [activeTab, selectedMaterial, selectedPlant, selectedMIC, selectedMultivariateMicIds, dateFrom, dateTo])
 }

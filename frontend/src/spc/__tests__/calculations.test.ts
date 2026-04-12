@@ -534,6 +534,24 @@ describe('computeGRR', () => {
     expect(result.ev).toBeCloseTo(2 * 0.8862, 3)
   })
 
+  it('K2 and K3 are also applied as multiplication in AV and PV', () => {
+    // 2 operators × 2 parts × 2 replicates
+    // op means: 15 and 17 -> xBarDiff = 2, so with EV = 0:
+    // AV = 2 * K2(2) = 2 * 0.7071 = 1.4142
+    // part means: 11 and 21 -> rParts = 10, so:
+    // PV = 10 * K3(2) = 10 * 0.7071 = 7.071
+    const data = [
+      [[10, 10], [20, 20]],
+      [[12, 12], [22, 22]],
+    ]
+
+    const result = computeGRR(data, 20)
+
+    expect(result.ev).toBeCloseTo(0, 5)
+    expect(result.av).toBeCloseTo(2 * 0.7071, 3)
+    expect(result.pv).toBeCloseTo(10 * 0.7071, 3)
+  })
+
   it('returns a stability warning when AV raw variance goes negative', () => {
     const data = [
       [[10, 10.5], [20, 20.5]],

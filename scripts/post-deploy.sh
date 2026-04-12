@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # post-deploy.sh
 #
-# Re-applies user_api_scopes: ["sql"] to the Databricks App after every bundle
-# deploy. This is necessary because `databricks bundle deploy` resets the OAuth
-# scopes to their default (empty), which breaks the x-forwarded-access-token
-# passthrough that the backend relies on for Unity Catalog SQL queries.
+# Fallback helper for older Databricks CLI / bundle versions that cannot declare
+# `user_api_scopes: ["sql"]` directly in databricks.yml. The main deploy path
+# no longer depends on this script now that the bundle schema supports app
+# scopes declaratively.
 #
 # Usage (called automatically by `make deploy`):
 #   bash scripts/post-deploy.sh [--profile <profile>]
@@ -27,7 +27,7 @@ done
 
 BUNDLE_PATH="/Workspace/Shared/.bundle/${BUNDLE_NAME}/${PROFILE}/files"
 
-echo "→ Deploying app '${APP_NAME}' from ${BUNDLE_PATH}..."
+echo "→ Deploying app '${APP_NAME}' from ${BUNDLE_PATH} as a compatibility fallback..."
 
 MSYS_NO_PATHCONV=1 databricks apps deploy "${APP_NAME}" \
   --profile "${PROFILE}" \
@@ -39,5 +39,5 @@ databricks apps update "${APP_NAME}" \
   --profile "${PROFILE}" \
   --json '{"user_api_scopes": ["sql"]}'
 
-echo "✓ OAuth scope applied. The Databricks Apps proxy will now forward"
-echo "  the user's OIDC token via x-forwarded-access-token on every request."
+echo "✓ Compatibility fallback complete. Prefer declarative app scopes in"
+echo "  databricks.yml and reserve this script for manual recovery only."

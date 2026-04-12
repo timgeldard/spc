@@ -129,8 +129,7 @@ export default function CompareView() {
                 <li>Look for characteristics where one material has materially lower Cpk than the others.</li>
               </ol>
               <InfoBanner variant="info">
-                Only characteristics measured on <strong>all</strong> entered materials are shown. If the chart is empty,
-                check that all materials share at least one common MIC.
+                Only characteristics measured on all entered materials are shown. If the chart is empty, check that all materials share at least one common MIC.
               </InfoBanner>
             </Stack>
           </Tile>

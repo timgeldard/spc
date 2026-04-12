@@ -1,5 +1,6 @@
 bundle:
   name: spc-tim
+  databricks_cli_version: '>= 0.283.0'
 
 variables:
   app_name:
@@ -28,12 +29,8 @@ resources:
       name: ${var.app_name}
       description: Statistical Process Control app powered by Databricks
       source_code_path: .
-      # IMPORTANT: user_api_scopes (["sql"]) cannot be declared here — the DABs
-      # schema does not support this field and bundle deploy resets it to empty.
-      # The `make deploy` target runs scripts/post-deploy.sh after every deploy
-      # to re-apply the scope via `databricks apps update`. Never deploy with
-      # `databricks bundle deploy` directly or the SQL token passthrough breaks.
-      #
+      user_api_scopes:
+        - sql
       # Configure DATABRICKS_READINESS_TOKEN in each deployed environment if
       # `/api/ready` should perform a real SQL warehouse probe before traffic.
       #

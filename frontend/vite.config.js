@@ -21,47 +21,6 @@ const CHUNK_FAMILIES = [
     ],
   },
   {
-    name: 'genie-runtime',
-    patterns: [
-      `${NODE_MODULE}@carbon/ai-chat/`,
-      `${NODE_MODULE}@carbon/ai-chat-components/`,
-    ],
-  },
-  {
-    name: 'codemirror-runtime',
-    patterns: [
-      `${NODE_MODULE}@codemirror/`,
-      `${NODE_MODULE}codemirror/`,
-      `${NODE_MODULE}@lezer/`,
-      `${NODE_MODULE}program-language-detector/`,
-    ],
-  },
-  {
-    name: 'markdown-runtime',
-    patterns: [
-      `${NODE_MODULE}markdown-it/`,
-      `${NODE_MODULE}linkify-it/`,
-      `${NODE_MODULE}mdurl/`,
-      `${NODE_MODULE}entities/`,
-      `${NODE_MODULE}uc.micro/`,
-      `${NODE_MODULE}punycode.js/`,
-      `${NODE_MODULE}remark-`,
-      `${NODE_MODULE}rehype-`,
-      `${NODE_MODULE}micromark`,
-      `${NODE_MODULE}mdast-`,
-      `${NODE_MODULE}hast-`,
-      `${NODE_MODULE}unified/`,
-    ],
-  },
-  {
-    name: 'carbon-web',
-    patterns: [
-      `${NODE_MODULE}@carbon/web-components/`,
-      `${NODE_MODULE}lit/`,
-      `${NODE_MODULE}@lit/`,
-    ],
-  },
-  {
     name: 'carbon-table',
     patterns: [
       `${NODE_MODULE}@carbon/react/es/components/DataTable/`,

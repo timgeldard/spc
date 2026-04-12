@@ -34,6 +34,7 @@ const ADVANCED_TABS: TabDefinition[] = [
   { id: 'compare', label: 'Compare' },
   { id: 'msa', label: 'MSA' },
   { id: 'correlation', label: 'Correlation' },
+  { id: 'multivariate', label: 'Multivariate SPC' },
   { id: 'genie', label: 'Ask Genie' },
 ]
 
@@ -44,8 +45,8 @@ const PRIMARY_TAB_COMPONENTS: Record<Extract<TabId, 'overview' | 'flow' | 'chart
   scorecard: ScorecardView,
 }
 
-function isAdvancedTab(tabId: TabId): tabId is Extract<TabId, 'compare' | 'msa' | 'correlation' | 'genie'> {
-  return tabId === 'compare' || tabId === 'msa' || tabId === 'correlation' || tabId === 'genie'
+function isAdvancedTab(tabId: TabId): tabId is Extract<TabId, 'compare' | 'msa' | 'correlation' | 'multivariate' | 'genie'> {
+  return tabId === 'compare' || tabId === 'msa' || tabId === 'correlation' || tabId === 'multivariate' || tabId === 'genie'
 }
 
 function TabLoadingState() {

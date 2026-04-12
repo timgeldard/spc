@@ -96,3 +96,51 @@ Histogram binning is based on the **Freedman-Diaconis rule**, not Sturges' formu
 
 * **Bin Width**: $2 \cdot IQR \cdot n^{-1/3}$
 * **Why**: Freedman-Diaconis is more robust for skewed and heavy-tailed manufacturing data, especially when the app is also detecting non-normal distributions.
+
+---
+
+## 6. Multivariate SPC (Hotelling's T²)
+
+Univariate charts can miss coupled process drift when each characteristic stays individually "reasonable" but the joint state of the process moves away from its historical center. The multivariate explorer uses **Hotelling's T²** on shared-batch characteristic vectors to surface that coordinated movement.
+
+### Data Shape
+For a selected material, plant, date window, and set of quantitative characteristics:
+* The source view is filtered to the requested MICs.
+* Data is pivoted to one row per shared batch.
+* Only complete rows are retained; batches missing any selected variable are excluded from the T² population.
+
+### Statistic
+Given an observation vector $x_i \in \mathbb{R}^p$:
+* **Mean vector**: $\mu = \frac{1}{n}\sum_{i=1}^{n}x_i$
+* **Sample covariance**: $S$
+* **Hotelling's T²**:
+  $$T_i^2 = (x_i - \mu)^T S^{-1} (x_i - \mu)$$
+
+The implementation uses the Moore-Penrose pseudo-inverse $S^{+}$ for numerical stability when variables are strongly correlated.
+
+### Phase II Control Limit
+The explorer uses the common F-distribution approximation for a Phase II-style upper control limit:
+$$UCL = \frac{n p}{n - p} \cdot F_{1-\alpha}(p, n-p)$$
+
+where:
+* $n$ = number of complete shared-batch observations
+* $p$ = number of selected variables
+* $\alpha = 0.0027$ by default (roughly analogous to a 3σ false-alarm rate)
+
+### Contribution Decomposition
+To help with root-cause triage, each point's T² signal is decomposed into variable-level signed contributions:
+$$c_i = (x_i - \mu) \odot \left(S^{-1}(x_i - \mu)\right)$$
+
+This produces:
+* a signed contribution for each selected variable
+* an absolute-share percentage for ranking top contributors
+
+The UI uses these values to show:
+* a contribution bar chart for the selected batch
+* a root-cause suggestion summary listing the strongest positive/negative contributors
+
+### Correlation Heatmap
+The same complete shared-batch matrix is reused to compute pairwise Pearson correlation:
+$$r_{ab} = \text{corr}(X_a, X_b)$$
+
+This ensures the heatmap and T² chart are grounded in the same retained population, so the analyst can relate multivariate anomalies to the underlying variable coupling structure.

@@ -14,6 +14,7 @@ const TAB_LABELS = {
   compare: 'Compare',
   msa: 'MSA',
   correlation: 'Correlation',
+  multivariate: 'Multivariate SPC',
   genie: 'Databricks Genie',
 } as const
 

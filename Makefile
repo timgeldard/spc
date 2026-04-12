@@ -5,9 +5,7 @@
 #   1. Verifies Databricks CLI auth
 #   2. Builds the frontend (ensures dist is fresh before upload)
 #   3. Runs databricks bundle deploy
-#   4. Explicitly triggers a new app deployment (bundle deploy alone does not
-#      always snapshot untracked files such as frontend/dist)
-#   5. Re-applies user_api_scopes: ["sql"] (reset by every bundle deploy)
+#   4. Applies SPC support migrations in order
 
 PROFILE ?= uat
 APP_NAME ?= spc
@@ -54,7 +52,6 @@ render-app-config:
 
 deploy: check-env build render-app-config
 	databricks bundle deploy --profile $(PROFILE)
-	APP_NAME=$(APP_NAME) BUNDLE_NAME=$(BUNDLE_NAME) bash scripts/post-deploy.sh --profile $(PROFILE)
 	$(MAKE) setup-locked-limits PROFILE=$(PROFILE)
 	$(MAKE) setup-exclusions PROFILE=$(PROFILE)
 	$(MAKE) setup-query-audit PROFILE=$(PROFILE)

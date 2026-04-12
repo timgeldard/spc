@@ -27,7 +27,7 @@ const PREF_ROLE_MODE = 'spc_role_mode'
 const PREF_SAVED_VIEWS = 'spc_saved_views'
 
 // ── URL param keys ────────────────────────────────────────────────────────────
-const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation', 'genie'] as const
+const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation', 'multivariate', 'genie'] as const
 
 function getPref(key: string): string | null {
   try { return localStorage.getItem(key) } catch { return null }
@@ -54,6 +54,7 @@ function buildInitialState(): SPCState {
     selectedMaterial: null,
     selectedPlant: null,
     selectedMIC: null,
+    selectedMultivariateMicIds: [],
     dateFrom,
     dateTo,
     activeTab: 'overview',
@@ -131,9 +132,13 @@ function buildInitialState(): SPCState {
     if (from) state.dateFrom = from
     const to = params.get('to')
     if (to) state.dateTo = to
+    const multivariateMicIds = params.get('mv')
+    if (multivariateMicIds) {
+      state.selectedMultivariateMicIds = multivariateMicIds.split(',').map(value => value.trim()).filter(Boolean)
+    }
   } catch { /* no window.location (e.g., test environment) */ }
 
-  if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation', 'genie'].includes(state.activeTab)) {
+  if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation', 'multivariate', 'genie'].includes(state.activeTab)) {
     state.activeTab = 'overview'
   }
 
@@ -145,6 +150,7 @@ export const initialState: SPCState = {
   selectedMaterial: null,
   selectedPlant: null,
   selectedMIC: null,
+  selectedMultivariateMicIds: [],
   dateFrom: '',
   dateTo: '',
   activeTab: 'overview',
@@ -183,6 +189,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         selectedMaterial: action.payload,
         selectedPlant: null,
         selectedMIC: null,
+        selectedMultivariateMicIds: [],
         stratifyBy: null,
         excludedIndices: new Set<number>(),
         chartTypeOverride: null,
@@ -205,6 +212,11 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         exclusionAudit: null,
         exclusionDialog: null,
       }
+    case 'SET_MULTIVARIATE_MIC_IDS':
+      return {
+        ...state,
+        selectedMultivariateMicIds: action.payload,
+      }
     case 'SET_DATE_FROM':
       return {
         ...state,
@@ -226,7 +238,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload }
     case 'SET_ROLE_MODE': {
-      const nextTab = action.payload === 'operator' && ['compare', 'msa', 'correlation', 'genie'].includes(state.activeTab)
+      const nextTab = action.payload === 'operator' && ['compare', 'msa', 'correlation', 'multivariate', 'genie'].includes(state.activeTab)
         ? 'overview'
         : state.activeTab
       return { ...state, roleMode: action.payload, activeTab: nextTab }
@@ -249,6 +261,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         selectedMaterial: action.payload.selectedMaterial,
         selectedPlant: action.payload.selectedPlant,
         selectedMIC: action.payload.selectedMIC,
+        selectedMultivariateMicIds: action.payload.selectedMultivariateMicIds ?? [],
         dateFrom: action.payload.dateFrom,
         dateTo: action.payload.dateTo,
         activeTab: nextTab,
@@ -313,6 +326,7 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         selectedMaterial: action.payload,
         selectedPlant: null,
         selectedMIC: null,
+        selectedMultivariateMicIds: [],
         stratifyBy: null,
         activeTab: 'charts',
         excludedIndices: new Set<number>(),

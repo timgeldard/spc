@@ -14,7 +14,7 @@ Release 1 includes:
 - process-flow health source and metric views
 - shared correlation source view
 - optional normal-CDF UDF
-- app-side feature flag and migration support plumbing
+- backend cutover to Databricks metric/source views
 
 Release 1 excludes:
 
@@ -76,21 +76,20 @@ Release 1 excludes:
 - [x] Create [012_create_spc_normal_cdf_udf.sql](/Users/timgeldard/spc-1/scripts/migrations/012_create_spc_normal_cdf_udf.sql).
 - [ ] Decide whether the inline ERF expression is good enough or the UDF should be applied.
 
-### 7. Backend dual-path refactor
+### 7. Backend cutover
 
-- [x] Add `USE_METRIC_VIEWS` config flag in [db.py](/Users/timgeldard/spc-1/backend/utils/db.py:69).
-- [ ] Refactor `fetch_scorecard()` to support legacy and metric-view paths side by side.
-- [ ] Refactor `fetch_attribute_characteristics()` to use `spc_attribute_quality_metrics`.
-- [ ] Keep `fetch_characteristics()` on raw SQL.
-- [ ] Refactor process-flow health aggregation only; keep recursive lineage raw.
-- [ ] Refactor correlation queries to use `spc_correlation_source_v`.
+- [x] Refactor `fetch_scorecard()` to use `spc_quality_metrics`.
+- [x] Refactor `fetch_attribute_characteristics()` to use `spc_attribute_quality_metrics`.
+- [x] Keep `fetch_characteristics()` on raw SQL.
+- [x] Refactor process-flow health aggregation to use `spc_process_flow_source_v`; keep recursive lineage raw.
+- [x] Refactor correlation queries to use `spc_correlation_source_v`.
+- [x] Remove the unused `USE_METRIC_VIEWS` config flag and legacy toggle scaffolding.
 
-### 8. Shadow validation
+### 8. Validation
 
-- [ ] Run legacy and metric-view code paths in parallel for identical inputs.
-- [ ] Compare all parity-critical metrics.
+- [ ] Compare all parity-critical metrics against approved legacy fixtures or warehouse reference queries.
 - [ ] Add automated fixtures for mixed-spec, unilateral-spec, and multi-plant edge cases.
-- [ ] Block cutover if any parity-critical difference exceeds `0.001`.
+- [ ] Block release if any parity-critical difference exceeds `0.001`.
 
 ### 9. Genie enablement
 
@@ -104,7 +103,6 @@ Release 1 excludes:
 
 ### 10. Release 1 cutover
 
-- [ ] Enable `USE_METRIC_VIEWS=true` in UAT.
 - [ ] Run smoke tests for scorecard, overview, process flow, compare, and export.
 - [ ] Benchmark latency and payload size before and after.
 - [ ] Promote to prod only after parity validation passes.

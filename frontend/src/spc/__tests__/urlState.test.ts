@@ -96,4 +96,10 @@ describe('URL param key mapping', () => {
     expect(params.get('from')).toBe('2025-01-01')
     expect(params.get('to')).toBe('2025-12-31')
   })
+
+  it('round-trips multivariate MIC selections through URLSearchParams', () => {
+    const params = new URLSearchParams()
+    params.set('mv', 'TEMP,PRESS,FLOW')
+    expect(params.get('mv')).toBe('TEMP,PRESS,FLOW')
+  })
 })

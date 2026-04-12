@@ -3,9 +3,42 @@ import math
 import uuid
 from typing import Optional
 
-from backend.dal.spc_shared import D2_TABLE, infer_spec_type, normal_cdf
+from backend.dal.spc_shared import infer_spec_type
+from backend.utils.multivariate import compute_hotelling_t2
 from backend.utils.db import run_sql_async, sql_param, tbl
 from backend.utils.spc_thresholds import CPK_CAPABLE, CPK_HIGHLY_CAPABLE, CPK_MARGINAL
+
+
+def _coerce_float(value: object) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_int(value: object) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _scorecard_status(ppk: Optional[float], *, mean_out_of_spec: bool) -> str:
+    if ppk is None:
+        return "grey"
+    if mean_out_of_spec:
+        return "out_of_spec_mean"
+    if ppk >= CPK_HIGHLY_CAPABLE:
+        return "excellent"
+    if ppk >= CPK_CAPABLE:
+        return "good"
+    if ppk >= CPK_MARGINAL:
+        return "marginal"
+    return "poor"
 
 
 async def fetch_process_flow(
@@ -88,39 +121,31 @@ async def fetch_process_flow(
     date_params: list[dict] = []
     date_clauses: list[str] = []
     if date_from:
-        date_clauses.append("mb.POSTING_DATE >= :date_from")
+        date_clauses.append("batch_date >= :date_from")
         date_params.append(sql_param("date_from", date_from))
     if date_to:
-        date_clauses.append("mb.POSTING_DATE <= :date_to")
+        date_clauses.append("batch_date <= :date_to")
         date_params.append(sql_param("date_to", date_to))
-    date_filter_mb = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
+    date_filter = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
 
     health_query = f"""
         SELECT
-            r.MATERIAL_ID                                               AS material_id,
-            COALESCE(m.MATERIAL_NAME, r.MATERIAL_ID)                    AS material_name,
+            material_id                                                 AS material_id,
+            MAX(material_name)                                          AS material_name,
             CASE
-                WHEN COUNT(DISTINCT COALESCE(p.PLANT_NAME, mb.PLANT_ID)) = 1
-                THEN MIN(COALESCE(p.PLANT_NAME, mb.PLANT_ID))
+                WHEN COUNT(DISTINCT plant_name_resolved) = 1
+                THEN MIN(plant_name_resolved)
                 ELSE NULL
             END                                                         AS plant_name,
-            COUNT(DISTINCT r.BATCH_ID)                                  AS total_batches,
+            COUNT(DISTINCT batch_id)                                    AS total_batches,
             COUNT(DISTINCT CASE
-                WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN r.BATCH_ID
+                WHEN has_rejection = 1 THEN batch_id
             END)                                                        AS rejected_batches,
-            COUNT(DISTINCT r.MIC_ID)                                    AS mic_count
-        FROM {tbl('gold_batch_quality_result_v')} r
-        LEFT JOIN {tbl('gold_material')} m
-            ON m.MATERIAL_ID = r.MATERIAL_ID AND m.LANGUAGE_ID = 'E'
-        LEFT JOIN {tbl('gold_batch_mass_balance_v')} mb
-            ON mb.MATERIAL_ID = r.MATERIAL_ID
-           AND mb.BATCH_ID    = r.BATCH_ID
-           AND mb.MOVEMENT_CATEGORY = 'Production'
-        LEFT JOIN {tbl('gold_plant')} p
-            ON p.PLANT_ID = mb.PLANT_ID
-        WHERE r.MATERIAL_ID IN ({in_clause})
-          {date_filter_mb}
-        GROUP BY r.MATERIAL_ID, m.MATERIAL_NAME
+            COUNT(DISTINCT mic_id)                                      AS mic_count
+        FROM {tbl('spc_process_flow_source_v')}
+        WHERE material_id IN ({in_clause})
+          {date_filter}
+        GROUP BY material_id
     """
     health_rows = await run_sql_async(token, health_query, mat_params + date_params)
 
@@ -187,219 +212,101 @@ async def fetch_scorecard(
     date_to: Optional[str],
 ) -> list[dict]:
     params = [sql_param("material_id", material_id)]
-    sc_clauses: list[str] = []
+    filters = ["material_id = :material_id"]
     if date_from:
-        sc_clauses.append("mb.POSTING_DATE >= :date_from")
+        filters.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        sc_clauses.append("mb.POSTING_DATE <= :date_to")
+        filters.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
     if plant_id:
-        sc_clauses.append("mb.PLANT_ID = :plant_id")
+        filters.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
-    date_filter = ("AND " + " AND ".join(sc_clauses)) if sc_clauses else ""
+    where_sql = "WHERE " + " AND ".join(filters)
 
     query = f"""
-        WITH batch_metadata AS (
-            SELECT
-                MATERIAL_ID,
-                BATCH_ID,
-                MAX(PLANT_ID) AS plant_id
-            FROM {tbl('gold_batch_mass_balance_v')} mb
-            WHERE mb.MATERIAL_ID = :material_id
-              AND mb.MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        filtered_results AS (
-            SELECT
-                r.BATCH_ID                                            AS batch_id,
-                r.MIC_ID                                              AS mic_id,
-                r.MIC_NAME                                            AS mic_name,
-                CAST(r.QUANTITATIVE_RESULT AS DOUBLE)                 AS value,
-                TRY_CAST(r.TARGET_VALUE AS DOUBLE)                    AS nominal_target,
-                TRY_CAST(
-                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                         THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
-                    END AS DOUBLE)                                    AS lsl_spec,
-                TRY_CAST(
-                    CASE WHEN LOCATE('...', r.TOLERANCE) > 0
-                         THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
-                    END AS DOUBLE)                                    AS usl_spec,
-                CASE WHEN LOCATE('...', r.TOLERANCE) = 0
-                     THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END         AS tolerance_half_width,
-                r.TOLERANCE                                           AS raw_tolerance,
-                r.INSPECTION_RESULT_VALUATION                         AS valuation
-            FROM {tbl('gold_batch_quality_result_v')} r
-            INNER JOIN batch_metadata bm
-                ON bm.MATERIAL_ID = r.MATERIAL_ID
-               AND bm.BATCH_ID    = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-        ),
-        batch_ranges AS (
-            SELECT
-                mic_id,
-                mic_name,
-                batch_id,
-                COUNT(*)                                              AS batch_n,
-                MAX(value) - MIN(value)                               AS batch_range
-            FROM filtered_results
-            GROUP BY mic_id, mic_name, batch_id
-            HAVING COUNT(*) >= 2
-        ),
-        range_summary AS (
-            SELECT
-                mic_id,
-                mic_name,
-                AVG(batch_range)                                      AS r_bar,
-                AVG(batch_n)                                          AS avg_n
-            FROM batch_ranges
-            GROUP BY mic_id, mic_name
-        ),
-        mic_stats AS (
-            SELECT
-                mic_id,
-                mic_name,
-                COUNT(DISTINCT batch_id)                              AS batch_count,
-                COUNT(*)                                              AS sample_count,
-                ROUND(AVG(value), 4)                                  AS mean_value,
-                ROUND(STDDEV_SAMP(value), 4)                          AS stddev_overall,
-                ROUND(MIN(value), 4)                                  AS min_value,
-                ROUND(MAX(value), 4)                                  AS max_value,
-                MAX(nominal_target)                                   AS nominal_target,
-                MAX(lsl_spec)                                         AS lsl_spec,
-                MAX(usl_spec)                                         AS usl_spec,
-                MAX(tolerance_half_width)                             AS tolerance_half_width,
-                COUNT(DISTINCT nominal_target)                        AS distinct_nominal_count,
-                COUNT(DISTINCT raw_tolerance)                         AS distinct_tolerance_count,
-                COUNT(DISTINCT CASE
-                    WHEN valuation = 'R' THEN batch_id
-                END)                                                  AS ooc_batches,
-                COUNT(DISTINCT CASE
-                    WHEN valuation = 'A' THEN batch_id
-                END)                                                  AS accepted_batches
-            FROM filtered_results
-            GROUP BY mic_id, mic_name
-        )
         SELECT
-            ms.*,
-            ROUND(rs.r_bar, 4)                                        AS r_bar,
-            ROUND(rs.avg_n, 4)                                        AS avg_n
-        FROM mic_stats ms
-        LEFT JOIN range_summary rs
-            ON rs.mic_id = ms.mic_id
-           AND rs.mic_name = ms.mic_name
-        WHERE ms.batch_count >= 3
-        ORDER BY ms.mic_name
+            mic_id,
+            mic_name,
+            MEASURE(batch_count)                                      AS batch_count,
+            MEASURE(total_samples)                                    AS sample_count,
+            MEASURE(mean_value)                                       AS mean_value,
+            MEASURE(stddev_overall)                                   AS stddev_overall,
+            MEASURE(min_value)                                        AS min_value,
+            MEASURE(max_value)                                        AS max_value,
+            MEASURE(nominal_target)                                   AS nominal_target,
+            MEASURE(spec_lower)                                       AS lsl,
+            MEASURE(spec_upper)                                       AS usl,
+            MEASURE(rejected_batches)                                 AS ooc_batches,
+            MEASURE(accepted_batches)                                 AS accepted_batches,
+            MEASURE(ooc_rate)                                         AS ooc_rate,
+            MEASURE(sigma_within)                                     AS sigma_within,
+            MEASURE(pp)                                               AS pp,
+            MEASURE(ppk)                                              AS ppk,
+            MEASURE(cp)                                               AS cp,
+            MEASURE(cpk)                                              AS cpk,
+            MEASURE(z_score)                                          AS z_score,
+            MEASURE(dpmo)                                             AS dpmo,
+            MEASURE(distinct_spec_count)                              AS distinct_spec_count,
+            MEASURE(performance_capability_method)                    AS performance_capability_method,
+            MEASURE(mean_out_of_spec_flag)                            AS mean_out_of_spec_flag
+        FROM {tbl('spc_quality_metrics')}
+        {where_sql}
+        GROUP BY mic_id, mic_name
+        HAVING MEASURE(batch_count) >= 3
+        ORDER BY mic_name
     """
     rows = await run_sql_async(token, query, params)
 
-    numeric_fields = [
-        "batch_count", "sample_count", "mean_value", "stddev_overall",
-        "min_value", "max_value", "nominal_target", "tolerance_half_width",
-        "lsl_spec", "usl_spec", "ooc_batches", "accepted_batches", "r_bar", "avg_n",
-    ]
     for row in rows:
-        for field in numeric_fields:
-            value = row.get(field)
-            if value is not None:
-                try:
-                    row[field] = float(value)
-                except (ValueError, TypeError):
-                    row[field] = None
+        for int_field in ("batch_count", "sample_count", "ooc_batches", "accepted_batches", "distinct_spec_count"):
+            row[int_field] = _coerce_int(row.get(int_field))
+        for float_field in (
+            "mean_value",
+            "stddev_overall",
+            "min_value",
+            "max_value",
+            "nominal_target",
+            "lsl",
+            "usl",
+            "ooc_rate",
+            "sigma_within",
+            "pp",
+            "ppk",
+            "cp",
+            "cpk",
+            "z_score",
+            "dpmo",
+        ):
+            row[float_field] = _coerce_float(row.get(float_field))
 
-        stddev = row.get("stddev_overall") or 0
         mean_v = row.get("mean_value")
         nominal = row.get("nominal_target")
-        r_bar = row.get("r_bar")
-        avg_n = row.get("avg_n")
-
-        usl = row.get("usl_spec")
-        lsl = row.get("lsl_spec")
-        if usl is None or lsl is None:
-            tol_val = row.get("tolerance_half_width")
-            if nominal is not None and tol_val is not None and tol_val > 0:
-                usl = nominal + tol_val
-                lsl = nominal - tol_val
+        usl = row.get("usl")
+        lsl = row.get("lsl")
 
         spec_type = infer_spec_type(usl, lsl, nominal)
         row["spec_type"] = spec_type
         row["usl"] = round(usl, 6) if usl is not None else None
         row["lsl"] = round(lsl, 6) if lsl is not None else None
-
-        pp = ppk = None
-        if stddev > 0 and mean_v is not None:
-            if usl is not None and lsl is not None:
-                spec_width = usl - lsl
-                pp = round(spec_width / (6 * stddev), 3)
-                ppk = round(min((usl - mean_v) / (3 * stddev), (mean_v - lsl) / (3 * stddev)), 3)
-            elif usl is not None:
-                ppk = round((usl - mean_v) / (3 * stddev), 3)
-            elif lsl is not None:
-                ppk = round((mean_v - lsl) / (3 * stddev), 3)
-
-        sigma_within = cp = cpk = None
-        ref_n = int(round(avg_n)) if avg_n is not None else None
-        d2 = D2_TABLE.get(ref_n)
-        if d2 and r_bar is not None and r_bar > 0 and mean_v is not None:
-            sigma_within = round(r_bar / d2, 6)
-            if usl is not None and lsl is not None:
-                cp = round((usl - lsl) / (6 * sigma_within), 3)
-                cpk = round(min((usl - mean_v) / (3 * sigma_within), (mean_v - lsl) / (3 * sigma_within)), 3)
-            elif usl is not None:
-                cpk = round((usl - mean_v) / (3 * sigma_within), 3)
-            elif lsl is not None:
-                cpk = round((mean_v - lsl) / (3 * sigma_within), 3)
-
-        row["cp"] = cp
-        row["cpk"] = cpk
-        row["sigma_within"] = sigma_within
-        row["pp"] = pp
-        row["ppk"] = ppk
-
-        if ppk is not None:
-            z_score = round(ppk * 3, 3)
-            dpmo = round(normal_cdf(-(z_score - 1.5)) * 1_000_000)
-        else:
-            z_score, dpmo = None, None
-        row["z_score"] = z_score
-        row["dpmo"] = dpmo
+        for rounded_field in ("pp", "ppk", "cp", "cpk", "z_score"):
+            value = row.get(rounded_field)
+            row[rounded_field] = round(value, 3) if value is not None else None
+        sigma_within = row.get("sigma_within")
+        row["sigma_within"] = round(sigma_within, 6) if sigma_within is not None else None
+        dpmo = row.get("dpmo")
+        row["dpmo"] = int(round(dpmo)) if dpmo is not None else None
         row["dpmo_convention"] = "motorola_1.5sigma_shift"
 
-        nom_count = int(row.get("distinct_nominal_count") or 0)
-        tol_count = int(row.get("distinct_tolerance_count") or 0)
-        row["has_mixed_spec"] = nom_count > 1 or tol_count > 1
+        row["has_mixed_spec"] = row["distinct_spec_count"] > 1
         row["spec_warning"] = (
             "Capability computed from mixed specification values in selected range."
             if row["has_mixed_spec"] else None
         )
 
-        mean_out_of_spec = (
-            mean_v is not None
-            and (
-                (usl is not None and mean_v > usl)
-                or (lsl is not None and mean_v < lsl)
-            )
-        )
-
-        if ppk is None:
-            row["capability_status"] = "grey"
-        elif mean_out_of_spec:
-            row["capability_status"] = "out_of_spec_mean"
-        elif ppk >= CPK_HIGHLY_CAPABLE:
-            row["capability_status"] = "excellent"
-        elif ppk >= CPK_CAPABLE:
-            row["capability_status"] = "good"
-        elif ppk >= CPK_MARGINAL:
-            row["capability_status"] = "marginal"
-        else:
-            row["capability_status"] = "poor"
-
-        total = row.get("batch_count") or 1
-        ooc = row.get("ooc_batches") or 0
-        row["ooc_rate"] = round(ooc / total, 4)
+        mean_out_of_spec = _coerce_int(row.get("mean_out_of_spec_flag")) == 1
+        row["capability_status"] = _scorecard_status(row.get("ppk"), mean_out_of_spec=mean_out_of_spec)
+        row["ooc_rate"] = round(row["ooc_rate"], 4) if row["ooc_rate"] is not None else None
 
     rows.sort(key=lambda row: (row.get("ppk") is None, row.get("ppk") or 0))
     return rows
@@ -527,67 +434,51 @@ async def fetch_correlation(
         sql_param("material_id", material_id),
         sql_param("min_batches", min_batches),
     ]
-    date_clauses: list[str] = []
+    filters = ["material_id = :material_id"]
     if date_from:
-        date_clauses.append("mb.POSTING_DATE >= :date_from")
+        filters.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        date_clauses.append("mb.POSTING_DATE <= :date_to")
+        filters.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
-    date_filter = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
-    corr_plant_filter = ""
     if plant_id:
-        corr_plant_filter = "AND (bd.plant_id = :plant_id OR bd.plant_id IS NULL)"
+        filters.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
+    where_sql = "WHERE " + " AND ".join(filters)
 
     query = f"""
-        WITH batch_dates AS (
-            SELECT MATERIAL_ID, BATCH_ID, MIN(POSTING_DATE) AS batch_date,
-                   MAX(PLANT_ID) AS plant_id
-            FROM {tbl('gold_batch_mass_balance_v')} mb
-            WHERE mb.MATERIAL_ID = :material_id
-              AND mb.MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        batch_avgs AS (
+        WITH filtered_avgs AS (
             SELECT
-                r.MIC_ID,
-                r.MIC_NAME,
-                r.BATCH_ID,
-                AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)) AS avg_result
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {corr_plant_filter}
-            GROUP BY r.MIC_ID, r.MIC_NAME, r.BATCH_ID
+                mic_id,
+                mic_name,
+                batch_id,
+                avg_result
+            FROM {tbl('spc_correlation_source_v')}
+            {where_sql}
         ),
         mic_batch_counts AS (
-            SELECT MIC_ID, COUNT(DISTINCT BATCH_ID) AS n
-            FROM batch_avgs
-            GROUP BY MIC_ID
+            SELECT mic_id, COUNT(DISTINCT batch_id) AS n
+            FROM filtered_avgs
+            GROUP BY mic_id
         ),
         qualified_mics AS (
-            SELECT MIC_ID FROM mic_batch_counts WHERE n >= :min_batches
+            SELECT mic_id FROM mic_batch_counts WHERE n >= :min_batches
         ),
         corr_pairs AS (
             SELECT
-                a.MIC_ID    AS mic_a,
-                a.MIC_NAME  AS mic_name_a,
-                b.MIC_ID    AS mic_b,
-                b.MIC_NAME  AS mic_name_b,
+                a.mic_id    AS mic_a,
+                a.mic_name  AS mic_name_a,
+                b.mic_id    AS mic_b,
+                b.mic_name  AS mic_name_b,
                 CORR(a.avg_result, b.avg_result) AS pearson_r,
                 COUNT(*)    AS shared_batches
-            FROM batch_avgs a
-            JOIN batch_avgs b
-                ON a.BATCH_ID = b.BATCH_ID
-                AND a.MIC_ID < b.MIC_ID
-            WHERE a.MIC_ID IN (SELECT MIC_ID FROM qualified_mics)
-              AND b.MIC_ID IN (SELECT MIC_ID FROM qualified_mics)
-            GROUP BY a.MIC_ID, a.MIC_NAME, b.MIC_ID, b.MIC_NAME
+            FROM filtered_avgs a
+            JOIN filtered_avgs b
+                ON a.batch_id = b.batch_id
+                AND a.mic_id < b.mic_id
+            WHERE a.mic_id IN (SELECT mic_id FROM qualified_mics)
+              AND b.mic_id IN (SELECT mic_id FROM qualified_mics)
+            GROUP BY a.mic_id, a.mic_name, b.mic_id, b.mic_name
             HAVING COUNT(*) >= :min_batches
         )
         SELECT mic_a, mic_name_a, mic_b, mic_name_b,
@@ -624,69 +515,48 @@ async def fetch_correlation_scatter(
         sql_param("mic_a_id", mic_a_id),
         sql_param("mic_b_id", mic_b_id),
     ]
-    date_clauses: list[str] = []
+    filters = ["material_id = :material_id"]
     if date_from:
-        date_clauses.append("mb.POSTING_DATE >= :date_from")
+        filters.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        date_clauses.append("mb.POSTING_DATE <= :date_to")
+        filters.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
-    date_filter = ("AND " + " AND ".join(date_clauses)) if date_clauses else ""
-    plant_filter = ""
     if plant_id:
-        plant_filter = "AND (bd.plant_id = :plant_id OR bd.plant_id IS NULL)"
+        filters.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
+    where_sql = "WHERE " + " AND ".join(filters)
 
     query = f"""
-        WITH batch_dates AS (
-            SELECT MATERIAL_ID, BATCH_ID,
-                   MIN(POSTING_DATE) AS batch_date,
-                   MAX(PLANT_ID)     AS plant_id
-            FROM {tbl('gold_batch_mass_balance_v')} mb
-            WHERE mb.MATERIAL_ID       = :material_id
-              AND mb.MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
+        WITH filtered_avgs AS (
+            SELECT batch_id, batch_date, mic_id, mic_name, avg_result
+            FROM {tbl('spc_correlation_source_v')}
+            {where_sql}
         ),
         mic_a_avgs AS (
-            SELECT r.BATCH_ID,
-                   ANY_VALUE(r.MIC_NAME) AS mic_name,
-                   AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)) AS avg_val
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID      = :mic_a_id
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {plant_filter}
-            GROUP BY r.BATCH_ID
+            SELECT batch_id, ANY_VALUE(mic_name) AS mic_name, AVG(avg_result) AS avg_val
+            FROM filtered_avgs
+            WHERE mic_id = :mic_a_id
+            GROUP BY batch_id
         ),
         mic_b_avgs AS (
-            SELECT r.BATCH_ID,
-                   ANY_VALUE(r.MIC_NAME) AS mic_name,
-                   AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)) AS avg_val
-            FROM {tbl('gold_batch_quality_result_v')} r
-            LEFT JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID      = :mic_b_id
-              AND r.QUANTITATIVE_RESULT IS NOT NULL
-              AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
-              {plant_filter}
-            GROUP BY r.BATCH_ID
+            SELECT batch_id, ANY_VALUE(mic_name) AS mic_name, AVG(avg_result) AS avg_val
+            FROM filtered_avgs
+            WHERE mic_id = :mic_b_id
+            GROUP BY batch_id
         )
         SELECT
-            a.BATCH_ID                            AS batch_id,
-            CAST(bd.batch_date AS STRING)         AS batch_date,
+            a.batch_id                            AS batch_id,
+            CAST(MIN(f.batch_date) AS STRING)     AS batch_date,
             a.avg_val                             AS x,
             b.avg_val                             AS y,
             a.mic_name                            AS mic_a_name,
             b.mic_name                            AS mic_b_name
         FROM mic_a_avgs a
-        JOIN mic_b_avgs b ON a.BATCH_ID = b.BATCH_ID
-        LEFT JOIN batch_dates bd ON bd.BATCH_ID = a.BATCH_ID
-        ORDER BY bd.batch_date, a.BATCH_ID
+        JOIN mic_b_avgs b ON a.batch_id = b.batch_id
+        LEFT JOIN filtered_avgs f ON f.batch_id = a.batch_id
+        GROUP BY a.batch_id, a.avg_val, b.avg_val, a.mic_name, b.mic_name
+        ORDER BY MIN(f.batch_date), a.batch_id
     """
     rows = await run_sql_async(token, query, params)
 
@@ -731,3 +601,53 @@ async def fetch_correlation_scatter(
         "mic_a_name": mic_a_name,
         "mic_b_name": mic_b_name,
     }
+
+
+async def fetch_multivariate(
+    token: str,
+    material_id: str,
+    mic_ids: list[str],
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+) -> dict:
+    params = [sql_param("material_id", material_id)]
+    filters = ["material_id = :material_id"]
+
+    mic_params: list[dict] = []
+    mic_placeholders: list[str] = []
+    for index, mic_id in enumerate(mic_ids):
+        param_name = f"mic_{index}"
+        mic_params.append(sql_param(param_name, mic_id))
+        mic_placeholders.append(f":{param_name}")
+    filters.append(f"mic_id IN ({', '.join(mic_placeholders)})")
+
+    if date_from:
+        filters.append("batch_date >= :date_from")
+        params.append(sql_param("date_from", date_from))
+    if date_to:
+        filters.append("batch_date <= :date_to")
+        params.append(sql_param("date_to", date_to))
+    if plant_id:
+        filters.append("plant_id = :plant_id")
+        params.append(sql_param("plant_id", plant_id))
+    where_sql = "WHERE " + " AND ".join(filters)
+
+    query = f"""
+        SELECT
+            batch_id,
+            CAST(batch_date AS STRING) AS batch_date,
+            mic_id,
+            mic_name,
+            avg_result
+        FROM {tbl('spc_correlation_source_v')}
+        {where_sql}
+        ORDER BY batch_date, batch_id, mic_name
+    """
+    rows = await run_sql_async(token, query, params + mic_params)
+    payload = compute_hotelling_t2(rows, mic_ids)
+    payload["material_id"] = material_id
+    payload["plant_id"] = plant_id
+    payload["date_from"] = date_from
+    payload["date_to"] = date_to
+    return payload

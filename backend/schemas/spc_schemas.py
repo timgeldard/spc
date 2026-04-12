@@ -341,3 +341,29 @@ class CorrelationScatterRequest(_DateRangeMixin):
         if len(v) > _MATERIAL_ID_MAX_LEN:
             raise ValueError(f"field must be at most {_MATERIAL_ID_MAX_LEN} characters")
         return v
+
+
+class MultivariateRequest(_DateRangeMixin):
+    material_id: str
+    mic_ids: list[str]
+    plant_id: Optional[str] = None
+
+    @field_validator("material_id")
+    @classmethod
+    def check_material_id(cls, v: str) -> str:
+        if len(v) > _MATERIAL_ID_MAX_LEN:
+            raise ValueError(f"material_id must be at most {_MATERIAL_ID_MAX_LEN} characters")
+        return v
+
+    @field_validator("mic_ids")
+    @classmethod
+    def check_mic_ids(cls, v: list[str]) -> list[str]:
+        cleaned = [item for item in dict.fromkeys(v) if item]
+        if len(cleaned) < 2:
+            raise ValueError("mic_ids must contain at least 2 characteristics")
+        if len(cleaned) > 8:
+            raise ValueError("mic_ids must contain at most 8 characteristics")
+        for mic_id in cleaned:
+            if len(mic_id) > _MIC_ID_MAX_LEN:
+                raise ValueError(f"mic_id '{mic_id}' exceeds maximum length")
+        return cleaned

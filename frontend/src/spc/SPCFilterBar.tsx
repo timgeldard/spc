@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from 'react'
 import {
   Button,
+  Checkbox,
   DatePicker,
   DatePickerInput,
   Select,
@@ -12,6 +13,7 @@ import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import Edit from '@carbon/icons-react/es/Edit.js'
 import Filter from '@carbon/icons-react/es/Filter.js'
 import { shallowEqual, useSPCDispatch, useSPCSelector } from './SPCContext'
+import FieldHelp from './components/FieldHelp'
 import { useValidateMaterial } from './hooks/useMaterials'
 import { usePlants } from './hooks/usePlants'
 import { useCharacteristics } from './hooks/useCharacteristics'
@@ -79,6 +81,15 @@ function chartTypeTagType(chartType: string | null | undefined): 'blue' | 'warm-
   return chartType === 'p_chart' ? 'warm-gray' : 'blue'
 }
 
+function formatMicLabel(mic: Pick<MicRef, 'mic_id' | 'mic_name' | 'operation_id' | 'chart_type' | 'batch_count'> | null | undefined): string {
+  if (!mic) return ''
+  const baseLabel = mic.mic_name || mic.mic_id || 'Unknown characteristic'
+  const operationPart = mic.operation_id ? ` · Op ${mic.operation_id}` : ''
+  const batchPart = mic.batch_count ? ` (${mic.batch_count} batches)` : ''
+  const attributePrefix = mic.chart_type === 'p_chart' ? '[Attribute] ' : ''
+  return `${attributePrefix}${baseLabel}${operationPart}${batchPart}`
+}
+
 // ── Stratify options ──────────────────────────────────────────────────────────
 
 const STRATIFY_OPTIONS: Array<{ value: StratifyByKey; label: string }> = [
@@ -102,6 +113,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       selectedMaterial: current.selectedMaterial,
       selectedPlant: current.selectedPlant,
       selectedMIC: current.selectedMIC,
+      selectedMultivariateMicIds: current.selectedMultivariateMicIds,
       dateFrom: current.dateFrom,
       dateTo: current.dateTo,
       stratifyBy: current.stratifyBy,
@@ -128,6 +140,17 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
         (a.mic_name || '').localeCompare(b.mic_name || ''),
       ),
     [characteristics, attrCharacteristics],
+  )
+  const quantitativeCharacteristics = useMemo(
+    () =>
+      [...characteristics].sort((a, b) =>
+        (a.mic_name || '').localeCompare(b.mic_name || ''),
+      ),
+    [characteristics],
+  )
+  const selectedMultivariateSet = useMemo(
+    () => new Set(state.selectedMultivariateMicIds),
+    [state.selectedMultivariateMicIds],
   )
 
   const selectedMicValue = useMemo(() => serializeMicKey(state.selectedMIC), [state.selectedMIC])
@@ -169,6 +192,16 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       dispatch({ type: 'SET_MIC', payload: null })
     }
   }, [allCharacteristics, charsLoading, dispatch, state.selectedMIC])
+
+  // Keep multivariate selections aligned with the current material / plant scope.
+  useEffect(() => {
+    if (charsLoading) return
+    const validMicIds = new Set(quantitativeCharacteristics.map(characteristic => characteristic.mic_id))
+    const nextIds = state.selectedMultivariateMicIds.filter(micId => validMicIds.has(micId))
+    if (nextIds.length !== state.selectedMultivariateMicIds.length) {
+      dispatch({ type: 'SET_MULTIVARIATE_MIC_IDS', payload: nextIds })
+    }
+  }, [charsLoading, dispatch, quantitativeCharacteristics, state.selectedMultivariateMicIds])
 
   // Auto-collapse when a MIC is freshly selected
   useEffect(() => {
@@ -216,6 +249,13 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
     dispatch({ type: 'SET_STRATIFY_BY', payload: value || null })
   }
 
+  const handleMultivariateToggle = (micId: string, checked: boolean) => {
+    const nextIds = checked
+      ? [...state.selectedMultivariateMicIds, micId]
+      : state.selectedMultivariateMicIds.filter(value => value !== micId)
+    dispatch({ type: 'SET_MULTIVARIATE_MIC_IDS', payload: nextIds.slice(0, 8) })
+  }
+
   const selectRecent = (material: MaterialRef) => {
     setInputValue(material.material_id)
     clearError()
@@ -233,7 +273,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   // ── Collapsed summary bar ──────────────────────────────────────────────────
 
   if (canCollapse && collapsed) {
-    const micLabel   = state.selectedMIC?.mic_name  || state.selectedMIC?.mic_id  || ''
+    const micLabel   = formatMicLabel(state.selectedMIC)
     const matLabel   = state.selectedMaterial?.material_name || state.selectedMaterial?.material_id || ''
     const plantPart  = state.selectedPlant ? ` · ${state.selectedPlant.plant_name || state.selectedPlant.plant_id}` : ''
     const datePart   = state.dateFrom && state.dateTo
@@ -424,7 +464,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
               <SelectItem
                 key={`${c.operation_id ?? ''}|${c.mic_id}`}
                 value={serializeMicKey(c)}
-                text={`${c.chart_type === 'p_chart' ? '[Attribute] ' : ''}${c.mic_name || c.mic_id}${c.batch_count ? ` (${c.batch_count} batches)` : ''}`}
+                text={formatMicLabel(c)}
               />
             ))}
           </Select>
@@ -551,6 +591,68 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
                 </span>
               )}
             </div>
+          </Tile>
+        )}
+
+        {state.selectedMaterial && (
+          <Tile style={{ padding: '1rem' }}>
+            <p style={sectionLabelStyle}>Multivariate variables</p>
+            <Stack gap={3}>
+              <p
+                style={{ margin: 0, fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}
+              >
+                Choose 2 to 8 quantitative characteristics to run Hotelling&apos;s T², correlation heatmaps, and root-cause contribution analysis.
+              </p>
+
+              {state.selectedMultivariateMicIds.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
+                  {quantitativeCharacteristics
+                    .filter(characteristic => selectedMultivariateSet.has(characteristic.mic_id))
+                    .map(characteristic => (
+                      <Tag key={characteristic.mic_id} type="blue" size="sm">
+                        {formatMicLabel(characteristic)}
+                      </Tag>
+                    ))}
+                </div>
+              )}
+
+              <FieldHelp>
+                Selected {state.selectedMultivariateMicIds.length}/8. Shared-batch analysis drops incomplete batches, so choose variables that are measured together in practice.
+              </FieldHelp>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '0.5rem',
+                  maxHeight: '14rem',
+                  overflowY: 'auto',
+                  paddingRight: '0.25rem',
+                }}
+              >
+                {quantitativeCharacteristics.length === 0 && !charsLoading && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-placeholder)' }}>
+                    No quantitative characteristics are available for multivariate analysis in this scope.
+                  </span>
+                )}
+                {quantitativeCharacteristics.map(characteristic => {
+                  const checked = selectedMultivariateSet.has(characteristic.mic_id)
+                  const disableUnchecked =
+                    !checked && state.selectedMultivariateMicIds.length >= 8
+                  return (
+                    <Checkbox
+                      key={characteristic.mic_id}
+                      id={`spc-multivariate-${characteristic.mic_id}`}
+                      labelText={formatMicLabel(characteristic)}
+                      checked={checked}
+                      disabled={charsLoading || disableUnchecked}
+                      onChange={(_, { checked: nextChecked }: { checked: boolean }) =>
+                        handleMultivariateToggle(characteristic.mic_id, nextChecked)
+                      }
+                    />
+                  )
+                })}
+              </div>
+            </Stack>
           </Tile>
         )}
 
