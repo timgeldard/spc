@@ -169,6 +169,7 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
             letterSpacing: '0.05em',
             color: 'var(--cds-text-secondary)',
           }}
+          type="button"
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen(v => !v)}
         >

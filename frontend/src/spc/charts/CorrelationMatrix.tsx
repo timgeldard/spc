@@ -15,8 +15,8 @@ function rToColor(r: number | null | undefined): string {
   const abs = Math.abs(r)
   const [r1, g1, b1] = [209, 213, 219]       // #d1d5db — neutral grey
   const [r2, g2, b2] = r >= 0
-    ? [27,  58,  75]                           // #0f62fe — positive navy
-    : [239, 68,  68]                           // #da1e28 — negative red
+    ? [15,  98,  254]                          // #0f62fe — positive navy
+    : [218, 30,  40]                           // #da1e28 — negative red
   return `rgb(${Math.round(r1 + (r2 - r1) * abs)},${Math.round(g1 + (g2 - g1) * abs)},${Math.round(b1 + (b2 - b1) * abs)})`
 }
 

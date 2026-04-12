@@ -2,6 +2,15 @@ import { useMemo } from 'react'
 import EChart from './EChart'
 import type { IndexedChartPoint, LockedLimits, SPCComputationResult, SPCSignal } from '../types'
 
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;')
+    .split("'").join('&#39;')
+}
+
 interface IndividualsChartProps {
   spc: SPCComputationResult | null | undefined
   indexedPoints?: IndexedChartPoint[]
@@ -118,8 +127,8 @@ export default function IndividualsChart({ spc, indexedPoints, signals, onPointC
           if (!p) return ''
           const rules = rulesByIndex.get(p.originalIndex) ?? []
           const deviation = p.nominal != null ? (p.value - p.nominal).toFixed(4) : null
-          let html = `<strong>${p.batch_id ?? `Point ${params.dataIndex}`}</strong><br/>`
-          if (p.batch_date) html += `Date: ${p.batch_date}<br/>`
+          let html = `<strong>${escapeHtml(p.batch_id ?? `Point ${params.dataIndex}`)}</strong><br/>`
+          if (p.batch_date) html += `Date: ${escapeHtml(p.batch_date)}<br/>`
           html += `Value: <strong>${p.value?.toFixed(4)}</strong><br/>`
           if (p.nominal != null) html += `Target: ${p.nominal.toFixed(4)}<br/>`
           if (deviation != null) html += `Deviation: ${deviation}<br/>`

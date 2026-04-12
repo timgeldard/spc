@@ -8,7 +8,7 @@ interface RangeChartProps {
   externalUclR?: number | null
 }
 
-export default function RangeChart({ spc, mrSignals }: RangeChartProps) {
+export default function RangeChart({ spc, mrSignals, externalUclR }: RangeChartProps) {
   const xbarR = spc?.xbarR
 
   const signalIndices = useMemo(() => {
@@ -22,7 +22,8 @@ export default function RangeChart({ spc, mrSignals }: RangeChartProps) {
   const option = useMemo(() => {
     if (!xbarR) return null
 
-    const { rBar, ucl_r, lcl_r, subgroupStats } = xbarR
+    const { rBar, ucl_r: computedUclR, lcl_r, subgroupStats } = xbarR
+    const ucl_r = externalUclR ?? computedUclR
 
     const categories = subgroupStats.map(s =>
       s.batchDate ? s.batchDate.substring(0, 10) : `#${s.batchSeq}`
@@ -97,7 +98,7 @@ export default function RangeChart({ spc, mrSignals }: RangeChartProps) {
         },
       }],
     }
-  }, [xbarR, signalIndices])
+  }, [xbarR, signalIndices, externalUclR])
 
   if (!xbarR || !option) return null
 

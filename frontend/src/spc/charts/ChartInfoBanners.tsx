@@ -59,7 +59,7 @@ export default function ChartInfoBanners({
           title={`${exclusionAudit.excluded_count ?? 0} point${(exclusionAudit.excluded_count ?? 0) !== 1 ? 's' : ''} excluded`}
           subtitle={[
             exclusionAudit.user_id ? `by ${exclusionAudit.user_id}` : '',
-            exclusionAudit.event_ts ? `on ${String(exclusionAudit.event_ts).replace('T', ' ').slice(0, 19)}` : '',
+            exclusionAudit.event_ts ? `on ${new Date(String(exclusionAudit.event_ts)).toISOString().replace('T', ' ')}` : '',
             exclusionAudit.justification ? `— ${exclusionAudit.justification}` : '',
           ].filter(Boolean).join(' ')}
           hideCloseButton
