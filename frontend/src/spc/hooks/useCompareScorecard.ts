@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchCompareScorecard } from '../../api/spc'
+import { spcQueryKeys } from '../queryKeys'
 import type { CompareScorecardResult } from '../types'
 
 interface UseCompareScorecardResult {
@@ -13,47 +15,17 @@ export function useCompareScorecard(
   dateTo?: string | null,
   plantId?: string | null,
 ): UseCompareScorecardResult {
-  const [result, setResult] = useState<CompareScorecardResult | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const materialIdsKey = JSON.stringify(materialIds ?? [])
+  const normalizedIds = materialIds ? Array.from(new Set(materialIds)).sort() : null
+  const query = useQuery({
+    queryKey: spcQueryKeys.compareScorecard(normalizedIds, dateFrom, dateTo, plantId),
+    queryFn: ({ signal }) =>
+      fetchCompareScorecard(normalizedIds as string[], dateFrom ?? null, dateTo ?? null, plantId ?? null, signal),
+    enabled: Boolean(normalizedIds && normalizedIds.length >= 2),
+  })
 
-  useEffect(() => {
-    const controller = new AbortController()
-    setResult(null)
-    setError(null)
-    if (!materialIds || materialIds.length < 2) {
-      setLoading(false)
-      return () => controller.abort()
-    }
-
-    setLoading(true)
-
-    fetch('/api/spc/compare-scorecard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        material_ids: materialIds,
-        date_from: dateFrom || null,
-        date_to: dateTo || null,
-        plant_id: plantId ?? null,
-      }),
-    })
-      .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(b.detail ?? `Error ${r.status}`)))
-      .then((d: CompareScorecardResult) => {
-        if (!controller.signal.aborted) setResult(d)
-      })
-      .catch(e => {
-        if (e?.name === 'AbortError' || controller.signal.aborted) return
-        setError(String(e))
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-
-    return () => controller.abort()
-  }, [materialIdsKey, dateFrom, dateTo, plantId])
-
-  return { result, loading, error }
+  return {
+    result: normalizedIds && normalizedIds.length >= 2 ? (query.data ?? null) : null,
+    loading: query.isLoading || query.isFetching,
+    error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
+  }
 }

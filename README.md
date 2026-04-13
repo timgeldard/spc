@@ -51,7 +51,7 @@ React SPA (Vite + TypeScript)
     ├── SPCPage              Tab shell: Overview | Flow | Charts | Scorecard | Advanced analysis
     ├── SPCFilterBar         Material → Dynamic Stratification → Date range
     ├── SPCContext           Reducer-backed local UI/workbench state
-    ├── TanStack Query       Server-state caching for metadata and summary analysis
+    ├── TanStack Query       Server-state caching for metadata, summary, and analytical reads
     ├── spc/dal/             Data Access Layer (PyPika SQL Builders)
     ├── spc/charts/          IMR, XbarR, P, Capability, T² & Signals Panels
     └── spc/scorecard/       ScorecardView (Carbon DataTable with sorting)

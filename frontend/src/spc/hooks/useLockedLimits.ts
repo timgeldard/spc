@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  deleteLockedLimits as deleteLockedLimitsRequest,
+  fetchLockedLimits,
+  saveLockedLimits as saveLockedLimitsRequest,
+} from '../../api/spc'
+import { spcQueryKeys } from '../queryKeys'
 import type { LockedLimits } from '../types'
 
 interface UseLockedLimitsResult {
@@ -16,95 +22,77 @@ export function useLockedLimits(
   chartType: string | null | undefined,
   operationId: string | null | undefined = null,
 ): UseLockedLimitsResult {
-  const [lockedLimits, setLockedLimits] = useState<LockedLimits | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const queryKey = spcQueryKeys.lockedLimits(materialId, micId, plantId, chartType, operationId)
 
-  const fetchLimits = useCallback(() => {
-    if (!materialId || !micId || !chartType) {
-      setLockedLimits(null)
-      setLoading(false)
-      setError(null)
-      return Promise.resolve(null)
-    }
+  const query = useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      fetchLockedLimits(
+        materialId as string,
+        micId as string,
+        chartType as string,
+        plantId ?? null,
+        operationId ?? null,
+        signal,
+      ),
+    enabled: Boolean(materialId && micId && chartType),
+  })
 
-    setLoading(true)
-    setError(null)
-    const params = new URLSearchParams({
-      material_id: materialId,
-      mic_id: micId,
-      chart_type: chartType,
-    })
-    if (plantId) params.append('plant_id', plantId)
-    if (operationId) params.append('operation_id', operationId)
-
-    return fetch(`/api/spc/locked-limits?${params}`)
-      .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(b.detail ?? `Error ${r.status}`)))
-      .then(d => {
-        const next = (d.locked_limits ?? null) as LockedLimits | null
-        setLockedLimits(next)
-        return next
+  const saveMutation = useMutation({
+    mutationFn: async (limitsObj: LockedLimits) => {
+      await saveLockedLimitsRequest(
+        materialId as string,
+        micId as string,
+        chartType as string,
+        plantId ?? null,
+        operationId ?? null,
+        limitsObj,
+      )
+      return await queryClient.fetchQuery({
+        queryKey,
+        queryFn: ({ signal }) =>
+          fetchLockedLimits(
+            materialId as string,
+            micId as string,
+            chartType as string,
+            plantId ?? null,
+            operationId ?? null,
+            signal,
+          ),
       })
-      .catch(e => {
-        setError(String(e))
-        return null
-      })
-      .finally(() => setLoading(false))
-  }, [materialId, micId, plantId, operationId, chartType])
+    },
+  })
 
-  useEffect(() => {
-    setLockedLimits(null)
-    void fetchLimits()
-  }, [fetchLimits])
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await deleteLockedLimitsRequest(
+        materialId as string,
+        micId as string,
+        chartType as string,
+        plantId ?? null,
+        operationId ?? null,
+      )
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(queryKey, null)
+    },
+  })
 
-  const saveLimits = useCallback(async (limitsObj: LockedLimits) => {
-    if (!materialId || !micId || !chartType) throw new Error('Missing required fields')
-
-    setError(null)
-    const response = await fetch('/api/spc/locked-limits', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        material_id: materialId,
-        mic_id: micId,
-        plant_id: plantId ?? null,
-        operation_id: operationId ?? null,
-        chart_type: chartType,
-        ...limitsObj,
-      }),
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      const message = body.detail ?? `Error ${response.status}`
-      setError(String(message))
-      throw new Error(message)
-    }
-    return fetchLimits()
-  }, [materialId, micId, plantId, operationId, chartType, fetchLimits])
-
-  const deleteLimits = useCallback(async () => {
-    if (!materialId || !micId || !chartType) throw new Error('Missing required fields')
-
-    setError(null)
-    const response = await fetch('/api/spc/locked-limits', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        material_id: materialId,
-        mic_id: micId,
-        plant_id: plantId ?? null,
-        operation_id: operationId ?? null,
-        chart_type: chartType,
-      }),
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      const message = body.detail ?? `Error ${response.status}`
-      setError(String(message))
-      throw new Error(message)
-    }
-    setLockedLimits(null)
-  }, [materialId, micId, plantId, operationId, chartType])
-
-  return { lockedLimits, loading, error, saveLimits, deleteLimits }
+  return {
+    lockedLimits: materialId && micId && chartType ? (query.data ?? null) : null,
+    loading: query.isLoading || query.isFetching || saveMutation.isPending || deleteMutation.isPending,
+    error:
+      (query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null) ??
+      (saveMutation.error instanceof Error ? saveMutation.error.message : saveMutation.error ? String(saveMutation.error) : null) ??
+      (deleteMutation.error instanceof Error ? deleteMutation.error.message : deleteMutation.error ? String(deleteMutation.error) : null),
+    saveLimits: async (limitsObj: LockedLimits) => {
+      if (!materialId || !micId || !chartType) throw new Error('Missing required fields')
+      return await saveMutation.mutateAsync(limitsObj)
+    },
+    deleteLimits: async () => {
+      if (!materialId || !micId || !chartType) throw new Error('Missing required fields')
+      await deleteMutation.mutateAsync()
+    },
+  }
 }

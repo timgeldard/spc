@@ -72,10 +72,11 @@ dimensions:
   background.
 - Added shared request caching for overview-to-detail SPC flows so repeated tab
   transitions reuse hot scorecard and process-flow results.
-- Introduced TanStack Query for the highest-traffic server-state hooks
-  (plants, characteristics, scorecard, and process flow), replacing custom
-  hook-level caching on those paths with stable query keys and centralized
-  retry/staleness behavior.
+- Introduced TanStack Query across the main cacheable SPC read layer:
+  plants, characteristics, attribute characteristics, scorecard, compare,
+  process flow, correlation, correlation scatter, multivariate, and locked
+  limits. Those paths now use stable query keys and centralized
+  retry/staleness behavior instead of bespoke hook-local caching.
 - Extended true request cancellation and stale-request suppression across the
   remaining high-cost analytical hooks, including correlation, scatter, P chart,
   count chart, and plant lookups.

@@ -1,5 +1,26 @@
 import { fetchJson } from './client'
-import type { MicRef, PlantRef, ProcessFlowResult, ScorecardRow } from '../spc/types'
+import type {
+  CompareScorecardResult,
+  CorrelationPair,
+  CorrelationResult,
+  CorrelationScatterResult,
+  LockedLimits,
+  MicRef,
+  MultivariateResult,
+  PlantRef,
+  ProcessFlowResult,
+  ScorecardRow,
+} from '../spc/types'
+
+function normaliseCorrelationPair(pair: CorrelationPair): CorrelationPair {
+  return {
+    ...pair,
+    mic_a_id: pair.mic_a_id ?? pair.mic_a ?? '',
+    mic_b_id: pair.mic_b_id ?? pair.mic_b ?? '',
+    pearson_r: pair.pearson_r ?? pair.r ?? null,
+    shared_batches: pair.shared_batches ?? pair.n ?? null,
+  }
+}
 
 export async function fetchPlants(materialId: string, signal?: AbortSignal): Promise<PlantRef[]> {
   const data = await fetchJson<{ plants?: PlantRef[] }>(
@@ -73,6 +94,194 @@ export async function fetchProcessFlow(
         date_to: dateTo ?? null,
         upstream_depth: upstreamDepth,
         downstream_depth: downstreamDepth,
+      }),
+    },
+  )
+}
+
+export async function fetchAttributeCharacteristics(
+  materialId: string,
+  plantId: string | null,
+  signal?: AbortSignal,
+): Promise<MicRef[]> {
+  const data = await fetchJson<{ characteristics?: MicRef[] }>(
+    '/api/spc/attribute-characteristics',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({ material_id: materialId, plant_id: plantId ?? null }),
+    },
+  )
+  return data.characteristics ?? []
+}
+
+export async function fetchCompareScorecard(
+  materialIds: string[],
+  dateFrom: string | null,
+  dateTo: string | null,
+  plantId: string | null,
+  signal?: AbortSignal,
+): Promise<CompareScorecardResult> {
+  return await fetchJson<CompareScorecardResult>(
+    '/api/spc/compare-scorecard',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        material_ids: materialIds,
+        date_from: dateFrom ?? null,
+        date_to: dateTo ?? null,
+        plant_id: plantId ?? null,
+      }),
+    },
+  )
+}
+
+export async function fetchCorrelation(
+  materialId: string,
+  plantId: string | null,
+  dateFrom: string | null,
+  dateTo: string | null,
+  minBatches: number,
+  signal?: AbortSignal,
+): Promise<CorrelationResult> {
+  const data = await fetchJson<CorrelationResult>(
+    '/api/spc/correlation',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        material_id: materialId,
+        plant_id: plantId ?? null,
+        date_from: dateFrom ?? null,
+        date_to: dateTo ?? null,
+        min_batches: minBatches,
+      }),
+    },
+  )
+  return { ...data, pairs: (data.pairs ?? []).map(normaliseCorrelationPair) }
+}
+
+export async function fetchCorrelationScatter(
+  materialId: string,
+  micAId: string,
+  micBId: string,
+  plantId: string | null,
+  dateFrom: string | null,
+  dateTo: string | null,
+  signal?: AbortSignal,
+): Promise<CorrelationScatterResult> {
+  return await fetchJson<CorrelationScatterResult>(
+    '/api/spc/correlation-scatter',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        material_id: materialId,
+        mic_a_id: micAId,
+        mic_b_id: micBId,
+        plant_id: plantId ?? null,
+        date_from: dateFrom ?? null,
+        date_to: dateTo ?? null,
+      }),
+    },
+  )
+}
+
+export async function fetchMultivariate(
+  materialId: string,
+  micIds: string[],
+  plantId: string | null,
+  dateFrom: string | null,
+  dateTo: string | null,
+  signal?: AbortSignal,
+): Promise<MultivariateResult> {
+  return await fetchJson<MultivariateResult>(
+    '/api/spc/multivariate',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        material_id: materialId,
+        mic_ids: Array.from(new Set(micIds)).slice(0, 8),
+        plant_id: plantId ?? null,
+        date_from: dateFrom ?? null,
+        date_to: dateTo ?? null,
+      }),
+    },
+  )
+}
+
+export async function fetchLockedLimits(
+  materialId: string,
+  micId: string,
+  chartType: string,
+  plantId: string | null,
+  operationId: string | null,
+  signal?: AbortSignal,
+): Promise<LockedLimits | null> {
+  const params = new URLSearchParams({
+    material_id: materialId,
+    mic_id: micId,
+    chart_type: chartType,
+  })
+  if (plantId) params.append('plant_id', plantId)
+  if (operationId) params.append('operation_id', operationId)
+  const data = await fetchJson<{ locked_limits?: LockedLimits | null }>(
+    `/api/spc/locked-limits?${params.toString()}`,
+    { signal },
+  )
+  return data.locked_limits ?? null
+}
+
+export async function saveLockedLimits(
+  materialId: string,
+  micId: string,
+  chartType: string,
+  plantId: string | null,
+  operationId: string | null,
+  limits: LockedLimits,
+): Promise<void> {
+  await fetchJson(
+    '/api/spc/locked-limits',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        material_id: materialId,
+        mic_id: micId,
+        plant_id: plantId ?? null,
+        operation_id: operationId ?? null,
+        chart_type: chartType,
+        ...limits,
+      }),
+    },
+  )
+}
+
+export async function deleteLockedLimits(
+  materialId: string,
+  micId: string,
+  chartType: string,
+  plantId: string | null,
+  operationId: string | null,
+): Promise<void> {
+  await fetchJson(
+    '/api/spc/locked-limits',
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        material_id: materialId,
+        mic_id: micId,
+        plant_id: plantId ?? null,
+        operation_id: operationId ?? null,
+        chart_type: chartType,
       }),
     },
   )
