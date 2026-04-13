@@ -163,7 +163,20 @@ make deploy PROFILE=prod
 
 Important deployment notes:
 - `databricks bundle deploy` alone is not sufficient for this app
-- `databricks.yml` now declares `user_api_scopes: ["sql"]` directly on the app resource
-- `scripts/post-deploy.sh` is retained only as a manual compatibility fallback for older CLI / bundle versions
+- `databricks.yml` declares `user_api_scopes: ["sql"]` directly on the app resource
+- deployment is fully declarative; no post-deploy scope patching script is required
 - `/api/ready` requires `DATABRICKS_READINESS_TOKEN` in the target environment for a real warehouse probe
 - the in-process SQL cache is per app instance, so multi-instance deployments should treat it as a latency optimisation rather than a shared consistency layer
+
+Live Release 1 warehouse validation:
+
+```bash
+DATABRICKS_HOST=https://<workspace-host> \
+DATABRICKS_TOKEN=<token> \
+DATABRICKS_WAREHOUSE_ID=<warehouse-id> \
+TRACE_CATALOG=connected_plant_uat \
+TRACE_SCHEMA=gold \
+python3 scripts/validate_release1_databricks.py
+```
+
+That harness smoke-tests the metric-view scorecard path and the multivariate shared-batch path against real Databricks data.

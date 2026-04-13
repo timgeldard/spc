@@ -61,6 +61,8 @@ _sql_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sql")
 _sql_cache = TTLCache(maxsize=100, ttl=300)
 _sql_cache_lock = threading.Lock()
 _SQL_CACHE_ROW_LIMIT = 1000
+_WRITE_SQL_PREFIXES = ("INSERT", "MERGE", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP", "TRUNCATE", "OPTIMIZE", "VACUUM")
+_READ_SQL_PREFIXES = ("SELECT", "WITH", "SHOW", "DESCRIBE")
 
 logger = logging.getLogger(__name__)
 _VIEW_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -165,10 +167,11 @@ def increment_observability_counter(name: str, *, tags: Optional[dict[str, str]]
 
 
 def send_operational_alert(*, subject: str, body: str, error_id: Optional[str] = None, request_path: Optional[str] = None) -> None:
-    """Stub hook for workspace-specific alerting integrations.
+    """Emit a structured operational alert log event.
 
-    See GitHub issue #9 for wiring this into Databricks SQL alerts or a webhook-
-    based incident pipeline once environment-specific routing is available.
+    This is a lightweight working implementation that records alert context in
+    application logs today and can be extended later to forward into a
+    workspace-specific incident pipeline.
     """
     logger.warning(
         "operational_alert.pending issue=#9 subject=%s error_id=%s request_path=%s body=%s",
@@ -283,6 +286,29 @@ def _should_cache_rows(rows: list[dict]) -> bool:
     return len(rows) <= _SQL_CACHE_ROW_LIMIT
 
 
+def _statement_prefix(statement: str) -> str:
+    stripped = statement.lstrip()
+    if not stripped:
+        return ""
+    return stripped.split(None, 1)[0].upper()
+
+
+def _is_read_only_statement(statement: str) -> bool:
+    return _statement_prefix(statement) in _READ_SQL_PREFIXES
+
+
+def _is_write_statement(statement: str) -> bool:
+    return _statement_prefix(statement) in _WRITE_SQL_PREFIXES
+
+
+def _clear_sql_cache() -> None:
+    with _sql_cache_lock:
+        _sql_cache.clear()
+        expires = getattr(_sql_cache, "_expires", None)
+        if isinstance(expires, dict):
+            expires.clear()
+
+
 async def run_sql_async(
     token: str,
     statement: str,
@@ -290,6 +316,13 @@ async def run_sql_async(
 ) -> list[dict]:
     """Non-blocking wrapper — runs run_sql in a thread pool so the async event
     loop is never blocked waiting for Databricks SQL responses."""
+    if not _is_read_only_statement(statement):
+        loop = asyncio.get_running_loop()
+        rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
+        if _is_write_statement(statement):
+            _clear_sql_cache()
+        return rows
+
     cache_key = _sql_cache_key(token, statement, params)
     with _sql_cache_lock:
         cached_rows = _sql_cache.get(cache_key)

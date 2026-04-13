@@ -307,8 +307,8 @@ dimensions:
 ### What changed
 
 - Hardened the Databricks deployment path around `make deploy`.
-- Moved SQL token passthrough scopes into declarative bundle config and retained
-  the post-deploy script only as a compatibility fallback.
+- Moved SQL token passthrough scopes into declarative bundle config and removed
+  the old post-deploy scope patching fallback.
 - Added missing root runtime dependencies required by the deployed app:
   `openpyxl`, `numpy`, `pandas`, `scipy`, `cachetools`, and `pypika`.
 - Removed stale dependency assumptions around `databricks-sql-connector`,

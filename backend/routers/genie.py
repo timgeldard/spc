@@ -11,9 +11,10 @@ API flow:
   3. Poll GET             /api/2.0/genie/spaces/{sid}/conversations/{cid}/messages/{mid}
      until status is COMPLETED, FAILED, or CANCELLED.
 """
+import asyncio
 import json
+import logging
 import os
-import time
 import urllib.error
 import urllib.request
 from typing import Optional
@@ -24,6 +25,7 @@ from pydantic import BaseModel
 from backend.utils.db import hostname, resolve_token
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _GENIE_SPACE_ID: str = os.environ.get("GENIE_SPACE_ID", "")
 _POLL_INTERVAL_S: float = 1.5
@@ -40,7 +42,7 @@ class GenieResponse(BaseModel):
     conversation_id: str
 
 
-def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
+def _api_sync(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
     host = hostname()
     url = f"https://{host}{path}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -51,7 +53,18 @@ def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dic
             return json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:500]
-        raise HTTPException(status_code=exc.code, detail=f"Genie API: {detail}") from exc
+        logger.warning(
+            "genie.api_error method=%s path=%s status=%d body=%s",
+            method, path, exc.code, detail,
+        )
+        raise HTTPException(
+            status_code=exc.code,
+            detail="Genie API request failed.",
+        ) from exc
+
+
+async def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
+    return await asyncio.to_thread(_api_sync, token, method, path, body)
 
 
 def _extract_text(msg: dict) -> str:
@@ -90,7 +103,7 @@ async def genie_message(
     space_id = _GENIE_SPACE_ID
 
     if req.conversation_id:
-        data = _api(
+        data = await _api(
             token, "POST",
             f"/api/2.0/genie/spaces/{space_id}/conversations/{req.conversation_id}/messages",
             {"content": req.message},
@@ -98,7 +111,7 @@ async def genie_message(
         conversation_id = req.conversation_id
         message_id = data["id"]
     else:
-        data = _api(
+        data = await _api(
             token, "POST",
             f"/api/2.0/genie/spaces/{space_id}/start-conversation",
             {"content": req.message},
@@ -112,15 +125,19 @@ async def genie_message(
     )
 
     for _ in range(_POLL_MAX_ATTEMPTS):
-        msg = _api(token, "GET", poll_path)
+        msg = await _api(token, "GET", poll_path)
         status = msg.get("status", "")
         if status == "COMPLETED":
             return GenieResponse(answer=_extract_text(msg), conversation_id=conversation_id)
         if status in ("FAILED", "CANCELLED"):
+            logger.warning(
+                "genie.message_%s conversation_id=%s message_id=%s error=%s",
+                status.lower(), conversation_id, message_id, msg.get("error", ""),
+            )
             raise HTTPException(
                 status_code=500,
-                detail=f"Genie message {status.lower()}: {msg.get('error', '')}",
+                detail=f"Genie could not produce a response (status: {status.lower()}).",
             )
-        time.sleep(_POLL_INTERVAL_S)
+        await asyncio.sleep(_POLL_INTERVAL_S)
 
     raise HTTPException(status_code=504, detail="Genie response timed out.")

@@ -1,12 +1,37 @@
 import asyncio
 import math
 import uuid
-from typing import Optional
+from typing import Optional, TypedDict
 
 from backend.dal.spc_shared import infer_spec_type
 from backend.utils.multivariate import compute_hotelling_t2
 from backend.utils.db import run_sql_async, sql_param, tbl
 from backend.utils.spc_thresholds import CPK_CAPABLE, CPK_HIGHLY_CAPABLE, CPK_MARGINAL
+
+
+class _HealthRow(TypedDict, total=False):
+    material_id: str
+    material_name: str
+    plant_name: str | None
+    total_batches: int
+    rejected_batches: int
+    mic_count: int
+    status: str
+    estimated_cpk: float | None
+    mean_value: float | None
+    stddev_value: float | None
+
+
+class _ScorecardRow(TypedDict, total=False):
+    mic_id: str
+    mic_name: str
+    batch_count: int
+    sample_count: int
+    mean_value: float | None
+    stddev_overall: float | None
+    capability_status: str
+    ppk: float | None
+    ooc_rate: float | None
 
 
 def _coerce_float(value: object) -> Optional[float]:
@@ -149,7 +174,7 @@ async def fetch_process_flow(
     """
     health_rows = await run_sql_async(token, health_query, mat_params + date_params)
 
-    health_by_mat: dict[str, dict] = {}
+    health_by_mat: dict[str, _HealthRow] = {}
     for row in health_rows:
         mid = str(row.get("material_id", ""))
         for field in ["total_batches", "rejected_batches", "mic_count"]:
@@ -259,8 +284,9 @@ async def fetch_scorecard(
     rows = await run_sql_async(token, query, params)
 
     for row in rows:
+        typed_row: _ScorecardRow = row
         for int_field in ("batch_count", "sample_count", "ooc_batches", "accepted_batches", "distinct_spec_count"):
-            row[int_field] = _coerce_int(row.get(int_field))
+            typed_row[int_field] = _coerce_int(typed_row.get(int_field))  # type: ignore[literal-required]
         for float_field in (
             "mean_value",
             "stddev_overall",
@@ -278,35 +304,35 @@ async def fetch_scorecard(
             "z_score",
             "dpmo",
         ):
-            row[float_field] = _coerce_float(row.get(float_field))
+            typed_row[float_field] = _coerce_float(typed_row.get(float_field))  # type: ignore[literal-required]
 
-        mean_v = row.get("mean_value")
-        nominal = row.get("nominal_target")
-        usl = row.get("usl")
-        lsl = row.get("lsl")
+        mean_v = typed_row.get("mean_value")
+        nominal = typed_row.get("nominal_target")
+        usl = typed_row.get("usl")
+        lsl = typed_row.get("lsl")
 
         spec_type = infer_spec_type(usl, lsl, nominal)
-        row["spec_type"] = spec_type
-        row["usl"] = round(usl, 6) if usl is not None else None
-        row["lsl"] = round(lsl, 6) if lsl is not None else None
+        typed_row["spec_type"] = spec_type
+        typed_row["usl"] = round(usl, 6) if usl is not None else None
+        typed_row["lsl"] = round(lsl, 6) if lsl is not None else None
         for rounded_field in ("pp", "ppk", "cp", "cpk", "z_score"):
-            value = row.get(rounded_field)
-            row[rounded_field] = round(value, 3) if value is not None else None
-        sigma_within = row.get("sigma_within")
-        row["sigma_within"] = round(sigma_within, 6) if sigma_within is not None else None
-        dpmo = row.get("dpmo")
-        row["dpmo"] = int(round(dpmo)) if dpmo is not None else None
-        row["dpmo_convention"] = "motorola_1.5sigma_shift"
+            value = typed_row.get(rounded_field)
+            typed_row[rounded_field] = round(value, 3) if value is not None else None
+        sigma_within = typed_row.get("sigma_within")
+        typed_row["sigma_within"] = round(sigma_within, 6) if sigma_within is not None else None
+        dpmo = typed_row.get("dpmo")
+        typed_row["dpmo"] = int(round(dpmo)) if dpmo is not None else None
+        typed_row["dpmo_convention"] = "motorola_1.5sigma_shift"
 
-        row["has_mixed_spec"] = row["distinct_spec_count"] > 1
-        row["spec_warning"] = (
+        typed_row["has_mixed_spec"] = typed_row["distinct_spec_count"] > 1
+        typed_row["spec_warning"] = (
             "Capability computed from mixed specification values in selected range."
-            if row["has_mixed_spec"] else None
+            if typed_row["has_mixed_spec"] else None
         )
 
-        mean_out_of_spec = _coerce_int(row.get("mean_out_of_spec_flag")) == 1
-        row["capability_status"] = _scorecard_status(row.get("ppk"), mean_out_of_spec=mean_out_of_spec)
-        row["ooc_rate"] = round(row["ooc_rate"], 4) if row["ooc_rate"] is not None else None
+        mean_out_of_spec = _coerce_int(typed_row.get("mean_out_of_spec_flag")) == 1
+        typed_row["capability_status"] = _scorecard_status(typed_row.get("ppk"), mean_out_of_spec=mean_out_of_spec)
+        typed_row["ooc_rate"] = round(typed_row["ooc_rate"], 4) if typed_row["ooc_rate"] is not None else None
 
     rows.sort(key=lambda row: (row.get("ppk") is None, row.get("ppk") or 0))
     return rows

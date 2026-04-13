@@ -7,10 +7,12 @@ those require a live Databricks connection.
 """
 
 import os
+import asyncio
 import pytest
 from unittest.mock import patch
 
 from fastapi import HTTPException
+import backend.utils.db as db_module
 
 
 # Provide defaults so the module can be imported without env vars set
@@ -50,14 +52,16 @@ class TestSqlParam:
 
 class TestTbl:
     def test_returns_backtick_qualified_name(self):
-        result = tbl("my_table")
-        assert result == "`test_catalog`.`test_schema`.`my_table`"
+        with patch("backend.utils.db.TRACE_CATALOG", "test_catalog"), patch("backend.utils.db.TRACE_SCHEMA", "test_schema"):
+            result = tbl("my_table")
+            assert result == "`test_catalog`.`test_schema`.`my_table`"
 
     def test_includes_all_three_parts(self):
-        result = tbl("gold_batch_quality_result_v")
-        assert "test_catalog" in result
-        assert "test_schema" in result
-        assert "gold_batch_quality_result_v" in result
+        with patch("backend.utils.db.TRACE_CATALOG", "test_catalog"), patch("backend.utils.db.TRACE_SCHEMA", "test_schema"):
+            result = tbl("gold_batch_quality_result_v")
+            assert "test_catalog" in result
+            assert "test_schema" in result
+            assert "gold_batch_quality_result_v" in result
 
 
 class TestHostname:
@@ -70,8 +74,9 @@ class TestHostname:
         assert not result.endswith("/")
 
     def test_returns_bare_hostname(self):
-        result = hostname()
-        assert result == "adb-test.azuredatabricks.net"
+        with patch("backend.utils.db.DATABRICKS_HOST", "https://adb-test.azuredatabricks.net/"):
+            result = hostname()
+            assert result == "adb-test.azuredatabricks.net"
 
 
 class TestResolveToken:
@@ -100,8 +105,9 @@ class TestResolveToken:
 
 class TestCheckWarehouseConfig:
     def test_returns_http_path_when_set(self):
-        result = check_warehouse_config()
-        assert result == "/sql/1.0/warehouses/abc123"
+        with patch("backend.utils.db.WAREHOUSE_HTTP_PATH", "/sql/1.0/warehouses/abc123"):
+            result = check_warehouse_config()
+            assert result == "/sql/1.0/warehouses/abc123"
 
     def test_raises_500_when_not_set(self):
         with patch("backend.utils.db.WAREHOUSE_HTTP_PATH", ""):
@@ -121,3 +127,24 @@ class TestGetDataFreshness:
             result = get_data_freshness("token", ["gold_batch_quality_result_v"])
             assert result["sources"] == mock_rows
             mocked_run_sql.assert_called_once()
+
+
+class TestSqlCacheBehavior:
+    def test_statement_prefix_detects_read_only_and_write(self):
+        assert db_module._is_read_only_statement("SELECT 1")
+        assert db_module._is_read_only_statement("  WITH cte AS (SELECT 1) SELECT * FROM cte")
+        assert db_module._is_write_statement("INSERT INTO t VALUES (1)")
+        assert not db_module._is_read_only_statement("INSERT INTO t VALUES (1)")
+
+    def test_run_sql_async_clears_cache_after_write(self):
+        db_module._clear_sql_cache()
+        cache_key = db_module._sql_cache_key("token", "SELECT 1", None)
+        with db_module._sql_cache_lock:
+            db_module._sql_cache[cache_key] = [{"cached": True}]
+
+        with patch("backend.utils.db.run_sql", return_value=[]) as mocked_run_sql:
+            asyncio.run(db_module.run_sql_async("token", "INSERT INTO t VALUES (1)"))
+
+        mocked_run_sql.assert_called_once()
+        with db_module._sql_cache_lock:
+            assert db_module._sql_cache.get(cache_key) is None

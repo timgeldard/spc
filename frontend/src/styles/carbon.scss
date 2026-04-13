@@ -28,14 +28,12 @@
 @use '@carbon/styles/scss/components/select';
 @use '@carbon/styles/scss/components/skeleton-styles';
 @use '@carbon/styles/scss/components/stack';
-@use '@carbon/styles/scss/components/tabs';
 @use '@carbon/styles/scss/components/tag';
 @use '@carbon/styles/scss/components/text-area';
 @use '@carbon/styles/scss/components/text-input';
 @use '@carbon/styles/scss/components/tile';
 @use '@carbon/styles/scss/components/toggle';
 @use '@carbon/styles/scss/components/tooltip';
-@use '@carbon/styles/scss/components/ui-shell';
 
 :root {
   --spc-shadow-base: 0 1px 2px rgb(0 0 0 / 0.16);

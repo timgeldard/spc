@@ -186,7 +186,7 @@ The API uses `slowapi` limits to protect the warehouse from accidental UI storms
 - `databricks.yml` now defines both `uat` and `prod` targets.
 - `databricks.yml` declares `user_api_scopes: ["sql"]` directly on the app resource.
 - `make deploy` remains the supported path because it builds the frontend, renders app config, deploys the bundle, and applies SPC support migrations in order.
-- `scripts/post-deploy.sh` is retained only as a manual recovery path for older CLI / bundle versions.
+- deployment is fully declarative; there is no post-deploy scope patching step in the supported path.
 
 ## Implementation Rationale
 

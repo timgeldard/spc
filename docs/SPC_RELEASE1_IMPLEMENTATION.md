@@ -55,6 +55,7 @@ Release 1 excludes:
 - [x] Expose `pp_gaussian`, `ppk_gaussian`, `pp_non_parametric`, `ppk_non_parametric`, and governed `pp` / `ppk`.
 - [x] Null governed long-term performance when normality is mixed or unknown rather than silently assuming Gaussian behavior.
 - [ ] Validate `MEASURE(ppk)`, `MEASURE(cpk)`, `MEASURE(ooc_rate)`, and `MEASURE(rejected_batches)` against `/api/spc/scorecard`.
+- [ ] Run `python3 scripts/validate_release1_databricks.py` with live Databricks credentials to smoke-test metric views and multivariate shared-batch analysis against a real warehouse.
 - [ ] Confirm mixed-spec groups return `NULL` capability metrics and a `distinct_spec_count > 1`.
 
 ### 4. Attribute quality layer

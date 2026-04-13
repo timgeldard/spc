@@ -14,7 +14,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, TypeAdapter, field_validator, model_validator
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -27,11 +27,10 @@ from backend.utils.rate_limit import limiter
 from backend.dal.spc_analysis_dal import fetch_scorecard
 from backend.dal.spc_charts_dal import fetch_chart_data
 from backend.routers.spc_common import handle_sql_error
-import re
+from backend.schemas.spc_schemas import _validate_date
 
 router = APIRouter()
 
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MATERIAL_ID_MAX_LEN = 40
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
 
@@ -44,6 +43,13 @@ def sanitize_spreadsheet_value(value):
 
 def _sanitize_row(row):
     return [sanitize_spreadsheet_value(cell) for cell in row]
+
+
+class SignalExportEntry(BaseModel):
+    rule: Optional[str] = None
+    chart: Optional[str] = "X"
+    indices: list[int] = []
+    description: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
@@ -67,9 +73,7 @@ class ExportRequest(BaseModel):
     @field_validator("date_from", "date_to")
     @classmethod
     def check_date(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not _DATE_RE.match(v):
-            raise ValueError("Date must be in YYYY-MM-DD format")
-        return v
+        return _validate_date(v, "date")
 
     @field_validator("export_type")
     @classmethod
@@ -84,6 +88,20 @@ class ExportRequest(BaseModel):
         if v not in ("scorecard", "chart_data", "signals"):
             raise ValueError("export_scope must be 'scorecard', 'chart_data', or 'signals'")
         return v
+
+    @model_validator(mode="after")
+    def validate_signals_json(self) -> "ExportRequest":
+        if self.export_scope != "signals" or self.signals_json is None:
+            return self
+        try:
+            raw = json.loads(self.signals_json)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError("signals_json must be valid JSON") from exc
+        try:
+            TypeAdapter(list[SignalExportEntry]).validate_python(raw)
+        except Exception as exc:
+            raise ValueError("signals_json must be a list of signal objects") from exc
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -149,34 +167,14 @@ def _build_scorecard_excel(rows: list[dict], material_id: str) -> io.BytesIO:
     ws = wb.active
     ws.title = "Capability Scorecard"
 
-    headers = [
-        "MIC ID", "Characteristic", "Batches", "Samples", "Mean", "Std Dev",
-        "Min", "Max", "Target", "Pp", "Ppk", "Z Score", "DPMO", "OOC Rate", "Status",
-    ]
+    headers = _scorecard_export_headers()
     ws.append(_sanitize_row(headers))
     _style_header_row(ws, 1, len(headers))
 
-    for row in rows:
-        ooc_pct = f"{row.get('ooc_rate', 0) * 100:.1f}%" if row.get("ooc_rate") is not None else "—"
-        ws.append(_sanitize_row([
-            row.get("mic_id"),
-            row.get("mic_name"),
-            row.get("batch_count"),
-            row.get("sample_count"),
-            row.get("mean_value"),
-            row.get("stddev_overall"),
-            row.get("min_value"),
-            row.get("max_value"),
-            row.get("nominal_target"),
-            row.get("pp"),
-            row.get("ppk"),
-            row.get("z_score"),
-            row.get("dpmo"),
-            ooc_pct,
-            row.get("capability_status", "").capitalize(),
-        ]))
+    for row in _scorecard_export_rows(rows):
+        ws.append(_sanitize_row(row))
         # Colour status cell (column 15 = "Status")
-        status = row.get("capability_status", "grey")
+        status = str(row[-1] or "").strip().lower()
         fill   = STATUS_FILLS.get(status)
         if fill:
             ws.cell(row=ws.max_row, column=15).fill = fill
@@ -214,6 +212,44 @@ def _build_chart_data_excel(rows: list[dict], material_id: str, mic_name: Option
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+def _scorecard_export_headers() -> list[str]:
+    return [
+        "MIC ID", "Characteristic", "Batches", "Samples", "Mean", "Std Dev",
+        "Min", "Max", "Target", "Pp", "Ppk", "Z Score", "DPMO", "OOC Rate", "Status",
+    ]
+
+
+def _scorecard_export_rows(rows: list[dict]) -> list[list[object]]:
+    export_rows: list[list[object]] = []
+    for row in rows:
+        ooc_pct = f"{row.get('ooc_rate', 0) * 100:.1f}%" if row.get("ooc_rate") is not None else "—"
+        export_rows.append([
+            row.get("mic_id"),
+            row.get("mic_name"),
+            row.get("batch_count"),
+            row.get("sample_count"),
+            row.get("mean_value"),
+            row.get("stddev_overall"),
+            row.get("min_value"),
+            row.get("max_value"),
+            row.get("nominal_target"),
+            row.get("pp"),
+            row.get("ppk"),
+            row.get("z_score"),
+            row.get("dpmo"),
+            ooc_pct,
+            row.get("capability_status", "").capitalize(),
+        ])
+    return export_rows
+
+
+def _parse_signals(signals_json: Optional[str]) -> list[SignalExportEntry]:
+    if not signals_json:
+        return []
+    raw = json.loads(signals_json)
+    return TypeAdapter(list[SignalExportEntry]).validate_python(raw)
 
 
 def _build_signals_excel(signals: list[dict]) -> io.BytesIO:
@@ -275,15 +311,10 @@ async def spc_export(
 
     # --- Signals (no DB call needed — passed from frontend) ---
     if scope == "signals":
-        signals: list[dict] = []
-        if body.signals_json:
-            try:
-                signals = json.loads(body.signals_json)
-            except (json.JSONDecodeError, TypeError):
-                signals = []
+        signals = _parse_signals(body.signals_json)
 
         if fmt == "excel":
-            buf  = _build_signals_excel(signals)
+            buf  = _build_signals_excel([signal.model_dump() for signal in signals])
             return StreamingResponse(
                 buf,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -292,8 +323,8 @@ async def spc_export(
         else:
             headers_csv = ["Rule", "Chart", "Point Indices", "Description"]
             rows_csv    = [
-                [s.get("rule"), s.get("chart", "X"),
-                 ", ".join(str(i) for i in s.get("indices", [])), s.get("description")]
+                [s.rule, s.chart or "X",
+                 ", ".join(str(i) for i in s.indices), s.description]
                 for s in signals
             ]
             csv_text = _rows_to_csv(headers_csv, rows_csv)
@@ -318,16 +349,7 @@ async def spc_export(
                 headers={"Content-Disposition": "attachment; filename=spc_scorecard.xlsx"},
             )
         else:
-            headers_csv = ["MIC ID", "Characteristic", "Batches", "Mean", "Std Dev",
-                           "Pp", "Ppk", "Z Score", "DPMO", "OOC Rate %", "Status"]
-            rows_csv = [
-                [r.get("mic_id"), r.get("mic_name"), r.get("batch_count"),
-                 r.get("mean_value"), r.get("stddev_overall"),
-                 r.get("pp"), r.get("ppk"), r.get("z_score"), r.get("dpmo"),
-                 f"{(r.get('ooc_rate') or 0)*100:.1f}", r.get("capability_status")]
-                for r in rows
-            ]
-            csv_text = _rows_to_csv(headers_csv, rows_csv)
+            csv_text = _rows_to_csv(_scorecard_export_headers(), _scorecard_export_rows(rows))
             return StreamingResponse(
                 iter([csv_text]),
                 media_type="text/csv",
