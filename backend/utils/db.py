@@ -25,9 +25,13 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from typing import Optional
+from typing import Optional, Protocol
 
 from fastapi import HTTPException
+try:
+    from databricks import sql as databricks_sql
+except ImportError:  # pragma: no cover - optional until connector is installed
+    databricks_sql = None
 try:
     from cachetools import TTLCache
 except ImportError:  # pragma: no cover - local-dev fallback until deps are installed
@@ -68,6 +72,7 @@ _sql_cache_lock = threading.Lock()
 _SQL_CACHE_ROW_LIMIT = 1000
 _WRITE_SQL_PREFIXES = ("INSERT", "MERGE", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP", "TRUNCATE", "OPTIMIZE", "VACUUM")
 _READ_SQL_PREFIXES = ("SELECT", "WITH", "SHOW", "DESCRIBE")
+_SQL_CONNECTOR_PARAM_RE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
 
 logger = logging.getLogger(__name__)
 _VIEW_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -187,88 +192,194 @@ def send_operational_alert(*, subject: str, body: str, error_id: Optional[str] =
     )
 
 
+class _SqlExecutor(Protocol):
+    def execute(
+        self,
+        token: str,
+        statement: str,
+        params: Optional[list[dict]] = None,
+    ) -> list[dict]: ...
+
+
+def _sql_stmt_hash(statement: str) -> str:
+    return hashlib.sha256(statement.encode()).hexdigest()[:16]
+
+
+def _warehouse_id() -> str:
+    return WAREHOUSE_HTTP_PATH.rsplit("/", 1)[-1]
+
+
+def _params_to_mapping(params: Optional[list[dict]]) -> dict[str, object | None]:
+    return {str(param["name"]): param.get("value") for param in (params or [])}
+
+
+def _normalize_statement_for_connector(
+    statement: str,
+    params: Optional[list[dict]] = None,
+) -> tuple[str, list[object | None]]:
+    mapping = _params_to_mapping(params)
+    positional: list[object | None] = []
+
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in mapping:
+            raise RuntimeError(f"Missing SQL parameter '{name}' for Databricks connector execution")
+        positional.append(mapping[name])
+        return "?"
+
+    normalized = _SQL_CONNECTOR_PARAM_RE.sub(replace, statement)
+    return normalized, positional
+
+
+class _RestStatementExecutor:
+    def execute(
+        self,
+        token: str,
+        statement: str,
+        params: Optional[list[dict]] = None,
+    ) -> list[dict]:
+        host = hostname()
+        url = f"https://{host}/api/2.0/sql/statements/"
+
+        body: dict = {
+            "warehouse_id": _warehouse_id(),
+            "statement": statement,
+            "wait_timeout": "50s",
+        }
+        if params:
+            body["parameters"] = params
+
+        payload = json.dumps(body).encode()
+        auth_headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        stmt_hash = _sql_stmt_hash(statement)
+        param_count = len(params) if params else 0
+        logger.info("sql.execute executor=rest hash=%s params=%d", stmt_hash, param_count)
+
+        req = urllib.request.Request(url, data=payload, headers=auth_headers, method="POST")
+        t0 = time.monotonic()
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                result = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            body_str = exc.read().decode() if exc.fp else ""
+            raise RuntimeError(f"SQL API {exc.code} {exc.reason}: {body_str[:2000]}") from exc
+
+        state = result.get("status", {}).get("state", "")
+        statement_id = result.get("statement_id", "")
+        poll_url = f"https://{host}/api/2.0/sql/statements/{statement_id}"
+
+        poll_delay_s = _SQL_POLL_INITIAL_DELAY_S
+        for _ in range(_SQL_POLL_MAX_ATTEMPTS):
+            if state in ("SUCCEEDED", "FAILED", "CANCELED", "CLOSED"):
+                break
+            time.sleep(poll_delay_s)
+            poll_req = urllib.request.Request(poll_url, headers=auth_headers)
+            try:
+                with urllib.request.urlopen(poll_req, timeout=30) as poll_resp:
+                    result = json.loads(poll_resp.read().decode())
+                    state = result.get("status", {}).get("state", "")
+            except urllib.error.HTTPError as exc:
+                body_str = exc.read().decode() if exc.fp else ""
+                raise RuntimeError(f"SQL poll {exc.code}: {body_str[:1000]}") from exc
+            poll_delay_s = min(_SQL_POLL_MAX_DELAY_S, poll_delay_s * 2)
+
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        if state != "SUCCEEDED":
+            error_info = result.get("status", {}).get("error", {})
+            msg = error_info.get("message", f"Query ended with state: {state}")
+            logger.warning("sql.failed executor=rest hash=%s state=%s duration_ms=%d", stmt_hash, state, elapsed_ms)
+            raise RuntimeError(msg)
+
+        columns = [c["name"] for c in result["manifest"]["schema"]["columns"]]
+        rows = [
+            dict(zip(columns, row_data))
+            for row_data in result.get("result", {}).get("data_array", [])
+        ]
+        logger.info("sql.done executor=rest hash=%s state=SUCCEEDED rows=%d duration_ms=%d", stmt_hash, len(rows), elapsed_ms)
+        return rows
+
+
+class _ConnectorStatementExecutor:
+    def execute(
+        self,
+        token: str,
+        statement: str,
+        params: Optional[list[dict]] = None,
+    ) -> list[dict]:
+        if databricks_sql is None:
+            raise RuntimeError("databricks-sql-connector is not installed")
+
+        normalized_statement, positional_params = _normalize_statement_for_connector(statement, params)
+        stmt_hash = _sql_stmt_hash(statement)
+        param_count = len(positional_params)
+        logger.info("sql.execute executor=connector hash=%s params=%d", stmt_hash, param_count)
+        t0 = time.monotonic()
+
+        try:
+            with databricks_sql.connect(
+                server_hostname=hostname(),
+                http_path=WAREHOUSE_HTTP_PATH,
+                access_token=token,
+            ) as connection:
+                with connection.cursor() as cursor:
+                    if positional_params:
+                        cursor.execute(normalized_statement, positional_params)
+                    else:
+                        cursor.execute(normalized_statement)
+                    description = cursor.description or []
+                    columns = [column[0] for column in description]
+                    raw_rows = cursor.fetchall() or []
+        except Exception as exc:
+            raise RuntimeError(str(exc)) from exc
+
+        rows: list[dict] = []
+        for raw_row in raw_rows:
+            if isinstance(raw_row, dict):
+                rows.append(dict(raw_row))
+                continue
+            rows.append(dict(zip(columns, list(raw_row))))
+
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        logger.info("sql.done executor=connector hash=%s state=SUCCEEDED rows=%d duration_ms=%d", stmt_hash, len(rows), elapsed_ms)
+        return rows
+
+
+_REST_EXECUTOR: _SqlExecutor = _RestStatementExecutor()
+_CONNECTOR_EXECUTOR: _SqlExecutor = _ConnectorStatementExecutor()
+
+
+def _configured_sql_executor_name() -> str:
+    configured = os.environ.get("SPC_SQL_EXECUTOR", "rest").strip().lower()
+    return configured if configured in {"rest", "connector"} else "rest"
+
+
+def _get_sql_executor() -> _SqlExecutor:
+    configured = _configured_sql_executor_name()
+    if configured == "connector":
+        if databricks_sql is None:
+            logger.warning("sql.executor connector requested but databricks-sql-connector is unavailable; falling back to rest")
+            return _REST_EXECUTOR
+        return _CONNECTOR_EXECUTOR
+    return _REST_EXECUTOR
+
+
 def run_sql(
     token: str,
     statement: str,
     params: Optional[list[dict]] = None,
 ) -> list[dict]:
     """
-    Execute a SQL statement via the Databricks SQL Statement Execution REST API.
+    Execute a SQL statement via the configured Databricks SQL executor.
 
-    Supports named parameters (:name syntax) to prevent SQL injection:
-
-        rows = run_sql(token, "SELECT * FROM t WHERE col = :val",
-                       [sql_param("val", user_input)])
-
-    Falls back to polling when the warehouse returns PENDING/RUNNING status.
-    Raises RuntimeError on SQL failures.
+    The default executor remains the Statement Execution REST path for parity,
+    while `SPC_SQL_EXECUTOR=connector` enables the official Databricks SQL
+    connector path using the same `run_sql` / `run_sql_async` call sites.
     """
-    host = hostname()
-    wh_id = WAREHOUSE_HTTP_PATH.rsplit("/", 1)[-1]
-    url = f"https://{host}/api/2.0/sql/statements/"
-
-    body: dict = {
-        "warehouse_id": wh_id,
-        "statement": statement,
-        "wait_timeout": "50s",
-    }
-    if params:
-        body["parameters"] = params
-
-    payload = json.dumps(body).encode()
-    auth_headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
-    stmt_hash = hashlib.sha256(statement.encode()).hexdigest()[:16]
-    param_count = len(params) if params else 0
-    logger.info("sql.execute hash=%s params=%d", stmt_hash, param_count)
-
-    req = urllib.request.Request(url, data=payload, headers=auth_headers, method="POST")
-    t0 = time.monotonic()
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            result = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body_str = exc.read().decode() if exc.fp else ""
-        raise RuntimeError(f"SQL API {exc.code} {exc.reason}: {body_str[:2000]}") from exc
-
-    # Poll until terminal state
-    state = result.get("status", {}).get("state", "")
-    statement_id = result.get("statement_id", "")
-    poll_url = f"https://{host}/api/2.0/sql/statements/{statement_id}"
-
-    poll_delay_s = _SQL_POLL_INITIAL_DELAY_S
-    for _ in range(_SQL_POLL_MAX_ATTEMPTS):
-        if state in ("SUCCEEDED", "FAILED", "CANCELED", "CLOSED"):
-            break
-        time.sleep(poll_delay_s)
-        poll_req = urllib.request.Request(poll_url, headers=auth_headers)
-        try:
-            with urllib.request.urlopen(poll_req, timeout=30) as poll_resp:
-                result = json.loads(poll_resp.read().decode())
-                state = result.get("status", {}).get("state", "")
-        except urllib.error.HTTPError as exc:
-            body_str = exc.read().decode() if exc.fp else ""
-            raise RuntimeError(f"SQL poll {exc.code}: {body_str[:1000]}") from exc
-        poll_delay_s = min(_SQL_POLL_MAX_DELAY_S, poll_delay_s * 2)
-
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
-
-    if state != "SUCCEEDED":
-        error_info = result.get("status", {}).get("error", {})
-        msg = error_info.get("message", f"Query ended with state: {state}")
-        logger.warning("sql.failed hash=%s state=%s duration_ms=%d", stmt_hash, state, elapsed_ms)
-        raise RuntimeError(msg)
-
-    columns = [c["name"] for c in result["manifest"]["schema"]["columns"]]
-    rows = [
-        dict(zip(columns, row_data))
-        for row_data in result.get("result", {}).get("data_array", [])
-    ]
-    logger.info("sql.done hash=%s state=SUCCEEDED rows=%d duration_ms=%d", stmt_hash, len(rows), elapsed_ms)
-    return rows
+    return _get_sql_executor().execute(token, statement, params)
 
 
 def _sql_cache_key(

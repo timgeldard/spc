@@ -83,6 +83,7 @@ Release 1 excludes:
 - [x] Refactor `fetch_attribute_characteristics()` to use `spc_attribute_quality_metrics`.
 - [x] Keep `fetch_characteristics()` on raw SQL.
 - [x] Refactor process-flow health aggregation to use `spc_process_flow_source_v`; keep recursive lineage raw.
+- [x] Replace hardcoded process-flow recursion limits with request-level upstream/downstream lineage depth parameters.
 - [x] Refactor correlation queries to use `spc_correlation_source_v`.
 - [x] Remove the unused `USE_METRIC_VIEWS` config flag and legacy toggle scaffolding.
 

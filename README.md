@@ -15,7 +15,7 @@ Databricks SQL Warehouse and Unity Catalog.
 - **Rule Detection** — WECO (4 rules) and Nelson (8 rules) out-of-control signals
 - **P-Chart / nP-Chart** — Proportion nonconforming charts for attribute data
 - **Dynamic Stratification** — Slice charts and scorecards by **Plant, Lot, or Operation**
-- **Process Flow** — DAG showing upstream/downstream material lineage with health colouring
+- **Process Flow** — DAG showing upstream/downstream material lineage with health colouring and configurable lineage depth
 - **Multivariate SPC** — Hotelling's T² control chart for coordinated drift across multiple characteristics
 - **Root-Cause Suggestions** — Contributor ranking for multivariate anomalies using covariance-weighted decomposition
 - **Correlation Explorer** — Interactive heatmap showing pairwise coupling across the same shared-batch population
@@ -50,7 +50,8 @@ Databricks Apps Runtime
 React SPA (Vite + TypeScript)
     ├── SPCPage              Tab shell: Overview | Flow | Charts | Scorecard | Advanced analysis
     ├── SPCFilterBar         Material → Dynamic Stratification → Date range
-    ├── SPCContext           useReducer state (Strictly Typed)
+    ├── SPCContext           Reducer-backed local UI/workbench state
+    ├── TanStack Query       Server-state caching for metadata and summary analysis
     ├── spc/dal/             Data Access Layer (PyPika SQL Builders)
     ├── spc/charts/          IMR, XbarR, P, Capability, T² & Signals Panels
     └── spc/scorecard/       ScorecardView (Carbon DataTable with sorting)
@@ -61,7 +62,7 @@ The FastAPI backend is built with a layered architecture:
 *   **Schemas** define Pydantic models for request/response contracts.
 *   **Data Access Layer (DAL)** manages programmatic SQL generation via **PyPika**, ensuring injection safety and deterministic data formatting.
 
-SQL is executed via the Databricks REST API (`/api/2.0/sql/statements`) to ensure safe async execution of recursive CTEs.
+SQL is executed through a swappable adapter in `backend/utils/db.py`. The default path remains the Databricks Statement Execution REST API for parity, and `SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector` path against the same DAL call sites.
 
 ---
 
@@ -167,6 +168,7 @@ Important deployment notes:
 - deployment is fully declarative; no post-deploy scope patching script is required
 - `/api/ready` requires `DATABRICKS_READINESS_TOKEN` in the target environment for a real warehouse probe
 - the in-process SQL cache is per app instance, so multi-instance deployments should treat it as a latency optimisation rather than a shared consistency layer
+- the backend supports `SPC_SQL_EXECUTOR=rest|connector`; keep `rest` as the baseline until connector parity is verified in your workspace
 
 Live Release 1 warehouse validation:
 

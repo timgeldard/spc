@@ -72,9 +72,16 @@ dimensions:
   background.
 - Added shared request caching for overview-to-detail SPC flows so repeated tab
   transitions reuse hot scorecard and process-flow results.
+- Introduced TanStack Query for the highest-traffic server-state hooks
+  (plants, characteristics, scorecard, and process flow), replacing custom
+  hook-level caching on those paths with stable query keys and centralized
+  retry/staleness behavior.
 - Extended true request cancellation and stale-request suppression across the
   remaining high-cost analytical hooks, including correlation, scatter, P chart,
   count chart, and plant lookups.
+- Added configurable upstream/downstream lineage depth controls to the process
+  flow experience, with the selected search horizon persisted into saved views
+  and shareable URL state.
 - Replaced the full-framework Carbon stylesheet import with a curated set of
   Carbon style modules, cutting the global CSS bundle and eliminating the IBM
   Plex runtime font warnings in production builds.
@@ -311,8 +318,11 @@ dimensions:
   the old post-deploy scope patching fallback.
 - Added missing root runtime dependencies required by the deployed app:
   `openpyxl`, `numpy`, `pandas`, `scipy`, `cachetools`, and `pypika`.
-- Removed stale dependency assumptions around `databricks-sql-connector`,
-  because the app now uses the Databricks REST SQL Statements API instead.
+- Introduced an execution adapter in `backend/utils/db.py` so the backend can
+  run against either the Databricks Statement Execution REST API or the
+  official `databricks-sql-connector` without changing DAL call sites.
+- Added `databricks-sql-connector` as an optional supported runtime dependency
+  and kept the REST path as the default parity baseline.
 
 ### Business benefit
 
@@ -324,7 +334,8 @@ dimensions:
 
 - Startup crashes caused by missing runtime packages are avoided.
 - The deployed environment is now aligned with the actual import graph of the
-  backend.
+  backend, and the SQL transport can be swapped in a controlled way with
+  parity-oriented tests.
 
 ---
 

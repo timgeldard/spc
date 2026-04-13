@@ -156,3 +156,31 @@ class TestSqlRuntimeTuning:
         assert db_module._SQL_POLL_MAX_ATTEMPTS >= 1
         assert db_module._SQL_POLL_INITIAL_DELAY_S >= 1
         assert db_module._SQL_POLL_MAX_DELAY_S >= db_module._SQL_POLL_INITIAL_DELAY_S
+
+
+class TestSqlExecutorSelection:
+    def test_normalize_statement_for_connector_preserves_parameter_order(self):
+        statement, positional = db_module._normalize_statement_for_connector(
+            "SELECT * FROM t WHERE material_id = :material_id AND plant_id = :plant_id AND material_id <> :material_id",
+            [
+                db_module.sql_param("material_id", "MAT-1"),
+                db_module.sql_param("plant_id", "PLANT-2"),
+            ],
+        )
+
+        assert statement == "SELECT * FROM t WHERE material_id = ? AND plant_id = ? AND material_id <> ?"
+        assert positional == ["MAT-1", "PLANT-2", "MAT-1"]
+
+    def test_normalize_statement_for_connector_rejects_missing_parameter(self):
+        with pytest.raises(RuntimeError, match="Missing SQL parameter 'material_id'"):
+            db_module._normalize_statement_for_connector("SELECT * FROM t WHERE material_id = :material_id", [])
+
+    def test_get_sql_executor_returns_rest_by_default(self):
+        with patch.dict("os.environ", {}, clear=False):
+            executor = db_module._get_sql_executor()
+        assert isinstance(executor, db_module._RestStatementExecutor)
+
+    def test_get_sql_executor_falls_back_to_rest_when_connector_missing(self):
+        with patch.dict("os.environ", {"SPC_SQL_EXECUTOR": "connector"}, clear=False), patch("backend.utils.db.databricks_sql", None):
+            executor = db_module._get_sql_executor()
+        assert isinstance(executor, db_module._RestStatementExecutor)

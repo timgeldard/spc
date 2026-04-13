@@ -202,8 +202,10 @@ GRANT MODIFY ON TABLE `connected_plant_uat`.`gold`.`spc_msa_sessions`
 ## Write Mechanism
 
 Both tables are written via the existing `run_sql()` utility in `backend/utils/db.py`,
-which executes DML (`MERGE INTO`, `INSERT INTO`) through the Databricks SQL Statement
-Execution REST API. No additional Python packages or connectors are required.
+which executes DML (`MERGE INTO`, `INSERT INTO`) through the configured Databricks SQL
+executor. The default path uses the Statement Execution REST API, and
+`SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector`
+through the same `run_sql()` / `run_sql_async()` wrappers.
 
 Example pattern used by the locked limits endpoint:
 

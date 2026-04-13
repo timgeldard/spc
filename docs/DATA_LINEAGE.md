@@ -335,7 +335,7 @@ Databricks Apps proxy
             │
             └── FastAPI backend (spc.py)
                     │
-                    └── Databricks SQL Warehouse (REST API /api/2.0/sql/statements)
+                    └── Databricks SQL Warehouse (Statement REST API or official SQL connector)
                             │
                             └── Unity Catalog (connected_plant_uat.gold.*)
                                     │

@@ -34,7 +34,7 @@ The app is a single Databricks App unit: a FastAPI backend serving both the REST
 └─────────────────────────────────────────────────────────┘
                           │
             Databricks SQL Warehouse
-            (REST API /api/2.0/sql/statements)
+            (Statement REST API or official SQL connector)
                           │
             Unity Catalog (connected_plant_uat.gold.*)
             Row/column policies enforced per user
@@ -63,7 +63,7 @@ backend/
 ├── schemas/            Pydantic Models
 │   └── spc_schemas.py  Request/Response type safety
 └── utils/
-    ├── db.py           SQL statement execution and token resolution
+    ├── db.py           SQL statement execution adapter, caching, and token resolution
     └── rate_limit.py   API protection
 ```
 
@@ -92,7 +92,15 @@ params = [sql_param("id", val)]
 rows = await run_sql_async(token, query.get_sql(), params)
 ```
 
-The REST API substitutes `:name` placeholders server-side. No user input is ever string-interpolated into the SQL text.
+Named `:name` placeholders remain the only DAL contract. The default REST executor passes them straight through to the Statement Execution API, while the optional connector executor normalizes them to positional parameters before dispatch. No user input is ever string-interpolated into the SQL text.
+
+### SQL Execution Adapter
+
+`backend/utils/db.py` now exposes a small executor boundary under the existing `run_sql()` / `run_sql_async()` wrappers.
+
+*   **Default**: `SPC_SQL_EXECUTOR=rest` uses the Databricks Statement Execution REST API for behavioral parity with the existing app.
+*   **Optional**: `SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector` path using the same DAL call sites.
+*   **Parity strategy**: the adapter boundary lets the app compare executors against the same DAL tests and live validation harness before removing the REST fallback.
 
 ---
 
@@ -108,9 +116,27 @@ The frontend is fully migrated to **TypeScript** to ensure mathematical correctn
 
 ### State Management (`SPCContext.tsx`)
 
-All SPC state still originates from a strictly typed reducer, but consumers now subscribe through selector-based accessors built on `useSyncExternalStore` rather than receiving the full mutable state object.
+All SPC local UI state still originates from a strictly typed reducer, but consumers now subscribe through selector-based accessors built on `useSyncExternalStore` rather than receiving the full mutable state object.
 
 This keeps domain integrity rules in one place while avoiding app-wide rerenders for unrelated state changes such as tab switches, loading flags, or exclusion updates.
+
+### Server State (`TanStack Query`)
+
+The frontend now treats API-backed state separately from local workbench state.
+
+*   **TanStack Query** owns cacheable server state for:
+    * plants
+    * characteristics
+    * scorecards
+    * process-flow summaries
+*   **SPCContext** remains responsible for:
+    * selected material / plant / MIC
+    * chart posture and exclusion UI
+    * multivariate variable picks
+    * process-flow lineage depth
+    * active tab / saved views
+
+This split reduces custom fetch logic and lets the app use stable query keys for cache reuse, background refresh, and future optimistic invalidation without replacing the existing reducer-based domain state.
 
 ### Frontend Performance Boundaries
 
@@ -120,10 +146,12 @@ The SPC frontend now treats expensive capabilities as explicit runtime boundarie
 *   **Native Genie Panel**: `GenieView.tsx` is now a lightweight native SPC chat surface that talks directly to the backend Genie endpoint instead of loading the Carbon AI Chat runtime. This preserves the governed conversational workflow while removing a large web-component and editor stack from the shipped frontend.
 *   **Worker-based Analytics with Fallbacks**: Heavy chart analytics run in `spcCompute.worker.ts` via `useSPCComputedAnalytics`, which keeps large quantitative recalculations off the main thread. The hook now also traps worker startup, messaging, and execution failures so the chart surface exits loading cleanly and can fall back to in-process computation when needed.
 *   **Progressive Chart Hydration**: `useSPCChartData` publishes the first page of quantitative history immediately, then continues hydrating later pages in the background up to the configured cap. This improves time-to-first-chart for high-volume materials without sacrificing full-history analysis.
-*   **Shared Request Reuse and Cancellation**: Overview and detail tabs share hot scorecard and process-flow results through a lightweight request cache, and the remaining analytical hooks now pass `AbortSignal` through to the underlying fetch so superseded requests stop consuming backend resources.
+*   **TanStack Query for Core SPC Reads**: Plants, characteristics, scorecards, and process-flow summaries now use TanStack Query instead of bespoke hook-local caching. This gives those high-traffic reads stable query keys, background refetch behavior, and centralized retry/error policy.
+*   **Request Reuse and Cancellation**: The remaining analytical hooks still use the lighter custom request-cache path for now, but all active fetches pass `AbortSignal` through to the underlying request so superseded work stops consuming backend resources.
 *   **Explicit Runtime Families**: `vite.config.js` now assigns Carbon table, layout, date-picker, icon families, and a reduced Carbon app residual runtime to explicit chunk families instead of relying on a broad catch-all. This keeps large transitive packages out of app-facing entry chunks and makes bundle growth easier to reason about.
 *   **Bundle Budget Guardrails**: `frontend/scripts/check-bundle-budgets.mjs` validates the key shell, chart, Carbon, Genie, and CSS assets after build so regressions are caught as part of routine verification instead of being discovered only during manual bundle inspection.
 *   **Governed Performance Switching**: The quantitative metric-view source preserves sample-grain values plus subgroup rollups so the semantic layer can expose both Gaussian and non-parametric long-term performance and switch between them conservatively for Genie-facing queries.
+*   **Configurable Lineage Horizon**: Process flow no longer depends on a hidden hardcoded recursion limit; analysts can now tune upstream/downstream lineage depth from the filter bar, and the selection persists in saved views and shareable URLs.
 
 ### Chart Rendering
 
@@ -205,9 +233,9 @@ No automated deployment — push to UAT is a manual step via `make deploy`.
 
 | Area | Limitation |
 |---|---|
-| Databricks connector | Not used — REST API polling adds ~2s latency vs native driver |
+| Databricks connector | Optional via `SPC_SQL_EXECUTOR=connector`; parity with the REST baseline still needs live workspace validation before it should become the default |
 | In-process SQL cache | `TTLCache` is per app instance; multi-instance deployments do not share cache state |
-| App scopes | Declarative in `databricks.yml`; older CLI versions may still need the compatibility script |
+| Frontend data layer | TanStack Query currently covers metadata and summary reads; chart, correlation, multivariate, and exclusion flows still need the same migration |
 | Plant filter in chart-data | Uses INNER JOIN on batch_dates — batches with no mass balance record are excluded |
 | Histogram bins | Binning follows Freedman-Diaconis and may still need UX tuning for very small samples |
 | Scorecard stability | Cpk shown without per-MIC stability check (requires full chart-data fetch per MIC) |
