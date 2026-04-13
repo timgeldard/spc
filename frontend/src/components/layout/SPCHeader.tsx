@@ -1,18 +1,10 @@
-import { useState, type ChangeEvent } from 'react'
+import { useState, type ChangeEvent, type CSSProperties } from 'react'
 import {
   Button,
   Search,
   Select,
   SelectItem,
 } from '~/lib/carbon-forms'
-import {
-  Header,
-  HeaderGlobalAction,
-  HeaderGlobalBar,
-  HeaderMenuButton,
-  HeaderName,
-  HeaderPanel,
-} from '~/lib/carbon-shell'
 import Asleep from '@carbon/icons-react/es/Asleep.js'
 import Bookmark from '@carbon/icons-react/es/Bookmark.js'
 import BookmarkAdd from '@carbon/icons-react/es/BookmarkAdd.js'
@@ -28,6 +20,18 @@ interface SPCHeaderProps {
   showMenuButton?: boolean
   isSideNavExpanded?: boolean
   onClickSideNavExpand?: () => void
+}
+
+const actionButtonStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '2.5rem',
+  height: '2.5rem',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--cds-text-primary)',
+  cursor: 'pointer',
 }
 
 export function SPCHeader({
@@ -78,22 +82,43 @@ export function SPCHeader({
   }
 
   return (
-    <Header aria-label="SPC Studio">
-      {showMenuButton && (
-        <HeaderMenuButton
+    <header
+      aria-label="SPC Studio"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        minHeight: '3rem',
+        padding: '0 1rem',
+        borderBottom: '1px solid var(--cds-border-subtle-01)',
+        background: 'var(--cds-layer)',
+        position: 'relative',
+      }}
+    >
+      {showMenuButton ? (
+        <button
+          type="button"
           aria-label={isSideNavExpanded ? 'Close menu' : 'Open menu'}
-          isActive={isSideNavExpanded}
+          aria-pressed={isSideNavExpanded}
           onClick={() => onClickSideNavExpand?.()}
-        />
-      )}
+          style={{ ...actionButtonStyle, marginRight: '0.25rem' }}
+        >
+          <span aria-hidden="true" style={{ fontSize: '1.125rem' }}>{isSideNavExpanded ? '×' : '☰'}</span>
+        </button>
+      ) : null}
 
-      {/* prefix="" removes the default "IBM" company prefix */}
-      <HeaderName href="#" prefix="">
+      <a
+        href="#"
+        onClick={(event) => event.preventDefault()}
+        style={{
+          color: 'var(--cds-text-primary)',
+          textDecoration: 'none',
+          fontWeight: 600,
+          flexShrink: 0,
+        }}
+      >
         SPC Studio
-      </HeaderName>
+      </a>
 
-      {/* Centre search — fills flex space between HeaderName and HeaderGlobalBar.
-          No Tailwind; uses inline flex layout and Carbon's own Search component. */}
       <div
         style={{
           flex: 1,
@@ -112,59 +137,75 @@ export function SPCHeader({
         />
       </div>
 
-      <HeaderGlobalBar>
-        <HeaderGlobalAction
+      <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
+        <button
+          type="button"
           aria-label="Save current view"
           onClick={handleSaveView}
-          tooltipAlignment="center"
+          style={actionButtonStyle}
         >
           <BookmarkAdd size={20} />
-        </HeaderGlobalAction>
+        </button>
 
-        <HeaderGlobalAction
+        <button
+          type="button"
           aria-label="Saved views"
-          isActive={savedViewsOpen}
-          onClick={() => setSavedViewsOpen((o) => !o)}
-          tooltipAlignment="center"
+          aria-pressed={savedViewsOpen}
+          onClick={() => setSavedViewsOpen((open) => !open)}
+          style={actionButtonStyle}
         >
           <Bookmark size={20} />
-        </HeaderGlobalAction>
+        </button>
 
-        <HeaderGlobalAction aria-label="Export data" tooltipAlignment="center">
+        <button type="button" aria-label="Export data" style={actionButtonStyle}>
           <Download size={20} />
-        </HeaderGlobalAction>
+        </button>
 
-        {onToggleDark && (
-          <HeaderGlobalAction
+        {onToggleDark ? (
+          <button
+            type="button"
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             onClick={onToggleDark}
-            tooltipAlignment="center"
+            style={actionButtonStyle}
           >
             {dark ? <Light size={20} /> : <Asleep size={20} />}
-          </HeaderGlobalAction>
-        )}
+          </button>
+        ) : null}
 
-        <HeaderGlobalAction
+        <button
+          type="button"
           aria-label={`Role: ${state.roleMode} — click to switch to ${nextRoleMode}`}
           onClick={() => dispatch({ type: 'SET_ROLE_MODE', payload: nextRoleMode })}
-          tooltipAlignment="center"
+          style={actionButtonStyle}
         >
           <UserRole size={20} />
-        </HeaderGlobalAction>
+        </button>
 
-        <HeaderGlobalAction aria-label="User profile" tooltipAlignment="end">
+        <button type="button" aria-label="User profile" style={actionButtonStyle}>
           <UserAvatar size={20} />
-        </HeaderGlobalAction>
-      </HeaderGlobalBar>
+        </button>
+      </div>
 
-      {/* Saved views panel — slides down below the Header when triggered */}
-      <HeaderPanel aria-label="Saved views" expanded={savedViewsOpen}>
-        <div style={{ padding: '1.5rem 1rem' }}>
+      {savedViewsOpen ? (
+        <div
+          aria-label="Saved views"
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: '1rem',
+            zIndex: 20,
+            width: '22rem',
+            padding: '1rem',
+            border: '1px solid var(--cds-border-subtle-01)',
+            background: 'var(--cds-layer)',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+          }}
+        >
           <p
             style={{
               fontSize: '0.875rem',
               fontWeight: 600,
-              marginBottom: '0.75rem',
+              margin: '0 0 0.75rem',
               color: 'var(--cds-text-primary)',
             }}
           >
@@ -200,7 +241,7 @@ export function SPCHeader({
             </>
           )}
         </div>
-      </HeaderPanel>
-    </Header>
+      ) : null}
+    </header>
   )
 }

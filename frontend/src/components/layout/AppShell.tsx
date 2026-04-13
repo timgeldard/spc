@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { ElementType, ReactNode } from 'react'
-import { Content } from '~/lib/carbon-shell'
 import { GlobalFilterBar } from './GlobalFilterBar'
 import { SPCHeader } from './SPCHeader'
 import { Sidebar } from './Sidebar'
@@ -50,10 +49,10 @@ export function AppShell({
           isSideNavExpanded={isSideNavExpanded}
         />
       )}
-      <Content className="spc-app-shell__content">
+      <div className="spc-app-shell__content">
         <GlobalFilterBar>{filterBar}</GlobalFilterBar>
         {children}
-      </Content>
+      </div>
     </>
   )
 }

@@ -4,19 +4,17 @@ import path from 'node:path'
 const assetsDir = path.resolve(process.cwd(), 'dist/assets')
 
 const budgets = [
-  { label: 'SPC shell entry', pattern: /^SPCPage-.*\.js$/, maxKb: 15, required: true },
+  { label: 'SPC shell entry', pattern: /^SPCPage-.*\.js$/, maxKb: 25, required: true },
   { label: 'Genie view wrapper', pattern: /^GenieView-.*\.js$/, maxKb: 10, required: true },
   { label: 'Control charts view', pattern: /^ControlChartsView-.*\.js$/, maxKb: 80, required: true },
   { label: 'Carbon layout runtime', pattern: /^carbon-layout-react-.*\.js$/, maxKb: 30, required: true },
   { label: 'Carbon date runtime', pattern: /^carbon-date-.*\.js$/, maxKb: 250, required: true },
-  { label: 'Carbon shell icons', pattern: /^carbon-icons-shell-.*\.js$/, maxKb: 80, required: true },
-  { label: 'Carbon overview icons', pattern: /^carbon-icons-overview-.*\.js$/, maxKb: 80, required: true },
   { label: 'Carbon flow icons', pattern: /^carbon-icons-flow-.*\.js$/, maxKb: 80, required: false },
   { label: 'Carbon status icons', pattern: /^carbon-icons-status-.*\.js$/, maxKb: 80, required: true },
   { label: 'Carbon page icons', pattern: /^carbon-icons-page-.*\.js$/, maxKb: 60, required: true },
   { label: 'Carbon chart icons', pattern: /^carbon-icons-chart-.*\.js$/, maxKb: 40, required: false },
   { label: 'Carbon table runtime', pattern: /^carbon-table-.*\.js$/, maxKb: 60, required: true },
-  { label: 'Carbon app runtime', pattern: /^carbon-app-.*\.js$/, maxKb: 1100, required: true },
+  { label: 'Carbon app runtime', pattern: /^carbon-app-.*\.js$/, maxKb: 950, required: true },
   { label: 'Main stylesheet', pattern: /^index-.*\.css$/, maxKb: 500, required: true },
 ]
 

@@ -1,5 +1,4 @@
 import type { ElementType } from 'react'
-import { SideNav, SideNavItems, SideNavLink } from '~/lib/carbon-shell'
 import Analytics from '@carbon/icons-react/es/Analytics.js'
 import Dashboard from '@carbon/icons-react/es/Dashboard.js'
 import DataTable from '@carbon/icons-react/es/DataTable.js'
@@ -40,31 +39,43 @@ export function Sidebar({
   const resolvedActive = activeItem ?? items[0]?.id
 
   return (
-    // isPersistent: sidebar always occupies layout space on desktop (no overlay).
-    // isRail: collapses to icon-only strip when expanded={false}, matching prior behaviour.
-    // Carbon's responsive CSS automatically switches to overlay mode on small viewports.
-    <SideNav
+    <aside
       aria-label="Side navigation"
-      expanded={isSideNavExpanded}
-      isPersistent
-      isRail
+      style={{
+        width: isSideNavExpanded ? '15rem' : '3.5rem',
+        borderRight: '1px solid var(--cds-border-subtle-01)',
+        background: 'var(--cds-layer)',
+        padding: '0.5rem 0',
+        transition: 'width 160ms ease',
+        overflow: 'hidden',
+      }}
     >
-      <SideNavItems>
+      <nav style={{ display: 'grid', gap: '0.125rem' }}>
         {items.map((item) => (
-          <SideNavLink
+          <button
             key={item.id}
-            renderIcon={item.icon as React.ComponentType}
-            isActive={resolvedActive === item.id}
-            href="#"
-            onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-              e.preventDefault()
-              onSelectItem?.(item.id)
+            type="button"
+            onClick={() => onSelectItem?.(item.id)}
+            aria-current={resolvedActive === item.id ? 'page' : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              width: '100%',
+              minHeight: '2.75rem',
+              padding: isSideNavExpanded ? '0 1rem' : '0 0.75rem',
+              border: 'none',
+              background: resolvedActive === item.id ? 'var(--cds-layer-selected)' : 'transparent',
+              color: 'var(--cds-text-primary)',
+              cursor: 'pointer',
+              textAlign: 'left',
             }}
           >
-            {item.label}
-          </SideNavLink>
+            <item.icon />
+            {isSideNavExpanded ? <span>{item.label}</span> : null}
+          </button>
         ))}
-      </SideNavItems>
-    </SideNav>
+      </nav>
+    </aside>
   )
 }

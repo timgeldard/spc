@@ -49,33 +49,6 @@ const CHUNK_FAMILIES = [
     ],
   },
   {
-    name: 'carbon-icons-shell',
-    patterns: [
-      `${NODE_MODULE}@carbon/icons-react/es/Asleep.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Bookmark.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/BookmarkAdd.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Dashboard.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/DataTable.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Download.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Edit.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Filter.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Light.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Settings.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/TreeView.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/UserAvatar.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/UserRole.js`,
-    ],
-  },
-  {
-    name: 'carbon-icons-overview',
-    patterns: [
-      `${NODE_MODULE}@carbon/icons-react/es/Analytics.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/ArrowRight.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Group.js`,
-      `${NODE_MODULE}@carbon/icons-react/es/Growth.js`,
-    ],
-  },
-  {
     name: 'carbon-icons-flow',
     patterns: [
       `${NODE_MODULE}@carbon/icons-react/es/Activity.js`,
@@ -134,6 +107,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 950,
     rollupOptions: {
       output: {
         manualChunks(id) {

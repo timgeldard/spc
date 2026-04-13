@@ -1,6 +1,5 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Tab, TabList, Tabs } from '~/lib/carbon-shell'
 import { AppShell } from '../components/layout'
 import { SPCProvider, shallowEqual, useSPCDispatch, useSPCSelector } from './SPCContext'
 import SPCErrorBoundary from './SPCErrorBoundary'
@@ -105,31 +104,34 @@ function ModuleTabs() {
   const selectedIndex = Math.max(visibleTabs.findIndex(tab => tab.id === state.activeTab), 0)
 
   return (
-    <Tabs
-      selectedIndex={selectedIndex}
-      onChange={({ selectedIndex: nextIndex }) => {
-        const nextTab = visibleTabs[nextIndex]
-        if (nextTab) {
-          dispatch({ type: 'SET_ACTIVE_TAB', payload: nextTab.id })
-        }
-      }}
-    >
-      <TabList aria-label="SPC analysis modules" contained>
-      {visibleTabs.map(tab => {
+    <div role="tablist" aria-label="SPC analysis modules" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+      {visibleTabs.map((tab, index) => {
         const unavailableReason = getTabUnavailableReason(tab.id, state)
         const disabled = Boolean(unavailableReason) && state.activeTab !== tab.id
         return (
-          <Tab
+          <button
             key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selectedIndex === index}
             title={unavailableReason ?? undefined}
             disabled={disabled}
+            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab.id })}
+            style={{
+              padding: '0.625rem 1rem',
+              border: '1px solid var(--cds-border-subtle-01)',
+              borderBottomColor: selectedIndex === index ? 'var(--cds-interactive)' : 'var(--cds-border-subtle-01)',
+              background: selectedIndex === index ? 'var(--cds-layer-selected)' : 'var(--cds-layer)',
+              color: 'var(--cds-text-primary)',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.55 : 1,
+            }}
           >
             {tab.label}
-          </Tab>
+          </button>
         )
       })}
-      </TabList>
-    </Tabs>
+    </div>
   )
 }
 
