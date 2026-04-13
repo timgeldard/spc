@@ -40,7 +40,10 @@ def _coerce_float(value: object) -> Optional[float]:
     if value is None:
         return None
     try:
-        return float(value)
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
     except (TypeError, ValueError):
         return None
 

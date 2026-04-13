@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -11,7 +12,10 @@ def _round_float(value: Any, digits: int = 6) -> float | None:
     if value is None:
         return None
     try:
-        return round(float(value), digits)
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return round(f, digits)
     except (TypeError, ValueError):
         return None
 

@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import quote, unquote
@@ -41,7 +42,11 @@ def _coerce_chart_float(row: dict, field: str) -> None:
     if value is None:
         return
     try:
-        row[field] = float(value)
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            row[field] = None
+            return
+        row[field] = f
     except (ValueError, TypeError) as exc:
         raise ValueError(_format_chart_row_error(field, value, row)) from exc
 
