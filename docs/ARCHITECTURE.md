@@ -158,12 +158,13 @@ The SPC frontend now treats expensive capabilities as explicit runtime boundarie
 *   **Bundle Budget Guardrails**: `frontend/scripts/check-bundle-budgets.mjs` validates the key shell, chart, Carbon, Genie, and CSS assets after build so regressions are caught as part of routine verification instead of being discovered only during manual bundle inspection.
 *   **Governed Performance Switching**: The quantitative metric-view source preserves sample-grain values plus subgroup rollups so the semantic layer can expose both Gaussian and non-parametric long-term performance and switch between them conservatively for Genie-facing queries.
 *   **Configurable Lineage Horizon**: Process flow no longer depends on a hidden hardcoded recursion limit; analysts can now tune upstream/downstream lineage depth from the filter bar, and the selection persists in saved views and shareable URLs.
+*   **Backend MSA Parity Reference**: Gauge R&R now has a backend reference implementation in `backend/utils/msa.py` plus a live `POST /api/spc/msa/calculate` endpoint, so the interactive MSA screen uses the governed backend path instead of relying only on browser-side math.
 
 ### Chart Rendering
 
 | Library | Used for |
 |---|---|
-| **ECharts** | Control charts (I-MR, X̄-R, P) and Histograms |
+| **ECharts** | Control charts (I-MR, X̄-R, X̄-S, EWMA, CUSUM, P, nP, C, U) and Histograms |
 | **Carbon DataTable** | Sortable capability scorecards and scorecard drill-in |
 | **ReactFlow** | Interactive Process Flow DAGs |
 

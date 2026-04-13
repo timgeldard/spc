@@ -6,6 +6,7 @@ import {
   stddevMSSD,
   computeIMR,
   computeXbarR,
+  computeXbarS,
   groupIntoSubgroups,
   computeCapability,
   computeAll,
@@ -182,6 +183,41 @@ describe('computeXbarR', () => {
   })
 })
 
+describe('computeXbarS', () => {
+  it('returns null for fewer than 2 subgroups', () => {
+    expect(computeXbarS([{ batchSeq: 1, values: [10, 11] }])).toBeNull()
+    expect(computeXbarS([])).toBeNull()
+  })
+
+  it('returns chart limits for valid subgroups', () => {
+    const subgroups = [
+      { batchSeq: 1, batchId: 'B1', batchDate: '2024-01-01', values: [10, 11, 9, 10] },
+      { batchSeq: 2, batchId: 'B2', batchDate: '2024-01-02', values: [10, 12, 11, 9] },
+      { batchSeq: 3, batchId: 'B3', batchDate: '2024-01-03', values: [9, 10, 11, 10] },
+    ]
+    const result = computeXbarS(subgroups)
+    expect(result).not.toBeNull()
+    expect(result).toHaveProperty('grandMean')
+    expect(result).toHaveProperty('sBar')
+    expect(result).toHaveProperty('ucl_x')
+    expect(result).toHaveProperty('lcl_x')
+    expect(result).toHaveProperty('ucl_s')
+  })
+
+  it('surfaces mixed subgroup-size metadata for varying subgroup sizes', () => {
+    const subgroups = [
+      { batchSeq: 1, batchId: 'B1', batchDate: '2024-01-01', values: [10, 11] },
+      { batchSeq: 2, batchId: 'B2', batchDate: '2024-01-02', values: [10, 12, 11, 9] },
+      { batchSeq: 3, batchId: 'B3', batchDate: '2024-01-03', values: [9, 10, 11] },
+    ]
+    const result = computeXbarS(subgroups)
+    expect(result?.mixedSubgroupSizes).toBe(true)
+    expect(result?.referenceSubgroupSize).toBeNull()
+    expect(result?.averageSubgroupSize).toBeCloseTo((2 + 4 + 3) / 3, 6)
+    expect(result?.limitStrategy).toMatch(/average_n/)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // computeCapability
 // ---------------------------------------------------------------------------
@@ -276,6 +312,19 @@ describe('computeCapability', () => {
     expect(result.dpmo).toBeNull()
   })
 
+  it('returns approximate confidence intervals for Cp/Cpk/Pp/Ppk when enough data is present', () => {
+    const values = [8, 9, 10, 11, 12, 9, 10, 11, 10, 9, 11, 12, 10, 8, 9, 10, 11, 12, 10, 9, 11, 10, 9, 10, 11]
+    const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1)
+    expect(result.cpLower95).not.toBeNull()
+    expect(result.cpUpper95).not.toBeNull()
+    expect(result.cpkLower95).not.toBeNull()
+    expect(result.cpkUpper95).not.toBeNull()
+    expect(result.ppLower95).not.toBeNull()
+    expect(result.ppUpper95).not.toBeNull()
+    expect(result.ppkLower95).not.toBeNull()
+    expect(result.ppkUpper95).not.toBeNull()
+  })
+
   it('keeps the parametric long-term capability path for normal data', () => {
     const values = [8, 9, 10, 10, 10, 11, 12, 9, 10, 11]
     const result = computeCapability(values, { nominal: 10, tolerance: 3, spec_type: 'bilateral_symmetric' }, 1, {
@@ -330,6 +379,60 @@ describe('computeAll', () => {
     expect(result.capability.capabilityMethod).toBe('non_parametric')
     expect(result.capability.empiricalP50).not.toBeNull()
     expect(result.capability.ppk).not.toBeNull()
+  })
+
+  it('computes the Xbar-S chart family for subgrouped data', () => {
+    const points = [
+      { batch_id: 'B1', batch_seq: 1, sample_seq: 1, value: 10, nominal: 10, tolerance: 3 },
+      { batch_id: 'B1', batch_seq: 1, sample_seq: 2, value: 11, nominal: 10, tolerance: 3 },
+      { batch_id: 'B1', batch_seq: 1, sample_seq: 3, value: 9, nominal: 10, tolerance: 3 },
+      { batch_id: 'B2', batch_seq: 2, sample_seq: 1, value: 10, nominal: 10, tolerance: 3 },
+      { batch_id: 'B2', batch_seq: 2, sample_seq: 2, value: 12, nominal: 10, tolerance: 3 },
+      { batch_id: 'B2', batch_seq: 2, sample_seq: 3, value: 11, nominal: 10, tolerance: 3 },
+      { batch_id: 'B3', batch_seq: 3, sample_seq: 1, value: 9, nominal: 10, tolerance: 3 },
+      { batch_id: 'B3', batch_seq: 3, sample_seq: 2, value: 10, nominal: 10, tolerance: 3 },
+      { batch_id: 'B3', batch_seq: 3, sample_seq: 3, value: 11, nominal: 10, tolerance: 3 },
+    ]
+    const result = computeAll(points, 'xbar_s', 'weco')
+    expect(result.chartType).toBe('xbar_s')
+    expect(result.xbarS).not.toBeNull()
+    expect(result.xbarR).toBeNull()
+    expect(result.xbarS?.subgroupStats).toHaveLength(3)
+    expect(result.mrSignals).toBeDefined()
+  })
+
+  it('computes the EWMA chart family for individual data', () => {
+    const points = Array.from({ length: 10 }, (_, index) => ({
+      batch_id: `B${index + 1}`,
+      batch_seq: index + 1,
+      sample_seq: 1,
+      value: index < 8 ? 10 : 13,
+      nominal: 10,
+      tolerance: 3,
+    }))
+    const result = computeAll(points, 'ewma', 'weco', { ewmaLambda: 0.2, ewmaL: 3 })
+    expect(result.chartType).toBe('ewma')
+    expect(result.ewma).not.toBeNull()
+    expect(result.cusum).toBeNull()
+    expect(result.ewma?.lambda).toBeCloseTo(0.2, 6)
+    expect(result.ewma?.points).toHaveLength(10)
+  })
+
+  it('computes the CUSUM chart family for individual data', () => {
+    const points = Array.from({ length: 10 }, (_, index) => ({
+      batch_id: `B${index + 1}`,
+      batch_seq: index + 1,
+      sample_seq: 1,
+      value: index < 7 ? 10 : 14,
+      nominal: 10,
+      tolerance: 3,
+    }))
+    const result = computeAll(points, 'cusum', 'weco', { cusumK: 0.5, cusumH: 5 })
+    expect(result.chartType).toBe('cusum')
+    expect(result.cusum).not.toBeNull()
+    expect(result.ewma).toBeNull()
+    expect(result.cusum?.points).toHaveLength(10)
+    expect(result.cusum?.decisionInterval).toBeGreaterThan(0)
   })
 })
 

@@ -5,6 +5,7 @@ import type {
   CorrelationResult,
   CorrelationScatterResult,
   LockedLimits,
+  MSAResult,
   MicRef,
   MultivariateResult,
   PlantRef,
@@ -212,6 +213,27 @@ export async function fetchMultivariate(
         plant_id: plantId ?? null,
         date_from: dateFrom ?? null,
         date_to: dateTo ?? null,
+      }),
+    },
+  )
+}
+
+export async function calculateMSA(
+  measurementData: Array<Array<Array<number | null>>>,
+  tolerance: number,
+  method: 'average_range' | 'anova',
+  signal?: AbortSignal,
+): Promise<MSAResult> {
+  return await fetchJson<MSAResult>(
+    '/api/spc/msa/calculate',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        measurement_data: measurementData,
+        tolerance,
+        method,
       }),
     },
   )

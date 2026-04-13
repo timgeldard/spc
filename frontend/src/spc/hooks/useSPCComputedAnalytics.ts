@@ -28,6 +28,10 @@ interface UseSPCComputedAnalyticsArgs {
   normality: NormalityResult | null
   stratifyBy: StratifyByKey | null
   rollingWindowSize: number
+  ewmaLambda: number
+  ewmaL: number
+  cusumK: number
+  cusumH: number
 }
 
 interface ComputeResponse {
@@ -47,6 +51,10 @@ export function useSPCComputedAnalytics({
   normality,
   stratifyBy,
   rollingWindowSize,
+  ewmaLambda,
+  ewmaL,
+  cusumK,
+  cusumH,
 }: UseSPCComputedAnalyticsArgs): AnalyticsState {
   const workerRef = useRef<Worker | null>(null)
   const requestIdRef = useRef(0)
@@ -104,6 +112,10 @@ export function useSPCComputedAnalytics({
       normality: deferredNormality,
       stratifyBy,
       rollingWindowSize: deferredRollingWindowSize,
+      ewmaLambda,
+      ewmaL,
+      cusumK,
+      cusumH,
     }
 
     startTransition(() => {
@@ -186,6 +198,10 @@ export function useSPCComputedAnalytics({
     excludeOutliers,
     ruleSet,
     stratifyBy,
+    ewmaLambda,
+    ewmaL,
+    cusumK,
+    cusumH,
   ])
 
   return state

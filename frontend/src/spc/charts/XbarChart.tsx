@@ -9,7 +9,8 @@ interface XbarChartProps {
 }
 
 export default function XbarChart({ spc, signals, externalLimits }: XbarChartProps) {
-  const xbarR = spc?.xbarR
+  const xbarChart = spc?.xbarR ?? spc?.xbarS
+  const isSigmaFamily = spc?.chartType === 'xbar_s'
 
   const signalIndices = useMemo(() => {
     const map = new Map<number, string[]>()
@@ -23,12 +24,12 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
   }, [signals])
 
   const option = useMemo(() => {
-    if (!xbarR) return null
+    if (!xbarChart) return null
 
-    const { sigma1, sigma2, subgroupStats, mixedSubgroupSizes } = xbarR
-    const grandMean = externalLimits?.cl ?? xbarR.grandMean
-    const uclX = externalLimits?.ucl ?? xbarR.ucl_x
-    const lclX = externalLimits?.lcl ?? xbarR.lcl_x
+    const { sigma1, sigma2, subgroupStats, mixedSubgroupSizes } = xbarChart
+    const grandMean = externalLimits?.cl ?? xbarChart.grandMean
+    const uclX = externalLimits?.ucl ?? xbarChart.ucl_x
+    const lclX = externalLimits?.lcl ?? xbarChart.lcl_x
     const nominal = spc?.nominal
     const tolerance = spc?.tolerance
     const usl = nominal != null && tolerance != null ? nominal + tolerance : null
@@ -146,20 +147,20 @@ export default function XbarChart({ spc, signals, externalLimits }: XbarChartPro
       },
       series,
     }
-  }, [xbarR, spc, signalIndices, externalLimits])
+  }, [xbarChart, spc, signalIndices, externalLimits])
 
-  if (!xbarR || !option) return null
+  if (!xbarChart || !option) return null
 
   return (
     <div style={{ marginBottom: '0.25rem', borderBottom: '1px solid var(--cds-border-subtle-01)', paddingBottom: '1rem' }}>
       <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--cds-text-secondary)' }}>
         X̄ Chart (Subgroup Means)
-        <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>{xbarR.subgroupStats.length} subgroups</span>
+        <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>{xbarChart.subgroupStats.length} subgroups</span>
       </div>
       <EChart option={option} style={{ height: 280 }} theme="spc" notMerge ariaLabel="X-bar chart — subgroup means" />
-      {xbarR.mixedSubgroupSizes && (
+      {xbarChart.mixedSubgroupSizes && (
         <p style={{ marginTop: '0.25rem', fontSize: '0.7rem', fontStyle: 'italic', color: 'var(--cds-text-secondary)' }}>
-          Subgroup sizes vary. Dashed red limits are calculated per subgroup; the centre band uses pooled σ with average n for reference.
+          Subgroup sizes vary. Dashed red limits are calculated per subgroup; the centre band uses pooled σ with average n for reference for the {isSigmaFamily ? 'X̄-S' : 'X̄-R'} family.
         </p>
       )}
     </div>

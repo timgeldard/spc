@@ -4,13 +4,14 @@ import {
   Checkbox,
   RadioButton,
   RadioButtonGroup,
+  TextInput,
 } from '~/lib/carbon-forms'
 import { Accordion, AccordionItem } from '~/lib/carbon-feedback'
 import { Stack, Tag, Tile } from '~/lib/carbon-layout'
 import type { ChartDataPoint, LockedLimits } from '../types'
 
 export type AttributeChartType = 'p_chart' | 'np_chart' | 'c_chart' | 'u_chart'
-export type QuantChartType = 'imr' | 'xbar_r'
+export type QuantChartType = 'imr' | 'xbar_r' | 'xbar_s' | 'ewma' | 'cusum'
 
 function ChartTypeToggle({
   chartType,
@@ -42,6 +43,21 @@ function ChartTypeToggle({
           value="xbar_r"
           labelText="X̄-R"
         />
+        <RadioButton
+          id="spc-quant-chart-xbar-s"
+          value="xbar_s"
+          labelText="X̄-S"
+        />
+        <RadioButton
+          id="spc-quant-chart-ewma"
+          value="ewma"
+          labelText="EWMA"
+        />
+        <RadioButton
+          id="spc-quant-chart-cusum"
+          value="cusum"
+          labelText="CUSUM"
+        />
       </RadioButtonGroup>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -54,6 +70,71 @@ function ChartTypeToggle({
           <Tag type="cool-gray" size="sm">
             auto-detected
           </Tag>
+        )}
+      </div>
+    </Stack>
+  )
+}
+
+function TimeWeightedControls({
+  chartType,
+  ewmaLambda,
+  ewmaL,
+  cusumK,
+  cusumH,
+  onEwmaLambdaChange,
+  onEwmaLChange,
+  onCusumKChange,
+  onCusumHChange,
+}: {
+  chartType: QuantChartType | null
+  ewmaLambda: number
+  ewmaL: number
+  cusumK: number
+  cusumH: number
+  onEwmaLambdaChange: (value: number) => void
+  onEwmaLChange: (value: number) => void
+  onCusumKChange: (value: number) => void
+  onCusumHChange: (value: number) => void
+}) {
+  if (chartType !== 'ewma' && chartType !== 'cusum') return null
+
+  return (
+    <Stack gap={3}>
+      <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--cds-text-secondary)' }}>
+        Time-weighted settings
+      </p>
+      <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'repeat(auto-fit, minmax(9rem, 1fr))' }}>
+        {chartType === 'ewma' ? (
+          <>
+            <TextInput
+              id="spc-ewma-lambda"
+              labelText="λ"
+              value={String(ewmaLambda)}
+              onChange={(event) => onEwmaLambdaChange(Number(event.currentTarget.value))}
+            />
+            <TextInput
+              id="spc-ewma-l"
+              labelText="L"
+              value={String(ewmaL)}
+              onChange={(event) => onEwmaLChange(Number(event.currentTarget.value))}
+            />
+          </>
+        ) : (
+          <>
+            <TextInput
+              id="spc-cusum-k"
+              labelText="k"
+              value={String(cusumK)}
+              onChange={(event) => onCusumKChange(Number(event.currentTarget.value))}
+            />
+            <TextInput
+              id="spc-cusum-h"
+              labelText="h"
+              value={String(cusumH)}
+              onChange={(event) => onCusumHChange(Number(event.currentTarget.value))}
+            />
+          </>
         )}
       </div>
     </Stack>
@@ -134,6 +215,15 @@ interface ChartSettingsRailProps {
   onChartTypeOverride: (value: QuantChartType | null) => void
   attrChartType: AttributeChartType
   onAttrChartTypeChange: (value: AttributeChartType) => void
+  effectiveChartType: QuantChartType | null
+  ewmaLambda: number
+  onEwmaLambdaChange: (value: number) => void
+  ewmaL: number
+  onEwmaLChange: (value: number) => void
+  cusumK: number
+  onCusumKChange: (value: number) => void
+  cusumH: number
+  onCusumHChange: (value: number) => void
   isAttributeChart: boolean
   lockedLimits: LockedLimits | null
   limitsMode: 'live' | 'locked'
@@ -160,6 +250,15 @@ export default function ChartSettingsRail({
   onChartTypeOverride,
   attrChartType,
   onAttrChartTypeChange,
+  effectiveChartType,
+  ewmaLambda,
+  onEwmaLambdaChange,
+  ewmaL,
+  onEwmaLChange,
+  cusumK,
+  onCusumKChange,
+  cusumH,
+  onCusumHChange,
   isAttributeChart,
   lockedLimits,
   limitsMode,
@@ -234,6 +333,20 @@ export default function ChartSettingsRail({
               </Button>
             )}
           </div>
+        )}
+
+        {!isAttributeChart && (
+          <TimeWeightedControls
+            chartType={effectiveChartType}
+            ewmaLambda={ewmaLambda}
+            ewmaL={ewmaL}
+            cusumK={cusumK}
+            cusumH={cusumH}
+            onEwmaLambdaChange={onEwmaLambdaChange}
+            onEwmaLChange={onEwmaLChange}
+            onCusumKChange={onCusumKChange}
+            onCusumHChange={onCusumHChange}
+          />
         )}
 
         <Accordion align="start">

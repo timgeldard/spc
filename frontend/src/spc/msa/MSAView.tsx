@@ -3,7 +3,7 @@ import { Button, TextArea } from '~/lib/carbon-forms'
 import { InlineNotification } from '~/lib/carbon-feedback'
 import { Stack, Tile } from '~/lib/carbon-layout'
 import { shallowEqual, useSPCSelector } from '../SPCContext'
-import { computeGRR, computeGRR_ANOVA } from './msaCalculations'
+import { useMSACalculate } from '../hooks/useMSACalculate'
 import { useMSASave } from '../hooks/useMSASave'
 import type { MSAResult } from '../types'
 import FieldHelp from '../components/FieldHelp'
@@ -163,18 +163,20 @@ export default function MSAView() {
   const [tolerance, setTolerance] = useState('')
   const [csvText, setCsvText] = useState<string>(() => generateSampleData(3, 10, 2))
   const [result, setResult] = useState<MSAResult | null>(null)
+  const { calculating, error: calculationError, runCalculation } = useMSACalculate()
   const { saving, error: saveError, save } = useMSASave()
 
   const isPersistable = !!result && !result?.error && !!state.selectedMaterial && !!state.selectedMIC
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     const data = parseCSVData(csvText, nOperators, nParts, nReplicates)
     if (!data) {
       setResult({ error: 'Could not parse data. Expected format: operator,part,replicate,value (one row per measurement).' })
       return
     }
     const tol = parseFloat(tolerance) || 0
-    setResult((method === 'anova' ? computeGRR_ANOVA(data, tol) : computeGRR(data, tol)) as MSAResult)
+    const nextResult = await runCalculation(data, tol, method)
+    setResult(nextResult as MSAResult)
   }
 
   const handleSave = async () => {
@@ -350,8 +352,8 @@ export default function MSAView() {
             </Stack>
           </Tile>
 
-          <Button kind="primary" onClick={handleCalculate}>
-            Calculate GRR
+          <Button kind="primary" onClick={() => { void handleCalculate() }} disabled={calculating}>
+            {calculating ? 'Calculating…' : 'Calculate GRR'}
           </Button>
         </Stack>
 
@@ -387,6 +389,7 @@ export default function MSAView() {
         </Tile>
       </div>
 
+      {calculationError && <InfoBanner variant="warn">{calculationError}</InfoBanner>}
       {saveError && <InfoBanner variant="error">{saveError}</InfoBanner>}
       <GRRResult result={result} onSave={handleSave} saving={saving} isPersistable={isPersistable} />
     </Stack>

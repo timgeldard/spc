@@ -12,7 +12,9 @@ import { getConstants } from './spcConstants'
 import type {
   AutoCleanPhaseIResult,
   CapabilityResult,
+  CUSUMResult,
   ChartDataPoint,
+  EWMAResult,
   HistogramResult,
   IMRResult,
   IndexedChartPoint,
@@ -25,6 +27,7 @@ import type {
   SPCSignal,
   SpecConfig,
   XbarRResult,
+  XbarSResult,
   XbarSubgroup,
   XbarSubgroupStat,
 } from './types'
@@ -39,6 +42,10 @@ interface Limits {
 
 interface CapabilityOptions {
   normality?: NormalityResult | null
+  ewmaLambda?: number
+  ewmaL?: number
+  cusumK?: number
+  cusumH?: number
 }
 
 interface PChartPoint {
@@ -265,6 +272,189 @@ export function computeXbarR(subgroups: XbarSubgroup[]): XbarRResult | null {
     lcl_r,
     sigma1,
     sigma2,
+  }
+}
+
+export function computeXbarS(subgroups: XbarSubgroup[]): XbarSResult | null {
+  if (subgroups.length < 2) return null
+
+  const subgroupStats: XbarSubgroupStat[] = subgroups.map((sg) => {
+    const n = sg.values.length
+    const xbar = mean(sg.values) ?? 0
+    const rangeValue = Math.max(...sg.values) - Math.min(...sg.values)
+    const stddev = n > 1 ? stddevSample(sg.values) : null
+    return { ...sg, n, xbar, range: rangeValue, stddev }
+  })
+
+  const grandMean = mean(subgroupStats.map((s) => s.xbar))
+  const sBar = mean(subgroupStats.map((s) => s.stddev).filter((v): v is number => v != null))
+  if (grandMean === null || sBar === null) return null
+
+  const sizes = [...new Set(subgroupStats.map((s) => s.n))]
+  const constantN = sizes.length === 1 ? sizes[0] : null
+  const mixedSubgroupSizes = constantN == null
+  const averageSubgroupSize = mean(subgroupStats.map((s) => s.n))
+
+  const sigmaFromStddevValues = subgroupStats
+    .filter((s) => s.n > 1 && s.stddev != null)
+    .map((s) => (s.stddev ?? 0) / getConstants(s.n).c4)
+  const sigmaFromStddevs = sigmaFromStddevValues.length ? mean(sigmaFromStddevValues) : null
+
+  const pooledVarianceNumerator = subgroupStats.reduce(
+    (sum, s) => sum + (s.n > 1 && s.stddev != null ? (s.n - 1) * (s.stddev ** 2) : 0),
+    0,
+  )
+  const pooledDegrees = subgroupStats.reduce((sum, s) => sum + Math.max(0, s.n - 1), 0)
+  const pooledSigmaWithin = pooledDegrees > 0 ? Math.sqrt(pooledVarianceNumerator / pooledDegrees) : null
+
+  let ucl_x: number
+  let lcl_x: number
+  let ucl_s: number
+  let lcl_s: number
+  let sigmaWithin: number
+  let sigma1: number
+  let sigma2: number
+  let limitStrategy = 'constant_n_aiag'
+  let referenceSubgroupSize: number | null = constantN
+
+  if (constantN != null) {
+    const { c4, A3, B3, B4 } = getConstants(constantN)
+    sigmaWithin = sBar / c4
+    const sigmaXbarReference = sigmaWithin / Math.sqrt(constantN)
+    ucl_x = grandMean + A3 * sBar
+    lcl_x = grandMean - A3 * sBar
+    ucl_s = B4 * sBar
+    lcl_s = B3 * sBar
+    sigma1 = sigmaXbarReference
+    sigma2 = 2 * sigmaXbarReference
+  } else {
+    sigmaWithin = pooledSigmaWithin ?? sigmaFromStddevs ?? 0
+    const referenceN = averageSubgroupSize != null && averageSubgroupSize > 1 ? averageSubgroupSize : 1
+    const sigmaXbarReference = sigmaWithin / Math.sqrt(referenceN)
+    const subgroupUcls = subgroupStats
+      .filter((s) => s.stddev != null)
+      .map((s) => getConstants(s.n).B4 * (s.stddev ?? 0))
+    const subgroupLcls = subgroupStats
+      .filter((s) => s.stddev != null)
+      .map((s) => getConstants(s.n).B3 * (s.stddev ?? 0))
+    ucl_x = grandMean + 3 * sigmaXbarReference
+    lcl_x = grandMean - 3 * sigmaXbarReference
+    ucl_s = mean(subgroupUcls) ?? sBar
+    lcl_s = mean(subgroupLcls) ?? 0
+    sigma1 = sigmaXbarReference
+    sigma2 = 2 * sigmaXbarReference
+    limitStrategy = pooledSigmaWithin != null ? 'pooled_sigma_average_n' : 'stddev_sigma_average_n'
+    referenceSubgroupSize = null
+  }
+
+  const statsWithLimits: XbarSubgroupStat[] = subgroupStats.map((s) => {
+    const { c4, A3, B3, B4 } = getConstants(s.n)
+    const sigmaWithinLocal = s.n > 1 && s.stddev != null ? s.stddev / c4 : null
+    const subgroupSigmaX = sigmaWithinLocal != null ? sigmaWithinLocal / Math.sqrt(s.n) : sigma1
+    return {
+      ...s,
+      ucl_x: mixedSubgroupSizes ? grandMean + 3 * subgroupSigmaX : grandMean + A3 * sBar,
+      lcl_x: mixedSubgroupSizes ? grandMean - 3 * subgroupSigmaX : grandMean - A3 * sBar,
+      ucl_s: s.stddev != null ? B4 * sBar : null,
+      lcl_s: s.stddev != null ? B3 * sBar : null,
+      sigmaWithin: sigmaWithinLocal,
+    }
+  })
+
+  return {
+    grandMean,
+    sBar,
+    sigmaWithin,
+    pooledSigmaWithin,
+    sigmaFromStddevs,
+    mixedSubgroupSizes,
+    averageSubgroupSize,
+    limitStrategy,
+    referenceSubgroupSize,
+    subgroupStats: statsWithLimits,
+    ucl_x,
+    lcl_x,
+    ucl_s,
+    lcl_s,
+    sigma1,
+    sigma2,
+  }
+}
+
+export function computeEWMA(
+  sortedPoints: ChartDataPoint[],
+  target: number,
+  sigmaWithin: number,
+  lambda_ = 0.2,
+  L = 3,
+): EWMAResult | null {
+  if (sortedPoints.length < 2 || !(sigmaWithin > 0)) return null
+  const boundedLambda = Math.min(1, Math.max(0.05, lambda_))
+  const boundedL = Math.max(1, L)
+  let previous = target
+
+  const points = sortedPoints.map((point, index) => {
+    const ewma = boundedLambda * point.value + (1 - boundedLambda) * previous
+    previous = ewma
+    const sigmaZ = sigmaWithin * Math.sqrt((boundedLambda / (2 - boundedLambda)) * (1 - (1 - boundedLambda) ** (2 * (index + 1))))
+    return {
+      index,
+      batchSeq: point.batch_seq,
+      batchId: point.batch_id,
+      batchDate: point.batch_date,
+      value: point.value,
+      ewma,
+      ucl: target + boundedL * sigmaZ,
+      lcl: target - boundedL * sigmaZ,
+    }
+  })
+
+  return {
+    lambda: boundedLambda,
+    L: boundedL,
+    target,
+    sigmaWithin,
+    points,
+  }
+}
+
+export function computeCUSUM(
+  sortedPoints: ChartDataPoint[],
+  target: number,
+  sigmaWithin: number,
+  k = 0.5,
+  h = 5,
+): CUSUMResult | null {
+  if (sortedPoints.length < 2 || !(sigmaWithin > 0)) return null
+  const boundedK = Math.max(0.1, k)
+  const boundedH = Math.max(1, h)
+  const referenceValue = boundedK * sigmaWithin
+  const decisionInterval = boundedH * sigmaWithin
+  let cPlus = 0
+  let cMinus = 0
+
+  const points = sortedPoints.map((point, index) => {
+    cPlus = Math.max(0, cPlus + (point.value - target - referenceValue))
+    cMinus = Math.max(0, cMinus + (target - point.value - referenceValue))
+    return {
+      index,
+      batchSeq: point.batch_seq,
+      batchId: point.batch_id,
+      batchDate: point.batch_date,
+      value: point.value,
+      cPlus,
+      cMinus,
+    }
+  })
+
+  return {
+    k: boundedK,
+    h: boundedH,
+    target,
+    sigmaWithin,
+    decisionInterval,
+    referenceValue,
+    points,
   }
 }
 
@@ -514,12 +704,36 @@ export function computeCapability(
     }
   }
 
+  let cpLower95: number | null = null
+  let cpUpper95: number | null = null
+  if (cp !== null && n >= 5) {
+    const se = cp * Math.sqrt(1 / (2 * Math.max(1, n - 1)))
+    cpLower95 = round6(Math.max(0, cp - 1.96 * se))
+    cpUpper95 = round6(cp + 1.96 * se)
+  }
+
   let cpkLower95: number | null = null
   let cpkUpper95: number | null = null
   if (cpk !== null && n >= 25) {
     const se = Math.sqrt(1 / (9 * n) + cpk ** 2 / (2 * (n - 1)))
     cpkLower95 = round6(cpk - 1.96 * se)
     cpkUpper95 = round6(cpk + 1.96 * se)
+  }
+
+  let ppLower95: number | null = null
+  let ppUpper95: number | null = null
+  if (pp !== null && n >= 5) {
+    const se = pp * Math.sqrt(1 / (2 * Math.max(1, n - 1)))
+    ppLower95 = round6(Math.max(0, pp - 1.96 * se))
+    ppUpper95 = round6(pp + 1.96 * se)
+  }
+
+  let ppkLower95: number | null = null
+  let ppkUpper95: number | null = null
+  if (ppk !== null && n >= 25) {
+    const se = Math.sqrt(1 / (9 * n) + ppk ** 2 / (2 * (n - 1)))
+    ppkLower95 = round6(ppk - 1.96 * se)
+    ppkUpper95 = round6(ppk + 1.96 * se)
   }
 
   const zScore = capabilityMethod === 'parametric' && cpk !== null ? round6(cpk * 3) : null
@@ -541,8 +755,14 @@ export function computeCapability(
     empiricalP99865,
     sigmaOverall,
     xBar,
+    cpLower95,
+    cpUpper95,
     cpkLower95,
     cpkUpper95,
+    ppLower95,
+    ppUpper95,
+    ppkLower95,
+    ppkUpper95,
     zScore,
     dpmo,
     spec_type,
@@ -802,6 +1022,9 @@ export function computeAll(
       sorted: [],
       imr: null,
       xbarR: null,
+      xbarS: null,
+      ewma: null,
+      cusum: null,
       subgroups: null,
       capability: null,
       signals: [],
@@ -848,45 +1071,162 @@ export function computeAll(
 
   const values = sorted.map((p) => p.value)
 
-  if (chartType === 'xbar_r') {
+  if (chartType === 'ewma' || chartType === 'cusum') {
+    const imrBaseline = computeIMR(values)
+    if (!imrBaseline) return computeAll(points, 'imr', ruleSet, options)
+
+    const capability: CapabilityResult = {
+      ...computeCapability(values, specConfig, imrBaseline.sigmaWithin, { normality: options.normality ?? null }),
+      hasMixedSpec,
+      specWarning: specConfig.specWarning,
+    }
+
+    if (chartType === 'ewma') {
+      const ewma = computeEWMA(sorted, imrBaseline.xBar, imrBaseline.sigmaWithin, options.ewmaLambda, options.ewmaL)
+      if (!ewma) return computeAll(points, 'imr', ruleSet, options)
+      return {
+        chartType: 'ewma',
+        ruleSet,
+        values,
+        sorted,
+        imr: null,
+        xbarR: null,
+        xbarS: null,
+        ewma,
+        cusum: null,
+        subgroups: null,
+        capability,
+        signals: ewma.points
+          .filter((point) => point.ewma > point.ucl || point.ewma < point.lcl)
+          .map((point) => ({ rule: 1, indices: [point.index], description: 'EWMA point beyond dynamic control limit' })),
+        mrSignals: [],
+        nominal,
+        tolerance,
+        specConfig,
+        normality: options.normality ?? null,
+      }
+    }
+
+    const cusum = computeCUSUM(sorted, imrBaseline.xBar, imrBaseline.sigmaWithin, options.cusumK, options.cusumH)
+    if (!cusum) return computeAll(points, 'imr', ruleSet, options)
+    return {
+      chartType: 'cusum',
+      ruleSet,
+      values,
+      sorted,
+      imr: null,
+      xbarR: null,
+      xbarS: null,
+      ewma: null,
+      cusum,
+      subgroups: null,
+      capability,
+      signals: cusum.points
+        .flatMap((point) => {
+          const hits: SPCSignal[] = []
+          if (point.cPlus > cusum.decisionInterval) {
+            hits.push({ rule: 1, indices: [point.index], description: 'CUSUM positive decision interval exceeded' })
+          }
+          if (point.cMinus > cusum.decisionInterval) {
+            hits.push({ rule: 1, indices: [point.index], description: 'CUSUM negative decision interval exceeded' })
+          }
+          return hits
+        }),
+      mrSignals: [],
+      nominal,
+      tolerance,
+      specConfig,
+      normality: options.normality ?? null,
+    }
+  }
+
+  if (chartType === 'xbar_r' || chartType === 'xbar_s') {
     const subgroups = groupIntoSubgroups(sorted)
     if (subgroups.length < 2) return computeAll(points, 'imr', ruleSet, options)
 
-    const xbarR = computeXbarR(subgroups)
-    if (!xbarR) return computeAll(points, 'imr', ruleSet, options)
-    const xbarValues = xbarR.subgroupStats.map((s) => s.xbar)
+    if (chartType === 'xbar_r') {
+      const xbarR = computeXbarR(subgroups)
+      if (!xbarR) return computeAll(points, 'imr', ruleSet, options)
+      const xbarValues = xbarR.subgroupStats.map((s) => s.xbar)
+      const capability: CapabilityResult = {
+        ...computeCapability(values, specConfig, xbarR.sigmaWithin, { normality: options.normality ?? null }),
+        hasMixedSpec,
+        specWarning: specConfig.specWarning,
+      }
+
+      const xbarLimits: Limits = {
+        cl: xbarR.grandMean,
+        ucl: xbarR.ucl_x,
+        lcl: xbarR.lcl_x,
+        sigma1: xbarR.sigma1,
+        sigma2: xbarR.sigma2,
+      }
+      const rLimits: Limits = {
+        cl: xbarR.rBar,
+        ucl: xbarR.ucl_r,
+        lcl: xbarR.lcl_r,
+        sigma1: xbarR.rBar / 3,
+        sigma2: (xbarR.rBar * 2) / 3,
+      }
+
+      return {
+        chartType: 'xbar_r',
+        ruleSet,
+        values,
+        sorted,
+        imr: null,
+        xbarR,
+        xbarS: null,
+        ewma: null,
+        cusum: null,
+        subgroups,
+        capability,
+        signals: detectRules(xbarValues, xbarLimits, ruleSet),
+        mrSignals: detectRules(xbarR.subgroupStats.map((s) => s.range), rLimits, ruleSet),
+        nominal,
+        tolerance,
+        specConfig,
+        normality: options.normality ?? null,
+      }
+    }
+
+    const xbarS = computeXbarS(subgroups)
+    if (!xbarS) return computeAll(points, 'imr', ruleSet, options)
     const capability: CapabilityResult = {
-      ...computeCapability(values, specConfig, xbarR.sigmaWithin, { normality: options.normality ?? null }),
+      ...computeCapability(values, specConfig, xbarS.sigmaWithin, { normality: options.normality ?? null }),
       hasMixedSpec,
       specWarning: specConfig.specWarning,
     }
 
     const xbarLimits: Limits = {
-      cl: xbarR.grandMean,
-      ucl: xbarR.ucl_x,
-      lcl: xbarR.lcl_x,
-      sigma1: xbarR.sigma1,
-      sigma2: xbarR.sigma2,
+      cl: xbarS.grandMean,
+      ucl: xbarS.ucl_x,
+      lcl: xbarS.lcl_x,
+      sigma1: xbarS.sigma1,
+      sigma2: xbarS.sigma2,
     }
-    const rLimits: Limits = {
-      cl: xbarR.rBar,
-      ucl: xbarR.ucl_r,
-      lcl: xbarR.lcl_r,
-      sigma1: xbarR.rBar / 3,
-      sigma2: (xbarR.rBar * 2) / 3,
+    const sLimits: Limits = {
+      cl: xbarS.sBar,
+      ucl: xbarS.ucl_s,
+      lcl: xbarS.lcl_s,
+      sigma1: xbarS.sBar / 3,
+      sigma2: (xbarS.sBar * 2) / 3,
     }
 
     return {
-      chartType: 'xbar_r',
+      chartType: 'xbar_s',
       ruleSet,
       values,
       sorted,
       imr: null,
-      xbarR,
+      xbarR: null,
+      xbarS,
+      ewma: null,
+      cusum: null,
       subgroups,
       capability,
-      signals: detectRules(xbarValues, xbarLimits, ruleSet),
-      mrSignals: detectRules(xbarR.subgroupStats.map((s) => s.range), rLimits, ruleSet),
+      signals: detectRules(xbarS.subgroupStats.map((s) => s.xbar), xbarLimits, ruleSet),
+      mrSignals: detectRules(xbarS.subgroupStats.map((s) => s.stddev ?? 0), sLimits, ruleSet),
       nominal,
       tolerance,
       specConfig,
@@ -903,6 +1243,9 @@ export function computeAll(
       sorted,
       imr: null,
       xbarR: null,
+      xbarS: null,
+      ewma: null,
+      cusum: null,
       subgroups: null,
       capability: null,
       signals: [],
@@ -937,6 +1280,9 @@ export function computeAll(
     sorted,
     imr,
     xbarR: null,
+    xbarS: null,
+    ewma: null,
+    cusum: null,
     subgroups: null,
     capability,
     signals: detectRules(values, xLimits, ruleSet),
@@ -996,6 +1342,20 @@ export function autoCleanPhaseI(
         ? { cl: result.imr.xBar, ucl: result.imr.ucl_x, lcl: result.imr.lcl_x }
         : result.xbarR != null
           ? { cl: result.xbarR.grandMean, ucl: result.xbarR.ucl_x, lcl: result.xbarR.lcl_x }
+          : result.xbarS != null
+            ? { cl: result.xbarS.grandMean, ucl: result.xbarS.ucl_x, lcl: result.xbarS.lcl_x }
+            : result.ewma?.points?.length
+              ? {
+                  cl: result.ewma.target,
+                  ucl: result.ewma.points[result.ewma.points.length - 1]?.ucl,
+                  lcl: result.ewma.points[result.ewma.points.length - 1]?.lcl,
+                }
+              : result.cusum != null
+                ? {
+                    cl: result.cusum.target,
+                    ucl: result.cusum.decisionInterval,
+                    lcl: -result.cusum.decisionInterval,
+                  }
           : {}
 
     if (!rule1.length) {

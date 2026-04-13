@@ -268,7 +268,9 @@ Primary orchestration:
 The chart family is determined from MIC context and subgroup structure:
 
 - variable data uses `I-MR` when subgroup size is effectively `1`
-- variable data uses `X̄-R` when subgroup size is greater than `1`
+- variable data uses `X̄-R` or `X̄-S` when subgroup size is greater than `1`
+- the settings rail can override the subgroup companion chart between `R` and `S`
+- the settings rail can also switch variable charts into `EWMA` or `CUSUM` for time-weighted monitoring
 - attribute data uses the attribute chart type returned by the backend/controller path
 
 The summary bar shows:
@@ -280,7 +282,7 @@ The summary bar shows:
 
 What it shows:
 
-- The correct SPC lens for the current characteristic, including whether the user is looking at variable or attribute behavior and whether the capability evidence is parametric or empirical.
+- The correct SPC lens for the current characteristic, including whether the user is looking at individual, subgroup-range, subgroup-sigma, or attribute behavior and whether the capability evidence is parametric or empirical.
 
 Why it matters:
 
@@ -295,8 +297,12 @@ Implemented in the SPC computation engine and documented formally in [STATISTICA
 - moving range mean
 - within sigma from `MR-bar / d2`
 - X̄ and R subgroup statistics
+- X̄ and S subgroup statistics
 - X̄ limits using `A2`
 - R limits using `D3` and `D4`
+- X̄-S limits using `A3`, `B3`, and `B4`
+- EWMA dynamic limits using analyst-selected `λ` and `L`
+- tabular two-sided CUSUM using analyst-selected `k` and `h`
 - Nelson / WECO signal detection
 
 ### Attribute Chart Calculations
@@ -336,7 +342,10 @@ Displayed metrics:
 - `Cpk`
 - `Pp`
 - `Ppk`
+- `Cp 95% CI`
 - `Cpk 95% CI`
+- `Pp 95% CI`
+- `Ppk 95% CI`
 - `Z score`
 - `DPMO`
 - empirical `P0.135`, `P50`, `P99.865` when non-parametric mode is active
@@ -355,6 +364,7 @@ Derived presentation logic:
 - show non-normal warning when `normality.is_normal === false`
 - hide `Cp` and `Pp` for unilateral specs
 - show off-center note when both `Cp` and `Cpk` exist and `abs(Cp - Cpk) > 0.05`
+- show confidence-interval cards when the corresponding estimate has enough sample support
 
 Capability tier thresholds:
 
@@ -611,6 +621,8 @@ Primary computation files:
 
 - `MSAView.tsx`
 - `msaCalculations.ts`
+- backend parity reference: `backend/utils/msa.py`
+- backend calculation endpoint: `POST /api/spc/msa/calculate`
 
 ### Input Parsing
 
@@ -707,6 +719,8 @@ What it shows:
 Why it matters:
 
 - It answers the core MSA question: “Are we seeing process variation, or mostly gauge variation?”
+- The backend parity module gives the team a governed calculation reference so MSA browser math can be regression-tested rather than existing as an unverified frontend-only path.
+- The live MSA view now calls the backend calculation endpoint, so the displayed result comes from the governed backend path rather than only from local browser math.
 
 ### MSA Verdict Thresholds
 

@@ -20,6 +20,9 @@ const IndividualsChart           = lazy(() => import('./IndividualsChart'))
 const MovingRangeChart           = lazy(() => import('./MovingRangeChart'))
 const XbarChart                  = lazy(() => import('./XbarChart'))
 const RangeChart                 = lazy(() => import('./RangeChart'))
+const SigmaChart                 = lazy(() => import('./SigmaChart'))
+const EWMAChart                  = lazy(() => import('./EWMAChart'))
+const CUSUMChart                 = lazy(() => import('./CUSUMChart'))
 const PChart                     = lazy(() => import('./PChart'))
 const CChart                     = lazy(() => import('./CChart'))
 const UChart                     = lazy(() => import('./UChart'))
@@ -71,6 +74,20 @@ function renderQuantitativeChart(
             externalUclMr={limits?.ucl_r}
           />
         </>
+      ) : spcResult.chartType === 'ewma' ? (
+        <EWMAChart
+          spc={spcResult}
+          signals={spcResult.signals}
+          indexedPoints={spcResult.indexedPoints}
+          onPointClick={onPointClick}
+        />
+      ) : spcResult.chartType === 'cusum' ? (
+        <CUSUMChart
+          spc={spcResult}
+          signals={spcResult.signals}
+          indexedPoints={spcResult.indexedPoints}
+          onPointClick={onPointClick}
+        />
       ) : (
         <>
           <XbarChart
@@ -78,11 +95,19 @@ function renderQuantitativeChart(
             signals={spcResult.signals}
             externalLimits={limits}
           />
-          <RangeChart
-            spc={spcResult}
-            mrSignals={spcResult.mrSignals ?? []}
-            externalUclR={limits?.ucl_r}
-          />
+          {spcResult.chartType === 'xbar_s' ? (
+            <SigmaChart
+              spc={spcResult}
+              mrSignals={spcResult.mrSignals ?? []}
+              externalUclS={limits?.ucl_r}
+            />
+          ) : (
+            <RangeChart
+              spc={spcResult}
+              mrSignals={spcResult.mrSignals ?? []}
+              externalUclR={limits?.ucl_r}
+            />
+          )}
         </>
       )}
     </Suspense>
@@ -422,6 +447,15 @@ export default function ControlChartsView() {
                 onChartTypeOverride={v => dispatch({ type: 'SET_CHART_TYPE_OVERRIDE', payload: v })}
                 attrChartType={ctrl.attrChartType}
                 onAttrChartTypeChange={ctrl.setAttrChartType}
+                effectiveChartType={ctrl.effectiveChartType}
+                ewmaLambda={ctrl.ewmaLambda}
+                onEwmaLambdaChange={ctrl.setEwmaLambda}
+                ewmaL={ctrl.ewmaL}
+                onEwmaLChange={ctrl.setEwmaL}
+                cusumK={ctrl.cusumK}
+                onCusumKChange={ctrl.setCusumK}
+                cusumH={ctrl.cusumH}
+                onCusumHChange={ctrl.setCusumH}
                 isAttributeChart={ctrl.isAttributeChart}
                 lockedLimits={ctrl.lockedLimits}
                 limitsMode={limitsMode}

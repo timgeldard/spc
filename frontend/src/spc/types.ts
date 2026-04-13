@@ -1,7 +1,7 @@
 import type { Dispatch, ReactNode } from 'react'
 
 export type RuleSet = 'weco' | 'nelson'
-export type QuantChartType = 'imr' | 'xbar_r'
+export type QuantChartType = 'imr' | 'xbar_r' | 'xbar_s' | 'ewma' | 'cusum'
 export type StratifyByKey = 'plant_id' | 'inspection_lot_id' | 'operation_id'
 export type SpecType =
   | 'bilateral_symmetric'
@@ -128,6 +128,12 @@ export interface CapabilityMetrics {
   specWarning?: string | null
   cpkLower95?: number | null
   cpkUpper95?: number | null
+  cpLower95?: number | null
+  cpUpper95?: number | null
+  ppLower95?: number | null
+  ppUpper95?: number | null
+  ppkLower95?: number | null
+  ppkUpper95?: number | null
   dpmo_convention?: string | null
   hasMixedSpec?: boolean
 }
@@ -232,6 +238,8 @@ export interface XbarSubgroupStat {
   lcl_x?: number | null
   ucl_r?: number | null
   lcl_r?: number | null
+  ucl_s?: number | null
+  lcl_s?: number | null
   sigmaWithin?: number | null
 }
 
@@ -259,6 +267,64 @@ export interface XbarRResult {
   limitStrategy?: string
   referenceSubgroupSize?: number | null
   subgroupStats: XbarSubgroupStat[]
+}
+
+export interface XbarSResult {
+  grandMean: number
+  sBar: number
+  sigmaWithin: number
+  pooledSigmaWithin?: number | null
+  sigmaFromStddevs?: number | null
+  sigma1: number
+  sigma2: number
+  ucl_x: number
+  lcl_x: number
+  ucl_s: number
+  lcl_s: number
+  mixedSubgroupSizes?: boolean
+  averageSubgroupSize?: number | null
+  limitStrategy?: string
+  referenceSubgroupSize?: number | null
+  subgroupStats: XbarSubgroupStat[]
+}
+
+export interface EWMAChartPoint {
+  index: number
+  batchSeq?: number | null
+  batchId?: string | null
+  batchDate?: string | null
+  value: number
+  ewma: number
+  ucl: number
+  lcl: number
+}
+
+export interface EWMAResult {
+  lambda: number
+  L: number
+  target: number
+  sigmaWithin: number
+  points: EWMAChartPoint[]
+}
+
+export interface CUSUMChartPoint {
+  index: number
+  batchSeq?: number | null
+  batchId?: string | null
+  batchDate?: string | null
+  value: number
+  cPlus: number
+  cMinus: number
+}
+
+export interface CUSUMResult {
+  k: number
+  h: number
+  target: number
+  sigmaWithin: number
+  decisionInterval: number
+  referenceValue: number
+  points: CUSUMChartPoint[]
 }
 
 export interface HistogramBin {
@@ -294,6 +360,9 @@ export interface SPCComputationResult {
   sorted?: ChartDataPoint[]
   imr?: IMRResult | null
   xbarR?: XbarRResult | null
+  xbarS?: XbarSResult | null
+  ewma?: EWMAResult | null
+  cusum?: CUSUMResult | null
   subgroups?: XbarSubgroup[] | null
   normality?: NormalityResult | null
   [key: string]: unknown
@@ -611,7 +680,7 @@ export interface SPCState {
   roleMode: 'operator' | 'engineer'
   kpis: OverviewKpis
   recentViolations: RecentViolationItem[]
-  chartTypeOverride: 'imr' | 'xbar_r' | null
+  chartTypeOverride: QuantChartType | null
   excludedIndices: Set<number>
   ruleSet: 'weco' | 'nelson'
   excludeOutliers: boolean

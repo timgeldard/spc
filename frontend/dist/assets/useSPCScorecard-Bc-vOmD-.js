@@ -1,1 +1,0 @@
-import{u as c,g as l,s as y}from"./queryKeys-BXu3ijP3.js";function g(e,u,n,o){const r=c({queryKey:y.scorecard(e,u,n,o),queryFn:({signal:s})=>l(e,u??null,n??null,o??null,s),enabled:!!e});return{scorecard:e?r.data??[]:[],loading:r.isLoading||r.isFetching,error:r.error?String(r.error):null}}export{g as u};

@@ -20,6 +20,10 @@ interface ComputeRequest {
   normality: NormalityResult | null
   stratifyBy: StratifyByKey | null
   rollingWindowSize: number
+  ewmaLambda: number
+  ewmaL: number
+  cusumK: number
+  cusumH: number
 }
 
 interface ComputeResponse {

@@ -12,7 +12,7 @@ import { shallowEqual, useSPCSelector } from '../SPCContext'
  *   plant_n    — plant display name
  *   mic        — selected characteristic (MIC) ID
  *   mic_n      — MIC display name
- *   mic_ct     — MIC chart type (imr / xbar_r / p_chart …)
+ *   mic_ct     — MIC chart type (imr / xbar_r / xbar_s / p_chart …)
  *   flow_u     — upstream lineage search depth
  *   flow_d     — downstream lineage search depth
  *   from       — date range start (ISO date string)

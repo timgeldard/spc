@@ -1,12 +1,12 @@
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MATERIAL_ID_MAX_LEN = 40
 _MIC_ID_MAX_LEN = 40
-_CHART_TYPES = {"imr", "xbar_r", "p_chart"}
+_CHART_TYPES = {"imr", "xbar_r", "xbar_s", "ewma", "cusum", "p_chart", "np_chart", "c_chart", "u_chart"}
 _STRATIFY_KEYS = {"plant_id", "inspection_lot_id", "operation_id"}
 _DEFAULT_UPSTREAM_DEPTH = 4
 _DEFAULT_DOWNSTREAM_DEPTH = 3
@@ -318,6 +318,32 @@ class SaveMSARequest(BaseModel):
     def check_results_json(cls, v: str) -> str:
         if len(v) > 65_535:
             raise ValueError("results_json too large (max 65535 chars)")
+        return v
+
+
+class CalculateMSARequest(BaseModel):
+    measurement_data: list[list[list[float | None]]]
+    tolerance: float = 0.0
+    method: Literal["average_range", "anova"] = "average_range"
+
+    @field_validator("measurement_data")
+    @classmethod
+    def check_measurement_data(cls, v: list[list[list[float | None]]]) -> list[list[list[float | None]]]:
+        if len(v) < 2:
+            raise ValueError("measurement_data must contain at least 2 operators")
+        first_part_count = len(v[0]) if v[0] else 0
+        if first_part_count < 2:
+            raise ValueError("measurement_data must contain at least 2 parts")
+        first_replicate_count = len(v[0][0]) if v[0] and v[0][0] else 0
+        if first_replicate_count < 2:
+            raise ValueError("measurement_data must contain at least 2 replicates")
+
+        for operator in v:
+            if len(operator) != first_part_count:
+                raise ValueError("All operators must have the same part count")
+            for part in operator:
+                if len(part) != first_replicate_count:
+                    raise ValueError("All parts must have the same replicate count")
         return v
 
 

@@ -57,6 +57,41 @@ export function getLimitsSnapshot(spc: SPCComputationResult | null | undefined) 
       point_count: spc.values?.length ?? null,
     }
   }
+  if (spc.chartType === 'xbar_s') {
+    return {
+      cl: spc.xbarS?.grandMean ?? null,
+      ucl: spc.xbarS?.ucl_x ?? null,
+      lcl: spc.xbarS?.lcl_x ?? null,
+      ucl_r: spc.xbarS?.ucl_s ?? null,
+      lcl_r: spc.xbarS?.lcl_s ?? null,
+      sigma_within: spc.xbarS?.sigmaWithin ?? null,
+      point_count: spc.values?.length ?? null,
+    }
+  }
+  if (spc.chartType === 'ewma') {
+    const ewmaPoints = spc.ewma?.points ?? []
+    const lastPoint = ewmaPoints.length ? ewmaPoints[ewmaPoints.length - 1] : null
+    return {
+      cl: spc.ewma?.target ?? null,
+      ucl: lastPoint?.ucl ?? null,
+      lcl: lastPoint?.lcl ?? null,
+      ucl_r: null,
+      lcl_r: null,
+      sigma_within: spc.ewma?.sigmaWithin ?? null,
+      point_count: spc.values?.length ?? null,
+    }
+  }
+  if (spc.chartType === 'cusum') {
+    return {
+      cl: spc.cusum?.target ?? null,
+      ucl: spc.cusum?.decisionInterval ?? null,
+      lcl: spc.cusum?.decisionInterval != null ? -spc.cusum.decisionInterval : null,
+      ucl_r: null,
+      lcl_r: null,
+      sigma_within: spc.cusum?.sigmaWithin ?? null,
+      point_count: spc.values?.length ?? null,
+    }
+  }
   return {
     cl: spc.imr?.xBar ?? null,
     ucl: spc.imr?.ucl_x ?? null,

@@ -97,8 +97,14 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
     cpk,
     pp,
     ppk,
+    cpLower95,
+    cpUpper95,
     cpkLower95,
     cpkUpper95,
+    ppLower95,
+    ppUpper95,
+    ppkLower95,
+    ppkUpper95,
     zScore,
     dpmo,
     spec_type,
@@ -186,11 +192,32 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         {detailsOpen && (
           <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+              {cpLower95 != null && cpUpper95 != null && cp != null && (
+                <MetricCard
+                  label="Cp 95% CI"
+                  value={cp}
+                  note={`[${cpLower95.toFixed(2)}, ${cpUpper95.toFixed(2)}]`}
+                />
+              )}
               {cpkLower95 != null && cpkUpper95 != null && (
                 <MetricCard
                   label="Cpk 95% CI"
                   value={cpk}
                   note={`[${cpkLower95.toFixed(2)}, ${cpkUpper95.toFixed(2)}]`}
+                />
+              )}
+              {ppLower95 != null && ppUpper95 != null && pp != null && (
+                <MetricCard
+                  label="Pp 95% CI"
+                  value={pp}
+                  note={`[${ppLower95.toFixed(2)}, ${ppUpper95.toFixed(2)}]`}
+                />
+              )}
+              {ppkLower95 != null && ppkUpper95 != null && ppk != null && (
+                <MetricCard
+                  label="Ppk 95% CI"
+                  value={ppk}
+                  note={`[${ppkLower95.toFixed(2)}, ${ppkUpper95.toFixed(2)}]`}
                 />
               )}
               {zScore != null && (

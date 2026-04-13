@@ -24,6 +24,39 @@ Used when data is collected in subgroups ($n > 1$).
 *   **UCL / LCL (X-bar)**: $\bar{\bar{X}} \pm A_2\bar{R}$
 *   **UCL / LCL (Range)**: $D_4\bar{R}$ and $D_3\bar{R}$
 
+### X-bar & Sigma (X̄-S)
+Used when data is collected in subgroups ($n > 1$) and the subgroup standard deviation is the preferred companion chart.
+*   **$\bar{\bar{X}}$ (Grand Mean)**: Mean of subgroup means
+*   **$\bar{S}$**: Mean of subgroup sample standard deviations
+*   **$\sigma_{within}$**: $\bar{S} / c_4$ (using $c_4$ for the subgroup size $n$)
+*   **UCL / LCL (X-bar)**: $\bar{\bar{X}} \pm A_3\bar{S}$
+*   **UCL / LCL (Sigma)**: $B_4\bar{S}$ and $B_3\bar{S}$
+
+### Attribute Count Charts
+Used for discrete nonconformance counts rather than measured values.
+*   **P chart**: proportion nonconforming, with subgroup-specific $\sigma_p = \sqrt{\bar{p}(1-\bar{p})/n_i}$
+*   **nP chart**: count nonconforming for approximately constant subgroup size
+*   **C chart**: count of defects per unit, with limits $\bar{c} \pm 3\sqrt{\bar{c}}$
+*   **U chart**: defects per unit for varying area of opportunity, with limits $\bar{u} \pm 3\sqrt{\bar{u}/n_i}$
+
+### EWMA
+Used for smaller sustained shifts that may not trip traditional Shewhart limits quickly.
+*   **EWMA statistic**: $Z_t = \lambda X_t + (1-\lambda)Z_{t-1}$
+*   **Target**: process mean estimate carried from the baseline series
+*   **Dynamic EWMA sigma**:
+    $$\sigma_{Z_t} = \sigma_{within}\sqrt{\frac{\lambda}{2-\lambda}\left(1-(1-\lambda)^{2t}\right)}$$
+*   **UCL / LCL**: target $\pm L\sigma_{Z_t}$
+
+### CUSUM
+Used for cumulative small drift detection relative to a target mean.
+*   **Reference value**: $k\sigma_{within}$
+*   **Decision interval**: $h\sigma_{within}$
+*   **Positive CUSUM**:
+    $$C_t^+ = \max(0, C_{t-1}^+ + X_t - \mu_0 - k\sigma_{within})$$
+*   **Negative CUSUM**:
+    $$C_t^- = \max(0, C_{t-1}^- + \mu_0 - X_t - k\sigma_{within})$$
+*   A signal is raised when $C_t^+$ or $C_t^-$ exceeds the decision interval.
+
 ---
 
 ## 2. Process Capability
@@ -41,6 +74,16 @@ Measures the "potential" of the process if all special causes were removed.
 *   **$\sigma_{within}$**: Derived from $\overline{MR}/d_2$ or $\bar{R}/d_2$
 *   **$C_p$**: $\frac{USL - LSL}{6\sigma_{within}}$
 *   **$C_{pk}$**: $\min\left(\frac{USL - \bar{X}}{3\sigma_{within}}, \frac{\bar{X} - LSL}{3\sigma_{within}}\right)$
+
+### Capability Confidence Intervals
+The application now shows approximate 95% confidence intervals for `Cp`, `Cpk`, `Pp`, and `Ppk`.
+*   **$SE(C_p)$ / $SE(P_p)$**:
+    $$C_p\sqrt{\frac{1}{2(n-1)}}$$
+*   **$SE(C_{pk})$ / $SE(P_{pk})$**:
+    $$\sqrt{\frac{1}{9n} + \frac{C_{pk}^2}{2(n-1)}}$$
+*   **95% interval**: estimate $\pm 1.96 \times SE$
+
+These are approximate normal intervals intended to show capability uncertainty, not a substitute for a full tolerance-interval study.
 
 ---
 

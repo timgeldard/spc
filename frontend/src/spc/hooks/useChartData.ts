@@ -5,7 +5,7 @@ import type { AttributeChartPoint, ChartDataPoint, NormalityResult, StratifyByKe
 import type { AttributeChartType, QuantChartType } from '../charts/ChartSettingsRail'
 
 function isQuantChartType(value: string | null | undefined): value is QuantChartType {
-  return value === 'imr' || value === 'xbar_r'
+  return value === 'imr' || value === 'xbar_r' || value === 'xbar_s'
 }
 
 export interface ChartDataResult {

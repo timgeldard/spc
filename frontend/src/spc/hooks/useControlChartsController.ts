@@ -40,6 +40,14 @@ export interface ControlChartsController {
   effectiveChartType: QuantChartType | null
   attrChartType: AttributeChartType
   setAttrChartType: (v: AttributeChartType) => void
+  ewmaLambda: number
+  setEwmaLambda: (v: number) => void
+  ewmaL: number
+  setEwmaL: (v: number) => void
+  cusumK: number
+  setCusumK: (v: number) => void
+  cusumH: number
+  setCusumH: (v: number) => void
 
   // Raw data
   quantPoints: ChartDataPoint[]
@@ -138,6 +146,10 @@ export function useControlChartsController(): ControlChartsController {
   // ── Local UI state ──────────────────────────────────────────────────────
   const {
     attrChartType, setAttrChartType,
+    ewmaLambda, setEwmaLambda,
+    ewmaL, setEwmaL,
+    cusumK, setCusumK,
+    cusumH, setCusumH,
     rollingWindowSize, setRollingWindowSize,
     autoCleanLog, setAutoCleanLog,
   } = useChartSettings(selectedMIC?.mic_id)
@@ -177,6 +189,10 @@ export function useControlChartsController(): ControlChartsController {
     normality: quantNormality,
     stratifyBy,
     rollingWindowSize,
+    ewmaLambda,
+    ewmaL,
+    cusumK,
+    cusumH,
   })
 
   // ── Exclusion workflow ──────────────────────────────────────────────────
@@ -224,6 +240,12 @@ export function useControlChartsController(): ControlChartsController {
     ? `${attrChartType.toUpperCase()} attribute chart`
     : spc?.chartType === 'xbar_r'
       ? 'X̄-R variable chart'
+      : spc?.chartType === 'xbar_s'
+        ? 'X̄-S variable chart'
+        : spc?.chartType === 'ewma'
+          ? `EWMA variable chart (λ=${ewmaLambda.toFixed(2)}, L=${ewmaL.toFixed(1)})`
+          : spc?.chartType === 'cusum'
+            ? `CUSUM variable chart (k=${cusumK.toFixed(2)}, h=${cusumH.toFixed(1)})`
       : 'I-MR variable chart'
   const capabilityHeadline = getCapabilityHeadline(spc)
   const stratifyLabel = stratifyBy ? stratifyBy.replace(/_/g, ' ') : null
@@ -232,7 +254,8 @@ export function useControlChartsController(): ControlChartsController {
     spc &&
     limitsMode === 'live' &&
     (((spc.chartType === 'imr' && spc.imr?.xBar != null && spc.imr?.ucl_x != null && spc.imr?.lcl_x != null) ||
-      (spc.chartType === 'xbar_r' && spc.xbarR?.grandMean != null && spc.xbarR?.ucl_x != null && spc.xbarR?.lcl_x != null))),
+      (spc.chartType === 'xbar_r' && spc.xbarR?.grandMean != null && spc.xbarR?.ucl_x != null && spc.xbarR?.lcl_x != null) ||
+      (spc.chartType === 'xbar_s' && spc.xbarS?.grandMean != null && spc.xbarS?.ucl_x != null && spc.xbarS?.lcl_x != null))),
   )
 
   // ── Locked limits handlers ──────────────────────────────────────────────
@@ -251,14 +274,23 @@ export function useControlChartsController(): ControlChartsController {
           lcl_r: spc.imr?.lcl_mr,
           sigma_within: spc.imr?.sigmaWithin,
         }
-      : {
-          cl: spc.xbarR?.grandMean,
-          ucl: spc.xbarR?.ucl_x,
-          lcl: spc.xbarR?.lcl_x,
-          ucl_r: spc.xbarR?.ucl_r,
-          lcl_r: spc.xbarR?.lcl_r,
-          sigma_within: spc.xbarR?.sigmaWithin,
-        }
+      : spc.chartType === 'xbar_s'
+        ? {
+            cl: spc.xbarS?.grandMean,
+            ucl: spc.xbarS?.ucl_x,
+            lcl: spc.xbarS?.lcl_x,
+            ucl_r: spc.xbarS?.ucl_s,
+            lcl_r: spc.xbarS?.lcl_s,
+            sigma_within: spc.xbarS?.sigmaWithin,
+          }
+        : {
+            cl: spc.xbarR?.grandMean,
+            ucl: spc.xbarR?.ucl_x,
+            lcl: spc.xbarR?.lcl_x,
+            ucl_r: spc.xbarR?.ucl_r,
+            lcl_r: spc.xbarR?.lcl_r,
+            sigma_within: spc.xbarR?.sigmaWithin,
+          }
     if (limits.cl == null || limits.ucl == null || limits.lcl == null) return
     void saveLimits(limits)
   }, [spc, saveLimits])
@@ -270,6 +302,10 @@ export function useControlChartsController(): ControlChartsController {
     // Type flags
     isAttributeChart, isPChart, isCountChart, isQuantitative, effectiveChartType,
     attrChartType, setAttrChartType,
+    ewmaLambda, setEwmaLambda,
+    ewmaL, setEwmaL,
+    cusumK, setCusumK,
+    cusumH, setCusumH,
     // Raw data
     quantPoints, quantNormality, dataTruncated, hydrating,
     attrPoints, countPoints, points, loading, analyticsLoading, analyticsError, error,

@@ -83,6 +83,19 @@ dimensions:
 - Added configurable upstream/downstream lineage depth controls to the process
   flow experience, with the selected search horizon persisted into saved views
   and shareable URL state.
+- Extended subgroup variable charting to support `X̄-S` alongside the existing
+  `I-MR` and `X̄-R` families, including secondary sigma-chart rendering and
+  lockable subgroup sigma limits.
+- Added time-weighted quantitative chart families (`EWMA` and `CUSUM`) with
+  analyst-tunable parameters, while keeping capability anchored to the existing
+  within-sigma baseline.
+- Expanded capability evidence to include approximate 95% confidence intervals
+  for `Cp`, `Cpk`, `Pp`, and `Ppk`.
+- Added a backend Gauge R&R reference module so MSA calculations now have a
+  governed parity seam instead of existing only in the browser.
+- Added a live backend MSA calculation endpoint and switched the MSA view to
+  use it, preserving the current CSV-driven workflow while making backend
+  results the displayed source of truth.
 - Replaced the full-framework Carbon stylesheet import with a curated set of
   Carbon style modules, cutting the global CSS bundle and eliminating the IBM
   Plex runtime font warnings in production builds.

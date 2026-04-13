@@ -73,6 +73,7 @@ function resolvePresetRange(preset: DatePreset): { from: string; to: string } {
 
 function chartTypeLabel(chartType: string | null | undefined): string {
   if (chartType === 'xbar_r')  return 'X̄-R chart'
+  if (chartType === 'xbar_s')  return 'X̄-S chart'
   if (chartType === 'p_chart') return 'Attribute chart'
   return 'I-MR chart'
 }

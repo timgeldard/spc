@@ -9,8 +9,8 @@ Databricks SQL Warehouse and Unity Catalog.
 ## Features
 
 ### SPC Module
-- **Control Charts** — I-MR (Individuals + Moving Range) and X̄-R (Subgroup Mean + Range)
-- **Advanced Capability** — **Cp, Cpk** (short-term) and **Pp, Ppk** (long-term) calculation scores
+- **Control Charts** — I-MR, X̄-R, X̄-S, EWMA, CUSUM, and attribute charts (`P`, `nP`, `C`, `U`)
+- **Advanced Capability** — **Cp, Cpk** (short-term) and **Pp, Ppk** (long-term) calculation scores with 95% confidence intervals
 - **Non-Parametric Analysis** — Automatic fallback to percentile-based capability ($P_{0.135}$, $P_{99.865}$) for non-normal datasets
 - **Rule Detection** — WECO (4 rules) and Nelson (8 rules) out-of-control signals
 - **P-Chart / nP-Chart** — Proportion nonconforming charts for attribute data
@@ -53,7 +53,7 @@ React SPA (Vite + TypeScript)
     ├── SPCContext           Reducer-backed local UI/workbench state
     ├── TanStack Query       Server-state caching for metadata, summary, and analytical reads
     ├── spc/dal/             Data Access Layer (PyPika SQL Builders)
-    ├── spc/charts/          IMR, XbarR, P, Capability, T² & Signals Panels
+    ├── spc/charts/          IMR, XbarR/S, EWMA, CUSUM, P, Capability, T² & Signals Panels
     └── spc/scorecard/       ScorecardView (Carbon DataTable with sorting)
 ```
 

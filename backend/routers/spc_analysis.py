@@ -13,6 +13,7 @@ from backend.dal.spc_analysis_dal import (
 )
 from backend.routers.spc_common import handle_analysis_error, handle_sql_error
 from backend.schemas.spc_schemas import (
+    CalculateMSARequest,
     CompareScorecardsRequest,
     CorrelationRequest,
     CorrelationScatterRequest,
@@ -22,6 +23,7 @@ from backend.schemas.spc_schemas import (
     ScorecardRequest,
 )
 from backend.utils.db import attach_data_freshness, check_warehouse_config, resolve_token
+from backend.utils.msa import compute_grr, compute_grr_anova
 from backend.utils.rate_limit import limiter
 
 router = APIRouter()
@@ -122,6 +124,22 @@ async def msa_save(
         )
     except Exception as exc:
         handle_sql_error(exc)
+
+
+@router.post("/msa/calculate")
+@limiter.limit("20/minute")
+async def msa_calculate(
+    body: CalculateMSARequest,
+    x_forwarded_access_token: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    resolve_token(x_forwarded_access_token, authorization)
+    try:
+        if body.method == "anova":
+            return compute_grr_anova(body.measurement_data, body.tolerance)
+        return compute_grr(body.measurement_data, body.tolerance)
+    except Exception as exc:
+        handle_analysis_error(exc)
 
 
 @router.post("/correlation")

@@ -19,6 +19,10 @@ export interface ComputeAnalyticsInput {
   normality: NormalityResult | null
   stratifyBy: StratifyByKey | null
   rollingWindowSize: number
+  ewmaLambda: number
+  ewmaL: number
+  cusumK: number
+  cusumH: number
 }
 
 export interface ComputeAnalyticsOutput {
@@ -36,6 +40,10 @@ export function computeAnalytics({
   normality,
   stratifyBy,
   rollingWindowSize,
+  ewmaLambda,
+  ewmaL,
+  cusumK,
+  cusumH,
 }: ComputeAnalyticsInput): ComputeAnalyticsOutput {
   const effectiveExclusions = new Set<number>(excludedIndices)
   if (excludeOutliers) {
@@ -49,7 +57,13 @@ export function computeAnalytics({
     return { spc: null, trendData: [], stratumSections: [] }
   }
 
-  const spc = computeAll(activePoints, chartType, ruleSet, { normality })
+  const spc = computeAll(activePoints, chartType, ruleSet, {
+    normality,
+    ewmaLambda,
+    ewmaL,
+    cusumK,
+    cusumH,
+  })
   spc.filteredPointCount = activePoints.length
   spc.excludedPointCount = effectiveExclusions.size
   spc.indexedPoints = points.map((point, index) => ({
@@ -77,7 +91,7 @@ export function computeAnalytics({
         label,
         pointCount: groupedPoints.length,
         spc: groupedPoints.length > 0
-          ? computeAll(groupedPoints, chartType, ruleSet, { normality })
+          ? computeAll(groupedPoints, chartType, ruleSet, { normality, ewmaLambda, ewmaL, cusumK, cusumH })
           : null,
       }))
       .filter(section => (section.spc?.values?.length ?? 0) > 0)
