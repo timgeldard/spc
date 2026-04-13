@@ -11,7 +11,7 @@ from backend.dal.spc_analysis_dal import (
     fetch_scorecard,
     save_msa_session,
 )
-from backend.routers.spc_common import handle_sql_error
+from backend.routers.spc_common import handle_analysis_error, handle_sql_error
 from backend.schemas.spc_schemas import (
     CompareScorecardsRequest,
     CorrelationRequest,
@@ -47,7 +47,7 @@ async def spc_process_flow(
             body.downstream_depth,
         )
     except Exception as exc:
-        handle_sql_error(exc)
+        handle_analysis_error(exc)
 
     return await attach_data_freshness(
         payload,
@@ -144,7 +144,7 @@ async def spc_correlation(
             body.min_batches,
         )
     except Exception as exc:
-        handle_sql_error(exc)
+        handle_analysis_error(exc)
 
     return await attach_data_freshness(
         payload,
@@ -175,7 +175,7 @@ async def spc_correlation_scatter(
             body.date_to,
         )
     except Exception as exc:
-        handle_sql_error(exc)
+        handle_analysis_error(exc)
 
 
 @router.post("/multivariate")
@@ -198,7 +198,7 @@ async def spc_multivariate(
             body.date_to,
         )
     except Exception as exc:
-        handle_sql_error(exc)
+        handle_analysis_error(exc)
 
     return await attach_data_freshness(
         payload,

@@ -318,11 +318,33 @@ measures:
     display_name: Z Score
   - name: dpmo
     expr: |
+      -- Inline A&S 7.1.26 normal CDF: Φ(z_val) where z_val = MEASURE(z_score) - 1.5 (1.5σ shift).
+      -- DPMO = CAST((1 - Φ(z_val)) * 1e6 AS BIGINT). No UDF, no ERF() — pure SQL arithmetic only.
+      -- t = 1 / (1 + 0.3275911 * |z_val / √2|); Horner: t*(p1+t*(p2+t*(p3+t*(p4+t*p5))))*exp(-(z_val/√2)²)
       CASE
       WHEN MEASURE(performance_capability_method) <> 'parametric' OR MEASURE(z_score) IS NULL THEN NULL
-      ELSE ROUND(
-        (1 - (0.5 * (1 + ERF((MEASURE(z_score) - 1.5) / SQRT(2))))) * 1000000
-      )
+      WHEN (MEASURE(z_score) - 1.5) >  20.0 THEN CAST(0 AS BIGINT)
+      WHEN (MEASURE(z_score) - 1.5) < -20.0 THEN CAST(1000000 AS BIGINT)
+      ELSE CAST(
+        (1.0 - (
+          0.5 * (1.0 + SIGN((MEASURE(z_score) - 1.5)) * (
+            1.0 - (
+              (1.0 / (1.0 + 0.3275911 * ABS((MEASURE(z_score) - 1.5) / SQRT(2.0)))) *
+              (0.254829592 +
+               (1.0 / (1.0 + 0.3275911 * ABS((MEASURE(z_score) - 1.5) / SQRT(2.0)))) *
+               (-0.284496736 +
+                (1.0 / (1.0 + 0.3275911 * ABS((MEASURE(z_score) - 1.5) / SQRT(2.0)))) *
+                (1.421413741 +
+                 (1.0 / (1.0 + 0.3275911 * ABS((MEASURE(z_score) - 1.5) / SQRT(2.0)))) *
+                 (-1.453152027 +
+                  (1.0 / (1.0 + 0.3275911 * ABS((MEASURE(z_score) - 1.5) / SQRT(2.0)))) *
+                  1.061405429)))) *
+              EXP(-((MEASURE(z_score) - 1.5) / SQRT(2.0)) *
+                   ((MEASURE(z_score) - 1.5) / SQRT(2.0)))
+            )
+          ))
+        )) * 1000000.0
+        AS BIGINT)
       END
     display_name: DPMO
     synonyms: ['defects per million', 'ppm defects']

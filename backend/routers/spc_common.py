@@ -1,6 +1,7 @@
 import logging
 import uuid
 
+import numpy as np
 from fastapi import HTTPException
 
 from backend.utils.db import attach_data_freshness, classify_sql_runtime_error
@@ -65,6 +66,26 @@ def handle_sql_error(exc: Exception) -> None:
         status_code=500,
         detail=f"Internal server error; reference id: {error_id}",
     )
+
+
+def handle_analysis_error(exc: Exception) -> None:
+    """Handle errors from analysis endpoints, surfacing user-facing validation messages.
+
+    ValueError  → 422 with the exception message passed through to the client.
+    LinAlgError → 422 with a user-friendly explanation of the degenerate matrix case.
+    Anything else falls through to handle_sql_error for standard SQL / 500 handling.
+    """
+    if isinstance(exc, ValueError):
+        raise HTTPException(status_code=422, detail=str(exc))
+    if isinstance(exc, np.linalg.LinAlgError):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The selected characteristics produce a degenerate covariance matrix. "
+                "Try removing highly correlated or zero-variance variables."
+            ),
+        )
+    handle_sql_error(exc)
 
 
 def handle_locked_limits_error(exc: Exception) -> None:
