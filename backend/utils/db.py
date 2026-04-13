@@ -57,7 +57,12 @@ except ImportError:  # pragma: no cover - local-dev fallback until deps are inst
             super().__setitem__(key, value)
             self._expires[key] = time.monotonic() + self.ttl
 
-_sql_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sql")
+_SQL_MAX_WORKERS = max(1, int(os.environ.get("SPC_SQL_MAX_WORKERS", "20")))
+_SQL_POLL_MAX_ATTEMPTS = max(1, int(os.environ.get("SPC_SQL_POLL_MAX_ATTEMPTS", "60")))
+_SQL_POLL_INITIAL_DELAY_S = max(1, int(os.environ.get("SPC_SQL_POLL_INITIAL_DELAY_S", "2")))
+_SQL_POLL_MAX_DELAY_S = max(_SQL_POLL_INITIAL_DELAY_S, int(os.environ.get("SPC_SQL_POLL_MAX_DELAY_S", "30")))
+
+_sql_executor = ThreadPoolExecutor(max_workers=_SQL_MAX_WORKERS, thread_name_prefix="sql")
 _sql_cache = TTLCache(maxsize=100, ttl=300)
 _sql_cache_lock = threading.Lock()
 _SQL_CACHE_ROW_LIMIT = 1000
@@ -234,10 +239,11 @@ def run_sql(
     statement_id = result.get("statement_id", "")
     poll_url = f"https://{host}/api/2.0/sql/statements/{statement_id}"
 
-    for _ in range(60):  # up to ~2 minutes
+    poll_delay_s = _SQL_POLL_INITIAL_DELAY_S
+    for _ in range(_SQL_POLL_MAX_ATTEMPTS):
         if state in ("SUCCEEDED", "FAILED", "CANCELED", "CLOSED"):
             break
-        time.sleep(2)
+        time.sleep(poll_delay_s)
         poll_req = urllib.request.Request(poll_url, headers=auth_headers)
         try:
             with urllib.request.urlopen(poll_req, timeout=30) as poll_resp:
@@ -246,6 +252,7 @@ def run_sql(
         except urllib.error.HTTPError as exc:
             body_str = exc.read().decode() if exc.fp else ""
             raise RuntimeError(f"SQL poll {exc.code}: {body_str[:1000]}") from exc
+        poll_delay_s = min(_SQL_POLL_MAX_DELAY_S, poll_delay_s * 2)
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 

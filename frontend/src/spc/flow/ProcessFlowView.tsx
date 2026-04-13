@@ -149,6 +149,8 @@ export default function ProcessFlowView() {
       selectedMaterial: current.selectedMaterial,
       dateFrom: current.dateFrom,
       dateTo: current.dateTo,
+      processFlowUpstreamDepth: current.processFlowUpstreamDepth,
+      processFlowDownstreamDepth: current.processFlowDownstreamDepth,
     }),
     shallowEqual,
   )
@@ -156,6 +158,8 @@ export default function ProcessFlowView() {
     state.selectedMaterial?.material_id,
     state.dateFrom,
     state.dateTo,
+    state.processFlowUpstreamDepth,
+    state.processFlowDownstreamDepth,
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])

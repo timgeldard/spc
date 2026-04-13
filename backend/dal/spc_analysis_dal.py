@@ -8,6 +8,8 @@ from backend.utils.multivariate import compute_hotelling_t2
 from backend.utils.db import run_sql_async, sql_param, tbl
 from backend.utils.spc_thresholds import CPK_CAPABLE, CPK_HIGHLY_CAPABLE, CPK_MARGINAL
 
+_MULTIVARIATE_MAX_SOURCE_ROWS = 50000
+
 
 class _HealthRow(TypedDict, total=False):
     material_id: str
@@ -71,6 +73,8 @@ async def fetch_process_flow(
     material_id: str,
     date_from: Optional[str],
     date_to: Optional[str],
+    upstream_depth: int = 4,
+    downstream_depth: int = 3,
 ) -> dict:
     edges_query = f"""
         WITH RECURSIVE
@@ -90,7 +94,7 @@ async def fetch_process_flow(
             JOIN upstream u ON bl.CHILD_MATERIAL_ID = u.material_id
             WHERE bl.LINK_TYPE = 'PRODUCTION'
               AND bl.PARENT_MATERIAL_ID IS NOT NULL
-              AND u.depth < 4
+              AND u.depth < :upstream_depth
         ),
         downstream AS (
             SELECT DISTINCT
@@ -108,7 +112,7 @@ async def fetch_process_flow(
             JOIN downstream d ON bl.PARENT_MATERIAL_ID = d.material_id
             WHERE bl.LINK_TYPE = 'PRODUCTION'
               AND bl.CHILD_MATERIAL_ID IS NOT NULL
-              AND d.depth < 3
+              AND d.depth < :downstream_depth
         ),
         all_materials AS (
             SELECT material_id FROM upstream
@@ -127,7 +131,15 @@ async def fetch_process_flow(
           AND bl.PARENT_MATERIAL_ID IS NOT NULL
           AND bl.CHILD_MATERIAL_ID  IS NOT NULL
     """
-    edge_rows = await run_sql_async(token, edges_query, [sql_param("material_id", material_id)])
+    edge_rows = await run_sql_async(
+        token,
+        edges_query,
+        [
+            sql_param("material_id", material_id),
+            sql_param("upstream_depth", upstream_depth),
+            sql_param("downstream_depth", downstream_depth),
+        ],
+    )
 
     material_ids = {material_id}
     for edge in edge_rows:
@@ -226,7 +238,12 @@ async def fetch_process_flow(
             seen_edges.add((src, tgt))
             edges.append({"source": src, "target": tgt})
 
-    return {"nodes": nodes, "edges": edges}
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "upstream_depth": upstream_depth,
+        "downstream_depth": downstream_depth,
+    }
 
 
 async def fetch_scorecard(
@@ -669,8 +686,14 @@ async def fetch_multivariate(
         FROM {tbl('spc_correlation_source_v')}
         {where_sql}
         ORDER BY batch_date, batch_id, mic_name
+        LIMIT {_MULTIVARIATE_MAX_SOURCE_ROWS + 1}
     """
     rows = await run_sql_async(token, query, params + mic_params)
+    if len(rows) > _MULTIVARIATE_MAX_SOURCE_ROWS:
+        raise ValueError(
+            "Selected multivariate scope is too large for interactive analysis. "
+            "Narrow the date range, plant, or variable set and try again."
+        )
     payload = compute_hotelling_t2(rows, mic_ids)
     payload["material_id"] = material_id
     payload["plant_id"] = plant_id

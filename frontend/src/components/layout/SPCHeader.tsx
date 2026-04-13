@@ -68,6 +68,8 @@ export function SPCHeader({
         selectedPlant: state.selectedPlant,
         selectedMIC: state.selectedMIC,
         selectedMultivariateMicIds: state.selectedMultivariateMicIds,
+        processFlowUpstreamDepth: state.processFlowUpstreamDepth,
+        processFlowDownstreamDepth: state.processFlowDownstreamDepth,
         dateFrom: state.dateFrom,
         dateTo: state.dateTo,
         stratifyBy: state.stratifyBy,

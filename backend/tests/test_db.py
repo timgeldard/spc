@@ -148,3 +148,11 @@ class TestSqlCacheBehavior:
         mocked_run_sql.assert_called_once()
         with db_module._sql_cache_lock:
             assert db_module._sql_cache.get(cache_key) is None
+
+
+class TestSqlRuntimeTuning:
+    def test_statement_prefix_runtime_constants_are_configurable(self):
+        assert db_module._SQL_MAX_WORKERS >= 1
+        assert db_module._SQL_POLL_MAX_ATTEMPTS >= 1
+        assert db_module._SQL_POLL_INITIAL_DELAY_S >= 1
+        assert db_module._SQL_POLL_MAX_DELAY_S >= db_module._SQL_POLL_INITIAL_DELAY_S

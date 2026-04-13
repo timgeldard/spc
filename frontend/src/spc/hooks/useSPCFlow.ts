@@ -14,6 +14,8 @@ export function useSPCFlow(
   materialId?: string | null,
   dateFrom?: string | null,
   dateTo?: string | null,
+  upstreamDepth = 4,
+  downstreamDepth = 3,
 ): UseSPCFlowResult {
   const [flowData, setFlowData] = useState<ProcessFlowResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -25,6 +27,8 @@ export function useSPCFlow(
       materialId,
       dateFrom: dateFrom ?? null,
       dateTo: dateTo ?? null,
+      upstreamDepth,
+      downstreamDepth,
     })
 
     if (!materialId) {
@@ -54,6 +58,8 @@ export function useSPCFlow(
             material_id: materialId,
             date_from: dateFrom || null,
             date_to: dateTo || null,
+            upstream_depth: upstreamDepth,
+            downstream_depth: downstreamDepth,
           }),
           signal,
         })
@@ -75,7 +81,7 @@ export function useSPCFlow(
       })
 
     return () => controller.abort()
-  }, [materialId, dateFrom, dateTo])
+  }, [materialId, dateFrom, dateTo, upstreamDepth, downstreamDepth])
 
   return { flowData, loading, error }
 }

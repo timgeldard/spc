@@ -8,6 +8,9 @@ _MATERIAL_ID_MAX_LEN = 40
 _MIC_ID_MAX_LEN = 40
 _CHART_TYPES = {"imr", "xbar_r", "p_chart"}
 _STRATIFY_KEYS = {"plant_id", "inspection_lot_id", "operation_id"}
+_DEFAULT_UPSTREAM_DEPTH = 4
+_DEFAULT_DOWNSTREAM_DEPTH = 3
+_MAX_LINEAGE_DEPTH = 12
 
 
 def _validate_date(v: Optional[str], field_name: str) -> Optional[str]:
@@ -95,12 +98,21 @@ class ChartDataRequest(_DateRangeMixin, _MicIdMixin):
 
 class ProcessFlowRequest(_DateRangeMixin):
     material_id: str
+    upstream_depth: int = _DEFAULT_UPSTREAM_DEPTH
+    downstream_depth: int = _DEFAULT_DOWNSTREAM_DEPTH
 
     @field_validator("material_id")
     @classmethod
     def check_material_id(cls, v: str) -> str:
         if len(v) > _MATERIAL_ID_MAX_LEN:
             raise ValueError(f"material_id must be at most {_MATERIAL_ID_MAX_LEN} characters")
+        return v
+
+    @field_validator("upstream_depth", "downstream_depth")
+    @classmethod
+    def check_lineage_depth(cls, v: int) -> int:
+        if v < 1 or v > _MAX_LINEAGE_DEPTH:
+            raise ValueError(f"lineage depth must be between 1 and {_MAX_LINEAGE_DEPTH}")
         return v
 
 

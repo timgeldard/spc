@@ -1,3 +1,8 @@
+import asyncio
+
+import pytest
+
+from backend.dal import spc_analysis_dal
 from backend.utils.multivariate import compute_hotelling_t2
 
 
@@ -37,3 +42,22 @@ def test_compute_hotelling_t2_flags_injected_multivariate_anomaly():
     assert top["batch_id"] == "B-11"
     contributor_ids = [item["mic_id"] for item in top["top_contributors"]]
     assert contributor_ids == ["PRESS", "TEMP"] or contributor_ids == ["TEMP", "PRESS"]
+
+
+def test_fetch_multivariate_rejects_oversized_source_payload(monkeypatch):
+    async def fake_run_sql_async(_token, _query, _params=None):
+        return [{"batch_id": f"B-{i}", "batch_date": "2026-01-01", "mic_id": "TEMP", "mic_name": "Temperature", "avg_result": 1.0} for i in range(spc_analysis_dal._MULTIVARIATE_MAX_SOURCE_ROWS + 1)]
+
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+
+    with pytest.raises(ValueError, match="too large for interactive analysis"):
+        asyncio.run(
+            spc_analysis_dal.fetch_multivariate(
+                "token",
+                "MAT-1",
+                ["TEMP", "PRESS"],
+                None,
+                None,
+                None,
+            )
+        )

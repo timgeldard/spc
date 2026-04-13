@@ -57,4 +57,12 @@ describe('SPC reducer', () => {
 
     expect(next.selectedMultivariateMicIds).toEqual(['TEMP', 'PRESS', 'FLOW'])
   })
+
+  it('process flow lineage depth actions update search scope', () => {
+    const upstream = reducer(initialState, { type: 'SET_PROCESS_FLOW_UPSTREAM_DEPTH', payload: 9 })
+    const downstream = reducer(upstream, { type: 'SET_PROCESS_FLOW_DOWNSTREAM_DEPTH', payload: 7 })
+
+    expect(downstream.processFlowUpstreamDepth).toBe(9)
+    expect(downstream.processFlowDownstreamDepth).toBe(7)
+  })
 })

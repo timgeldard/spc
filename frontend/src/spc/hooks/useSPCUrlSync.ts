@@ -13,6 +13,8 @@ import { shallowEqual, useSPCSelector } from '../SPCContext'
  *   mic        — selected characteristic (MIC) ID
  *   mic_n      — MIC display name
  *   mic_ct     — MIC chart type (imr / xbar_r / p_chart …)
+ *   flow_u     — upstream lineage search depth
+ *   flow_d     — downstream lineage search depth
  *   from       — date range start (ISO date string)
  *   to         — date range end
  *
@@ -23,13 +25,25 @@ import { shallowEqual, useSPCSelector } from '../SPCContext'
  * so this hook is write-only: state → URL.
  */
 export function useSPCUrlSync(): void {
-  const { activeTab, selectedMaterial, selectedPlant, selectedMIC, selectedMultivariateMicIds, dateFrom, dateTo } = useSPCSelector(
+  const {
+    activeTab,
+    selectedMaterial,
+    selectedPlant,
+    selectedMIC,
+    selectedMultivariateMicIds,
+    processFlowUpstreamDepth,
+    processFlowDownstreamDepth,
+    dateFrom,
+    dateTo,
+  } = useSPCSelector(
     state => ({
       activeTab: state.activeTab,
       selectedMaterial: state.selectedMaterial,
       selectedPlant: state.selectedPlant,
       selectedMIC: state.selectedMIC,
       selectedMultivariateMicIds: state.selectedMultivariateMicIds,
+      processFlowUpstreamDepth: state.processFlowUpstreamDepth,
+      processFlowDownstreamDepth: state.processFlowDownstreamDepth,
       dateFrom: state.dateFrom,
       dateTo: state.dateTo,
     }),
@@ -66,6 +80,8 @@ export function useSPCUrlSync(): void {
       if (selectedMultivariateMicIds.length > 0) {
         params.set('mv', selectedMultivariateMicIds.join(','))
       }
+      if (processFlowUpstreamDepth !== 4) params.set('flow_u', String(processFlowUpstreamDepth))
+      if (processFlowDownstreamDepth !== 3) params.set('flow_d', String(processFlowDownstreamDepth))
 
       // Date range
       if (dateFrom) params.set('from', dateFrom)
@@ -75,5 +91,5 @@ export function useSPCUrlSync(): void {
       const url = search ? `?${search}` : window.location.pathname
       window.history.replaceState(null, '', url)
     } catch { /* no window.history (e.g., test environment) */ }
-  }, [activeTab, selectedMaterial, selectedPlant, selectedMIC, selectedMultivariateMicIds, dateFrom, dateTo])
+  }, [activeTab, selectedMaterial, selectedPlant, selectedMIC, selectedMultivariateMicIds, processFlowUpstreamDepth, processFlowDownstreamDepth, dateFrom, dateTo])
 }

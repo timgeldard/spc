@@ -553,6 +553,8 @@ export interface ProcessFlowEdgeData {
 export interface ProcessFlowResult {
   nodes: ProcessFlowNodeRecord[]
   edges: ProcessFlowEdgeData[]
+  upstream_depth?: number
+  downstream_depth?: number
   [key: string]: unknown
 }
 
@@ -598,6 +600,8 @@ export interface SPCState {
   selectedPlant: PlantRef | null
   selectedMIC: MicRef | null
   selectedMultivariateMicIds: string[]
+  processFlowUpstreamDepth: number
+  processFlowDownstreamDepth: number
   dateFrom: string
   dateTo: string
   activeTab: SPCTabId
@@ -627,6 +631,8 @@ export interface SavedView {
   selectedPlant: PlantRef | null
   selectedMIC: MicRef | null
   selectedMultivariateMicIds: string[]
+  processFlowUpstreamDepth: number
+  processFlowDownstreamDepth: number
   dateFrom: string
   dateTo: string
   stratifyBy: StratifyByKey | null
@@ -637,6 +643,8 @@ export type SPCAction =
   | { type: 'SET_PLANT'; payload: PlantRef | null }
   | { type: 'SET_MIC'; payload: MicRef | null }
   | { type: 'SET_MULTIVARIATE_MIC_IDS'; payload: string[] }
+  | { type: 'SET_PROCESS_FLOW_UPSTREAM_DEPTH'; payload: number }
+  | { type: 'SET_PROCESS_FLOW_DOWNSTREAM_DEPTH'; payload: number }
   | { type: 'SET_DATE_FROM'; payload: string }
   | { type: 'SET_DATE_TO'; payload: string }
   | { type: 'SET_GLOBAL_SEARCH'; payload: string }

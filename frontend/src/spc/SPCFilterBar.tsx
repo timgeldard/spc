@@ -98,6 +98,11 @@ const STRATIFY_OPTIONS: Array<{ value: StratifyByKey; label: string }> = [
   { value: 'operation_id',      label: 'Operation'      },
 ]
 
+const FLOW_DEPTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const depth = index + 1
+  return { value: depth, label: `Depth ${depth}` }
+})
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface SPCFilterBarProps {
@@ -114,6 +119,8 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
       selectedPlant: current.selectedPlant,
       selectedMIC: current.selectedMIC,
       selectedMultivariateMicIds: current.selectedMultivariateMicIds,
+      processFlowUpstreamDepth: current.processFlowUpstreamDepth,
+      processFlowDownstreamDepth: current.processFlowDownstreamDepth,
       dateFrom: current.dateFrom,
       dateTo: current.dateTo,
       stratifyBy: current.stratifyBy,
@@ -276,6 +283,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
     const micLabel   = formatMicLabel(state.selectedMIC)
     const matLabel   = state.selectedMaterial?.material_name || state.selectedMaterial?.material_id || ''
     const plantPart  = state.selectedPlant ? ` · ${state.selectedPlant.plant_name || state.selectedPlant.plant_id}` : ''
+    const depthPart  = ` · Lineage U${state.processFlowUpstreamDepth}/D${state.processFlowDownstreamDepth}`
     const datePart   = state.dateFrom && state.dateTo
       ? ` · ${state.dateFrom} → ${state.dateTo}`
       : state.dateFrom
@@ -302,6 +310,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
           <span style={{ margin: '0 0.375rem', color: 'var(--cds-border-subtle-02)' }}>·</span>
           <span>{micLabel}</span>
           {plantPart && <span style={{ color: 'var(--cds-text-secondary)' }}>{plantPart}</span>}
+          <span style={{ color: 'var(--cds-text-secondary)' }}>{depthPart}</span>
           {datePart  && <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)', marginLeft: '0.25rem' }}>{datePart}</span>}
           <span
             style={{
@@ -591,6 +600,47 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
                 </span>
               )}
             </div>
+          </Tile>
+        )}
+
+        {state.selectedMaterial && (
+          <Tile style={{ padding: '1rem' }}>
+            <p style={sectionLabelStyle}>Lineage depth</p>
+            <Stack gap={4}>
+              <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr 1fr' }}>
+                <Select
+                  id="spc-flow-upstream-depth"
+                  labelText="Upstream search"
+                  value={String(state.processFlowUpstreamDepth)}
+                  onChange={event =>
+                    dispatch({ type: 'SET_PROCESS_FLOW_UPSTREAM_DEPTH', payload: Number(event.target.value) })
+                  }
+                  helperText="Use a higher depth to inspect more parent generations when tracing likely root causes."
+                >
+                  {FLOW_DEPTH_OPTIONS.map(option => (
+                    <SelectItem key={`up-${option.value}`} value={String(option.value)} text={option.label} />
+                  ))}
+                </Select>
+
+                <Select
+                  id="spc-flow-downstream-depth"
+                  labelText="Downstream search"
+                  value={String(state.processFlowDownstreamDepth)}
+                  onChange={event =>
+                    dispatch({ type: 'SET_PROCESS_FLOW_DOWNSTREAM_DEPTH', payload: Number(event.target.value) })
+                  }
+                  helperText="Use a higher depth to inspect more downstream consumption generations when assessing impact."
+                >
+                  {FLOW_DEPTH_OPTIONS.map(option => (
+                    <SelectItem key={`down-${option.value}`} value={String(option.value)} text={option.label} />
+                  ))}
+                </Select>
+              </div>
+
+              <FieldHelp>
+                Use deeper searches for complex formulations or aerospace-style nested assemblies. Larger scopes can increase lineage-query cost, so keep the default unless the investigation warrants it.
+              </FieldHelp>
+            </Stack>
           </Tile>
         )}
 

@@ -25,6 +25,8 @@ const PREF_EXCLUDE_OUTLIERS = 'spc_exclude_outliers'
 const PREF_LIMITS_MODE = 'spc_limits_mode'
 const PREF_ROLE_MODE = 'spc_role_mode'
 const PREF_SAVED_VIEWS = 'spc_saved_views'
+const DEFAULT_PROCESS_FLOW_UPSTREAM_DEPTH = 4
+const DEFAULT_PROCESS_FLOW_DOWNSTREAM_DEPTH = 3
 
 // ── URL param keys ────────────────────────────────────────────────────────────
 const VALID_TABS = ['overview', 'flow', 'charts', 'scorecard', 'compare', 'msa', 'correlation', 'multivariate', 'genie'] as const
@@ -55,6 +57,8 @@ function buildInitialState(): SPCState {
     selectedPlant: null,
     selectedMIC: null,
     selectedMultivariateMicIds: [],
+    processFlowUpstreamDepth: DEFAULT_PROCESS_FLOW_UPSTREAM_DEPTH,
+    processFlowDownstreamDepth: DEFAULT_PROCESS_FLOW_DOWNSTREAM_DEPTH,
     dateFrom,
     dateTo,
     activeTab: 'overview',
@@ -136,6 +140,14 @@ function buildInitialState(): SPCState {
     if (multivariateMicIds) {
       state.selectedMultivariateMicIds = multivariateMicIds.split(',').map(value => value.trim()).filter(Boolean)
     }
+    const upstreamDepth = Number(params.get('flow_u'))
+    if (Number.isInteger(upstreamDepth) && upstreamDepth >= 1 && upstreamDepth <= 12) {
+      state.processFlowUpstreamDepth = upstreamDepth
+    }
+    const downstreamDepth = Number(params.get('flow_d'))
+    if (Number.isInteger(downstreamDepth) && downstreamDepth >= 1 && downstreamDepth <= 12) {
+      state.processFlowDownstreamDepth = downstreamDepth
+    }
   } catch { /* no window.location (e.g., test environment) */ }
 
   if (state.roleMode === 'operator' && ['compare', 'msa', 'correlation', 'multivariate', 'genie'].includes(state.activeTab)) {
@@ -151,6 +163,8 @@ export const initialState: SPCState = {
   selectedPlant: null,
   selectedMIC: null,
   selectedMultivariateMicIds: [],
+  processFlowUpstreamDepth: DEFAULT_PROCESS_FLOW_UPSTREAM_DEPTH,
+  processFlowDownstreamDepth: DEFAULT_PROCESS_FLOW_DOWNSTREAM_DEPTH,
   dateFrom: '',
   dateTo: '',
   activeTab: 'overview',
@@ -217,6 +231,10 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         ...state,
         selectedMultivariateMicIds: action.payload,
       }
+    case 'SET_PROCESS_FLOW_UPSTREAM_DEPTH':
+      return { ...state, processFlowUpstreamDepth: action.payload }
+    case 'SET_PROCESS_FLOW_DOWNSTREAM_DEPTH':
+      return { ...state, processFlowDownstreamDepth: action.payload }
     case 'SET_DATE_FROM':
       return {
         ...state,
@@ -262,6 +280,8 @@ export function reducer(state: SPCState, action: SPCAction): SPCState {
         selectedPlant: action.payload.selectedPlant,
         selectedMIC: action.payload.selectedMIC,
         selectedMultivariateMicIds: action.payload.selectedMultivariateMicIds ?? [],
+        processFlowUpstreamDepth: action.payload.processFlowUpstreamDepth ?? DEFAULT_PROCESS_FLOW_UPSTREAM_DEPTH,
+        processFlowDownstreamDepth: action.payload.processFlowDownstreamDepth ?? DEFAULT_PROCESS_FLOW_DOWNSTREAM_DEPTH,
         dateFrom: action.payload.dateFrom,
         dateTo: action.payload.dateTo,
         activeTab: nextTab,

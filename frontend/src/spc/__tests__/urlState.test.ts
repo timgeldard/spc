@@ -102,4 +102,12 @@ describe('URL param key mapping', () => {
     params.set('mv', 'TEMP,PRESS,FLOW')
     expect(params.get('mv')).toBe('TEMP,PRESS,FLOW')
   })
+
+  it('round-trips process flow depth through URLSearchParams', () => {
+    const params = new URLSearchParams()
+    params.set('flow_u', '10')
+    params.set('flow_d', '8')
+    expect(params.get('flow_u')).toBe('10')
+    expect(params.get('flow_d')).toBe('8')
+  })
 })

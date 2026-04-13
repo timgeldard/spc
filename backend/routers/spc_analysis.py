@@ -38,7 +38,14 @@ async def spc_process_flow(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
     try:
-        payload = await fetch_process_flow(token, body.material_id, body.date_from, body.date_to)
+        payload = await fetch_process_flow(
+            token,
+            body.material_id,
+            body.date_from,
+            body.date_to,
+            body.upstream_depth,
+            body.downstream_depth,
+        )
     except Exception as exc:
         handle_sql_error(exc)
 

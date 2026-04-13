@@ -2,18 +2,16 @@ from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import quote, unquote
 
-from pypika import Table, functions as fn
+from pypika import Database, Schema, Table, functions as fn
 from pypika.dialects import MySQLQuery
 from pypika.terms import Criterion, LiteralValue
 
 from backend.dal.spc_shared import infer_spec_type
-from backend.utils.db import run_sql_async, sql_param, tbl
+from backend.utils.db import TRACE_CATALOG, TRACE_SCHEMA, run_sql_async, sql_param, tbl
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
 _ATTRIBUTE_CHART_MAX_ROWS = 10000
-_MB_TABLE_PLACEHOLDER = "__spc_mass_balance__"
-_QR_TABLE_PLACEHOLDER = "__spc_quality_result__"
 _ALLOWED_STRATIFY_COLUMNS = {
     "plant_id": "bd.plant_id",
     "inspection_lot_id": "CAST(r.INSPECTION_LOT_ID AS STRING)",
@@ -167,12 +165,14 @@ def _sql_expr(sql: str) -> LiteralValue:
     return LiteralValue(sql)
 
 
-def _render_query(query) -> str:
-    return (
-        query.get_sql()
-        .replace(f"`{_MB_TABLE_PLACEHOLDER}`", tbl("gold_batch_mass_balance_v"))
-        .replace(f"`{_QR_TABLE_PLACEHOLDER}`", tbl("gold_batch_quality_result_v"))
+def _source_table(name: str, alias: Optional[str] = None) -> Table:
+    table = Table(
+        name,
+        schema=Schema(TRACE_SCHEMA, parent=Database(TRACE_CATALOG)),
     )
+    if alias:
+        return table.as_(alias)
+    return table
 
 
 def _apply_conditions(query, conditions: list[str]):
@@ -240,7 +240,7 @@ def _build_chart_filters(
 
 
 def _build_batch_dates_cte(filters: ChartFilterSpec):
-    mb = Table(_MB_TABLE_PLACEHOLDER).as_("mb")
+    mb = _source_table("gold_batch_mass_balance_v", "mb")
     query = (
         MySQLQuery.from_(mb)
         .select(
@@ -255,7 +255,7 @@ def _build_batch_dates_cte(filters: ChartFilterSpec):
 
 
 def _build_quality_data_cte(filters: ChartFilterSpec):
-    r = Table(_QR_TABLE_PLACEHOLDER).as_("r")
+    r = _source_table("gold_batch_quality_result_v", "r")
     bd = Table("batch_dates").as_("bd")
     select_terms = [
         r.BATCH_ID.as_("batch_id"),
@@ -373,11 +373,11 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
         .limit(limit + 1)
     )
     final_query = _apply_conditions(final_query, filters.final_where_conditions)
-    return _render_query(final_query), params
+    return final_query.get_sql(), params
 
 
 def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tuple[str, list[dict]]:
-    r = Table(_QR_TABLE_PLACEHOLDER).as_("r")
+    r = _source_table("gold_batch_quality_result_v", "r")
     bd = Table("batch_dates").as_("bd")
     final_query = (
         MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
@@ -392,7 +392,7 @@ def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tupl
         .limit(max_points)
     )
     final_query = _apply_conditions(final_query, filters.quality_conditions)
-    return _render_query(final_query), list(filters.params)
+    return final_query.get_sql(), list(filters.params)
 
 
 async def fetch_chart_data_page(

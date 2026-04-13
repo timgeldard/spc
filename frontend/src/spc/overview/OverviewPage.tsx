@@ -23,6 +23,8 @@ export default function OverviewPage() {
     selectedMaterial,
     selectedPlant,
     selectedMIC,
+    processFlowUpstreamDepth,
+    processFlowDownstreamDepth,
     dateFrom,
     dateTo,
   } = useSPCSelector(
@@ -30,6 +32,8 @@ export default function OverviewPage() {
       selectedMaterial: state.selectedMaterial,
       selectedPlant: state.selectedPlant,
       selectedMIC: state.selectedMIC,
+      processFlowUpstreamDepth: state.processFlowUpstreamDepth,
+      processFlowDownstreamDepth: state.processFlowDownstreamDepth,
       dateFrom: state.dateFrom,
       dateTo: state.dateTo,
     }),
@@ -57,6 +61,8 @@ export default function OverviewPage() {
     selectedMaterial?.material_id,
     dateFrom,
     dateTo,
+    processFlowUpstreamDepth,
+    processFlowDownstreamDepth,
   )
 
   const derivedKpis = useMemo(() => {
