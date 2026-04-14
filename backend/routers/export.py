@@ -37,6 +37,7 @@ router = APIRouter()
 
 _MATERIAL_ID_MAX_LEN = 40
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
+_ATTRIBUTE_CHART_TYPES = {"p_chart", "np_chart", "c_chart", "u_chart"}
 
 
 def sanitize_spreadsheet_value(value):
@@ -107,6 +108,21 @@ class ExportRequest(BaseModel):
             TypeAdapter(list[SignalExportEntry]).validate_python(raw)
         except Exception as exc:
             raise ValueError("signals_json must be a list of signal objects") from exc
+        return self
+
+    @model_validator(mode="after")
+    def validate_attribute_chart_scope(self) -> "ExportRequest":
+        if self.export_scope != "attribute_chart":
+            return self
+        if not self.mic_id:
+            raise ValueError("mic_id is required when export_scope is 'attribute_chart'")
+        if not self.chart_type:
+            raise ValueError("chart_type is required when export_scope is 'attribute_chart'")
+        if self.chart_type not in _ATTRIBUTE_CHART_TYPES:
+            raise ValueError(
+                "chart_type must be one of 'p_chart', 'np_chart', 'c_chart', or 'u_chart' "
+                "when export_scope is 'attribute_chart'"
+            )
         return self
 
 
@@ -255,7 +271,7 @@ def _attribute_export_headers(chart_type: Optional[str]) -> list[str]:
     if chart_type == "u_chart":
         return ["Batch ID", "Batch Date", "Batch Seq", "Opportunities", "Defects"]
     if chart_type == "np_chart":
-        return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Defect Count"]
+        return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Nonconforming"]
     return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Defect Count"]
 
 
@@ -270,6 +286,15 @@ def _attribute_export_rows(rows: list[dict], chart_type: Optional[str]) -> list[
                 row.get("n_inspected"),
                 row.get("n_nonconforming"),
                 row.get("p_value"),
+            ])
+            continue
+        if chart_type == "np_chart":
+            export_rows.append([
+                row.get("batch_id"),
+                row.get("batch_date"),
+                row.get("batch_seq"),
+                row.get("n_inspected"),
+                row.get("n_nonconforming"),
             ])
             continue
         export_rows.append([

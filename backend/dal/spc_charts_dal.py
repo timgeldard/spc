@@ -697,7 +697,7 @@ async def fetch_spec_drift_summary(
         conditions.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
     if operation_id:
-        conditions.append("COALESCE(operation_id, '') = COALESCE(:operation_id, '')")
+        conditions.append("operation_id = :operation_id")
         params.append(sql_param("operation_id", operation_id))
 
     where_clause = " AND ".join(conditions)
@@ -861,10 +861,12 @@ async def fetch_locked_limits(
     ]
     if unified_mic_key:
         mic_scope_filter = "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)"
+        mic_scope_order = "CASE WHEN unified_mic_key = :unified_mic_key THEN 0 ELSE 1 END,"
         params.append(sql_param("unified_mic_key", unified_mic_key))
         params.append(sql_param("mic_id", mic_id))
     else:
         mic_scope_filter = "AND mic_id = :mic_id"
+        mic_scope_order = ""
         params.append(sql_param("mic_id", mic_id))
     if plant_id:
         plant_filter = "AND plant_id = :plant_id"
@@ -888,7 +890,7 @@ async def fetch_locked_limits(
           {mic_scope_filter}
           {plant_filter}
           {operation_id_filter}
-        ORDER BY locked_at DESC
+        ORDER BY {mic_scope_order} locked_at DESC
         LIMIT 1
     """
     rows = await run_sql_async(token, query, params)

@@ -80,7 +80,7 @@ def test_fetch_spec_drift_summary_filters_by_operation_id(monkeypatch):
     )
 
     assert result["detected"] is False
-    assert "COALESCE(operation_id, '') = COALESCE(:operation_id, '')" in captured["query"]
+    assert "operation_id = :operation_id" in captured["query"]
     assert any(param["name"] == "operation_id" and param["value"] == "OP-10" for param in captured["params"])
 
 
@@ -108,4 +108,5 @@ def test_fetch_locked_limits_prefers_unified_mic_key(monkeypatch):
 
     assert result is None
     assert "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)" in captured["query"]
+    assert "ORDER BY CASE WHEN unified_mic_key = :unified_mic_key THEN 0 ELSE 1 END, locked_at DESC" in captured["query"]
     assert any(param["name"] == "mic_id" and param["value"] == "MIC-1" for param in captured["params"])
