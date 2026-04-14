@@ -65,7 +65,7 @@ def test_chart_data_response_shape(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert sorted(body.keys()) == ["count", "data", "data_truncated", "has_more", "limit", "next_cursor", "normality", "stratified", "stratify_by"]
+    assert sorted(body.keys()) == ["count", "data", "data_truncated", "has_more", "limit", "next_cursor", "normality", "spec_drift", "stratified", "stratify_by"]
     assert body["count"] == 1
     assert body["data"][0]["batch_id"] == "B1"
 

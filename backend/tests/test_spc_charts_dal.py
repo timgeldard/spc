@@ -55,3 +55,57 @@ def test_build_chart_filters_rejects_invalid_stratify_key():
             None,
             "bad_column",
         )
+
+
+def test_fetch_spec_drift_summary_filters_by_operation_id(monkeypatch):
+    captured = {}
+
+    async def fake_run_sql_async(_token, query, params=None):
+        captured["query"] = query
+        captured["params"] = params or []
+        return [{"distinct_signatures": 1, "total_batches": 3, "signature_set": ["1|2|1.5"]}]
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    result = asyncio.run(
+        spc_charts_dal.fetch_spec_drift_summary(
+            "token",
+            "MAT-1",
+            "MIC-1",
+            "PLANT-1",
+            "2026-01-01",
+            "2026-01-31",
+            operation_id="OP-10",
+        )
+    )
+
+    assert result["detected"] is False
+    assert "COALESCE(operation_id, '') = COALESCE(:operation_id, '')" in captured["query"]
+    assert any(param["name"] == "operation_id" and param["value"] == "OP-10" for param in captured["params"])
+
+
+def test_fetch_locked_limits_prefers_unified_mic_key(monkeypatch):
+    captured = {}
+
+    async def fake_run_sql_async(_token, query, params=None):
+        captured["query"] = query
+        captured["params"] = params or []
+        return []
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    result = asyncio.run(
+        spc_charts_dal.fetch_locked_limits(
+            "token",
+            "MAT-1",
+            "MIC-1",
+            "PLANT-1",
+            "imr",
+            operation_id="OP-10",
+            unified_mic_key="PLANT-1||VISCOSITY||NO_UNIT",
+        )
+    )
+
+    assert result is None
+    assert "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)" in captured["query"]
+    assert any(param["name"] == "mic_id" and param["value"] == "MIC-1" for param in captured["params"])

@@ -382,6 +382,12 @@ export interface SPCComputationResult {
 export interface LockedLimits extends ControlLimits {
   locked_at?: string | null
   locked_by?: string | null
+  unified_mic_key?: string | null
+  mic_origin?: string | null
+  spec_signature?: string | null
+  locking_note?: string | null
+  stale_spec?: boolean
+  live_spec_signature?: string | null
 }
 
 export interface ScorecardRow {
@@ -406,6 +412,8 @@ export interface ExportPayload {
   material_id?: string | null
   mic_id?: string | null
   plant_id?: string | null
+  operation_id?: string | null
+  chart_type?: string | null
   date_from?: string | null
   date_to?: string | null
 }

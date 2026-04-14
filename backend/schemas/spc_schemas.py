@@ -1,11 +1,12 @@
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MATERIAL_ID_MAX_LEN = 40
 _MIC_ID_MAX_LEN = 40
+_MIC_SELECTION_KEY_MAX_LEN = 120
 _CHART_TYPES = {"imr", "xbar_r", "xbar_s", "ewma", "cusum", "p_chart", "np_chart", "c_chart", "u_chart"}
 _STRATIFY_KEYS = {"plant_id", "inspection_lot_id", "operation_id"}
 _DEFAULT_UPSTREAM_DEPTH = 4
@@ -243,6 +244,7 @@ class LockLimitsRequest(BaseModel):
 class GetLockedLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
+    unified_mic_key: Optional[str] = None
     plant_id: Optional[str] = None
     operation_id: Optional[str] = None
     chart_type: str
@@ -272,6 +274,7 @@ class GetLockedLimitsRequest(BaseModel):
 class DeleteLockedLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
+    unified_mic_key: Optional[str] = None
     plant_id: Optional[str] = None
     operation_id: Optional[str] = None
     chart_type: str
@@ -394,9 +397,10 @@ class CorrelationScatterRequest(_DateRangeMixin):
 
     @field_validator("material_id", "mic_a_id", "mic_b_id")
     @classmethod
-    def check_lengths(cls, v: str) -> str:
-        if len(v) > _MATERIAL_ID_MAX_LEN:
-            raise ValueError(f"field must be at most {_MATERIAL_ID_MAX_LEN} characters")
+    def check_lengths(cls, v: str, info: ValidationInfo) -> str:
+        max_len = _MATERIAL_ID_MAX_LEN if info.field_name == "material_id" else _MIC_SELECTION_KEY_MAX_LEN
+        if len(v) > max_len:
+            raise ValueError(f"field must be at most {max_len} characters")
         return v
 
 
@@ -421,6 +425,6 @@ class MultivariateRequest(_DateRangeMixin):
         if len(cleaned) > 8:
             raise ValueError("mic_ids must contain at most 8 characteristics")
         for mic_id in cleaned:
-            if len(mic_id) > _MIC_ID_MAX_LEN:
+            if len(mic_id) > _MIC_SELECTION_KEY_MAX_LEN:
                 raise ValueError(f"mic_id '{mic_id}' exceeds maximum length")
         return cleaned

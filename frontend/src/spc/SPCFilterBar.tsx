@@ -27,6 +27,11 @@ function serializeMicKey(mic: Pick<MicRef, 'mic_id' | 'operation_id'> | null | u
   return JSON.stringify({ mic_id: mic.mic_id, operation_id: mic.operation_id ?? null })
 }
 
+function multivariateSelectionKey(mic: Pick<MicRef, 'mic_id' | 'operation_id'> | null | undefined): string {
+  if (!mic) return ''
+  return `${mic.mic_id}||${mic.operation_id ?? 'NO_OP'}`
+}
+
 /** YYYY-MM-DD in local time — avoids toISOString UTC shift in negative-offset timezones */
 function toLocalDateString(d: Date): string {
   const y   = d.getFullYear()
@@ -204,8 +209,17 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   // Keep multivariate selections aligned with the current material / plant scope.
   useEffect(() => {
     if (charsLoading) return
-    const validMicIds = new Set(quantitativeCharacteristics.map(characteristic => characteristic.mic_id))
-    const nextIds = state.selectedMultivariateMicIds.filter(micId => validMicIds.has(micId))
+    const validMicIds = new Set(quantitativeCharacteristics.map(characteristic => multivariateSelectionKey(characteristic)))
+    const keysByMicId = quantitativeCharacteristics.reduce<Record<string, string[]>>((acc, characteristic) => {
+      const key = multivariateSelectionKey(characteristic)
+      acc[characteristic.mic_id] = [...(acc[characteristic.mic_id] ?? []), key]
+      return acc
+    }, {})
+    const nextIds = Array.from(new Set(state.selectedMultivariateMicIds.flatMap(micId => {
+      if (validMicIds.has(micId)) return [micId]
+      const upgraded = keysByMicId[micId]
+      return upgraded?.length === 1 ? upgraded : []
+    })))
     if (nextIds.length !== state.selectedMultivariateMicIds.length) {
       dispatch({ type: 'SET_MULTIVARIATE_MIC_IDS', payload: nextIds })
     }
@@ -658,9 +672,9 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
               {state.selectedMultivariateMicIds.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
                   {quantitativeCharacteristics
-                    .filter(characteristic => selectedMultivariateSet.has(characteristic.mic_id))
+                    .filter(characteristic => selectedMultivariateSet.has(multivariateSelectionKey(characteristic)))
                     .map(characteristic => (
-                      <Tag key={characteristic.mic_id} type="blue" size="sm">
+                      <Tag key={multivariateSelectionKey(characteristic)} type="blue" size="sm">
                         {formatMicLabel(characteristic)}
                       </Tag>
                     ))}
@@ -686,18 +700,19 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
                   </span>
                 )}
                 {quantitativeCharacteristics.map(characteristic => {
-                  const checked = selectedMultivariateSet.has(characteristic.mic_id)
+                  const selectionKey = multivariateSelectionKey(characteristic)
+                  const checked = selectedMultivariateSet.has(selectionKey)
                   const disableUnchecked =
                     !checked && state.selectedMultivariateMicIds.length >= 8
                   return (
                     <Checkbox
-                      key={characteristic.mic_id}
-                      id={`spc-multivariate-${characteristic.mic_id}`}
+                      key={selectionKey}
+                      id={`spc-multivariate-${selectionKey}`}
                       labelText={formatMicLabel(characteristic)}
                       checked={checked}
                       disabled={charsLoading || disableUnchecked}
                       onChange={(_, { checked: nextChecked }: { checked: boolean }) =>
-                        handleMultivariateToggle(characteristic.mic_id, nextChecked)
+                        handleMultivariateToggle(selectionKey, nextChecked)
                       }
                     />
                   )

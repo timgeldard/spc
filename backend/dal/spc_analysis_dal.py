@@ -495,36 +495,36 @@ async def fetch_correlation(
     query = f"""
         WITH filtered_avgs AS (
             SELECT
-                mic_id,
-                mic_name,
+                mic_selection_key,
+                mic_display_name,
                 batch_id,
                 avg_result
             FROM {tbl('spc_correlation_source_v')}
             {where_sql}
         ),
         mic_batch_counts AS (
-            SELECT mic_id, COUNT(DISTINCT batch_id) AS n
+            SELECT mic_selection_key, COUNT(DISTINCT batch_id) AS n
             FROM filtered_avgs
-            GROUP BY mic_id
+            GROUP BY mic_selection_key
         ),
         qualified_mics AS (
-            SELECT mic_id FROM mic_batch_counts WHERE n >= :min_batches
+            SELECT mic_selection_key FROM mic_batch_counts WHERE n >= :min_batches
         ),
         corr_pairs AS (
             SELECT
-                a.mic_id    AS mic_a,
-                a.mic_name  AS mic_name_a,
-                b.mic_id    AS mic_b,
-                b.mic_name  AS mic_name_b,
+                a.mic_selection_key AS mic_a,
+                a.mic_display_name  AS mic_name_a,
+                b.mic_selection_key AS mic_b,
+                b.mic_display_name  AS mic_name_b,
                 CORR(a.avg_result, b.avg_result) AS pearson_r,
                 COUNT(*)    AS shared_batches
             FROM filtered_avgs a
             JOIN filtered_avgs b
                 ON a.batch_id = b.batch_id
-                AND a.mic_id < b.mic_id
-            WHERE a.mic_id IN (SELECT mic_id FROM qualified_mics)
-              AND b.mic_id IN (SELECT mic_id FROM qualified_mics)
-            GROUP BY a.mic_id, a.mic_name, b.mic_id, b.mic_name
+                AND a.mic_selection_key < b.mic_selection_key
+            WHERE a.mic_selection_key IN (SELECT mic_selection_key FROM qualified_mics)
+              AND b.mic_selection_key IN (SELECT mic_selection_key FROM qualified_mics)
+            GROUP BY a.mic_selection_key, a.mic_display_name, b.mic_selection_key, b.mic_display_name
             HAVING COUNT(*) >= :min_batches
         )
         SELECT mic_a, mic_name_a, mic_b, mic_name_b,
@@ -575,20 +575,20 @@ async def fetch_correlation_scatter(
 
     query = f"""
         WITH filtered_avgs AS (
-            SELECT batch_id, batch_date, mic_id, mic_name, avg_result
+            SELECT batch_id, batch_date, mic_selection_key, mic_display_name, avg_result
             FROM {tbl('spc_correlation_source_v')}
             {where_sql}
         ),
         mic_a_avgs AS (
-            SELECT batch_id, ANY_VALUE(mic_name) AS mic_name, AVG(avg_result) AS avg_val
+            SELECT batch_id, ANY_VALUE(mic_display_name) AS mic_name, AVG(avg_result) AS avg_val
             FROM filtered_avgs
-            WHERE mic_id = :mic_a_id
+            WHERE mic_selection_key = :mic_a_id
             GROUP BY batch_id
         ),
         mic_b_avgs AS (
-            SELECT batch_id, ANY_VALUE(mic_name) AS mic_name, AVG(avg_result) AS avg_val
+            SELECT batch_id, ANY_VALUE(mic_display_name) AS mic_name, AVG(avg_result) AS avg_val
             FROM filtered_avgs
-            WHERE mic_id = :mic_b_id
+            WHERE mic_selection_key = :mic_b_id
             GROUP BY batch_id
         )
         SELECT
@@ -666,7 +666,7 @@ async def fetch_multivariate(
         param_name = f"mic_{index}"
         mic_params.append(sql_param(param_name, mic_id))
         mic_placeholders.append(f":{param_name}")
-    filters.append(f"mic_id IN ({', '.join(mic_placeholders)})")
+    filters.append(f"mic_selection_key IN ({', '.join(mic_placeholders)})")
 
     if date_from:
         filters.append("batch_date >= :date_from")
@@ -683,8 +683,8 @@ async def fetch_multivariate(
         SELECT
             batch_id,
             CAST(batch_date AS STRING) AS batch_date,
-            mic_id,
-            mic_name,
+            mic_selection_key AS mic_id,
+            mic_display_name AS mic_name,
             avg_result
         FROM {tbl('spc_correlation_source_v')}
         {where_sql}

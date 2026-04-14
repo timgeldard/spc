@@ -25,7 +25,11 @@ from backend.utils.db import (
 )
 from backend.utils.rate_limit import limiter
 from backend.dal.spc_analysis_dal import fetch_scorecard
-from backend.dal.spc_charts_dal import fetch_chart_data
+from backend.dal.spc_charts_dal import (
+    fetch_chart_data,
+    fetch_count_chart_data,
+    fetch_p_chart_data,
+)
 from backend.routers.spc_common import handle_sql_error
 from backend.schemas.spc_schemas import _validate_date
 
@@ -54,11 +58,13 @@ class SignalExportEntry(BaseModel):
 
 class ExportRequest(BaseModel):
     export_type: str          # 'excel' | 'csv'
-    export_scope: str         # 'scorecard' | 'chart_data' | 'signals'
+    export_scope: str         # 'scorecard' | 'chart_data' | 'attribute_chart' | 'signals'
     material_id: str
     mic_id: Optional[str] = None
     mic_name: Optional[str] = None
     plant_id: Optional[str] = None
+    operation_id: Optional[str] = None
+    chart_type: Optional[str] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     signals_json: Optional[str] = None   # JSON-encoded signals list from frontend
@@ -85,8 +91,8 @@ class ExportRequest(BaseModel):
     @field_validator("export_scope")
     @classmethod
     def check_export_scope(cls, v: str) -> str:
-        if v not in ("scorecard", "chart_data", "signals"):
-            raise ValueError("export_scope must be 'scorecard', 'chart_data', or 'signals'")
+        if v not in ("scorecard", "chart_data", "attribute_chart", "signals"):
+            raise ValueError("export_scope must be 'scorecard', 'chart_data', 'attribute_chart', or 'signals'")
         return v
 
     @model_validator(mode="after")
@@ -155,6 +161,35 @@ async def _fetch_chart_data(token: str, body: ExportRequest) -> list[dict]:
         body.date_from,
         body.date_to,
         None,
+        operation_id=body.operation_id,
+    )
+
+
+async def _fetch_attribute_chart_data(token: str, body: ExportRequest) -> list[dict]:
+    if not body.mic_id:
+        return []
+    if body.chart_type == "p_chart":
+        return await fetch_p_chart_data(
+            token,
+            body.material_id,
+            body.mic_id,
+            body.mic_name,
+            body.plant_id,
+            body.date_from,
+            body.date_to,
+            operation_id=body.operation_id,
+        )
+    chart_subtype = "u" if body.chart_type == "u_chart" else "np" if body.chart_type == "np_chart" else "c"
+    return await fetch_count_chart_data(
+        token,
+        body.material_id,
+        body.mic_id,
+        body.mic_name,
+        body.plant_id,
+        body.date_from,
+        body.date_to,
+        chart_subtype,
+        operation_id=body.operation_id,
     )
 
 
@@ -206,6 +241,58 @@ def _build_chart_data_excel(rows: list[dict], material_id: str, mic_name: Option
             row.get("tolerance"),
             row.get("valuation"),
         ]))
+
+    _auto_width(ws)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def _attribute_export_headers(chart_type: Optional[str]) -> list[str]:
+    if chart_type == "p_chart":
+        return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Nonconforming", "P Value"]
+    if chart_type == "u_chart":
+        return ["Batch ID", "Batch Date", "Batch Seq", "Opportunities", "Defects"]
+    if chart_type == "np_chart":
+        return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Defect Count"]
+    return ["Batch ID", "Batch Date", "Batch Seq", "Inspected", "Defect Count"]
+
+
+def _attribute_export_rows(rows: list[dict], chart_type: Optional[str]) -> list[list[object]]:
+    export_rows: list[list[object]] = []
+    for row in rows:
+        if chart_type == "p_chart":
+            export_rows.append([
+                row.get("batch_id"),
+                row.get("batch_date"),
+                row.get("batch_seq"),
+                row.get("n_inspected"),
+                row.get("n_nonconforming"),
+                row.get("p_value"),
+            ])
+            continue
+        export_rows.append([
+            row.get("batch_id"),
+            row.get("batch_date"),
+            row.get("batch_seq"),
+            row.get("n_inspected"),
+            row.get("defect_count"),
+        ])
+    return export_rows
+
+
+def _build_attribute_chart_excel(rows: list[dict], chart_type: Optional[str]) -> io.BytesIO:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Attribute Chart Data"
+
+    headers = _attribute_export_headers(chart_type)
+    ws.append(_sanitize_row(headers))
+    _style_header_row(ws, 1, len(headers))
+
+    for row in _attribute_export_rows(rows, chart_type):
+        ws.append(_sanitize_row(row))
 
     _auto_width(ws)
     buf = io.BytesIO()
@@ -385,3 +472,27 @@ async def spc_export(
                 media_type="text/csv",
                 headers={"Content-Disposition": "attachment; filename=spc_chart_data.csv"},
             )
+
+    # --- Attribute chart data ---
+    if scope == "attribute_chart":
+        try:
+            rows = await _fetch_attribute_chart_data(token, body)
+        except Exception as exc:
+            handle_sql_error(exc)
+
+        if fmt == "excel":
+            buf = _build_attribute_chart_excel(rows, body.chart_type)
+            return StreamingResponse(
+                buf,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": "attachment; filename=spc_attribute_chart_data.xlsx"},
+            )
+
+        headers_csv = _attribute_export_headers(body.chart_type)
+        rows_csv = _attribute_export_rows(rows, body.chart_type)
+        csv_text = _rows_to_csv(headers_csv, rows_csv)
+        return StreamingResponse(
+            iter([csv_text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=spc_attribute_chart_data.csv"},
+        )

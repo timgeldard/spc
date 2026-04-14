@@ -32,6 +32,18 @@ function getCapabilityHeadline(spc: SPCComputationResult | null | undefined): { 
   return null
 }
 
+function buildSpecSignature(points: ChartDataPoint[]): string | null {
+  const signatureSet = new Set(
+    points.map(point => [
+      point.lsl ?? '_',
+      point.usl ?? '_',
+      point.nominal ?? '_',
+    ].join('|')),
+  )
+  if (signatureSet.size !== 1) return null
+  return Array.from(signatureSet)[0] ?? null
+}
+
 export interface ControlChartsController {
   // Type flags
   isAttributeChart: boolean
@@ -79,6 +91,7 @@ export interface ControlChartsController {
   // Locked limits
   lockedLimits: LockedLimits | null
   lockedLimitsError: string | null
+  lockedLimitsWarning: string | null
   externalLimits: LockedLimits | null
   canLockLimits: boolean
 
@@ -220,21 +233,29 @@ export function useControlChartsController(): ControlChartsController {
     setAutoCleanLog,
   })
 
-  // ── Locked limits ───────────────────────────────────────────────────────
+  // ── Derived values ──────────────────────────────────────────────────────
+  const currentExcludedPoints = useMemo(
+    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
+    [isQuantitative, quantPoints, excludedIndices],
+  )
+  const liveSpecSignature = useMemo(
+    () => (isQuantitative ? buildSpecSignature(quantPoints) : null),
+    [isQuantitative, quantPoints],
+  )
+
   const { lockedLimits, error: lockedLimitsError, saveLimits, deleteLimits } = useLockedLimits(
     isQuantitative ? selectedMaterial?.material_id : null,
     isQuantitative ? selectedMIC?.mic_id : null,
     isQuantitative ? selectedPlant?.plant_id : null,
     effectiveChartType,
     isQuantitative ? selectedMIC?.operation_id : null,
+    isQuantitative ? selectedMIC?.unified_mic_key : null,
+    liveSpecSignature,
   )
 
-  // ── Derived values ──────────────────────────────────────────────────────
-  const currentExcludedPoints = useMemo(
-    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
-    [isQuantitative, quantPoints, excludedIndices],
-  )
-
+  const lockedLimitsWarning = lockedLimits?.stale_spec
+    ? 'Locked limits were saved against a different live specification signature. Review the lock before using locked mode.'
+    : null
   const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
   const totalSignals = (spc?.signals?.length ?? 0) + (spc?.mrSignals?.length ?? 0)
   const exclusionCount = excludedIndices.size
@@ -254,6 +275,8 @@ export function useControlChartsController(): ControlChartsController {
 
   const canLockLimits = Boolean(
     spc &&
+    !specDrift?.detected &&
+    liveSpecSignature &&
     limitsMode === 'live' &&
     (((spc.chartType === 'imr' && spc.imr?.xBar != null && spc.imr?.ucl_x != null && spc.imr?.lcl_x != null) ||
       (spc.chartType === 'xbar_r' && spc.xbarR?.grandMean != null && spc.xbarR?.ucl_x != null && spc.xbarR?.lcl_x != null) ||
@@ -294,8 +317,12 @@ export function useControlChartsController(): ControlChartsController {
             sigma_within: spc.xbarR?.sigmaWithin,
           }
     if (limits.cl == null || limits.ucl == null || limits.lcl == null) return
-    void saveLimits(limits)
-  }, [spc, saveLimits])
+    void saveLimits({
+      ...limits,
+      unified_mic_key: selectedMIC?.unified_mic_key ?? null,
+      spec_signature: liveSpecSignature,
+    })
+  }, [liveSpecSignature, saveLimits, selectedMIC?.unified_mic_key, spc])
 
   // ── superseded by exclusionAudit from context ───────────────────────────
   void exclusionAudit // referenced via context; used by consumers via state
@@ -316,7 +343,7 @@ export function useControlChartsController(): ControlChartsController {
     // Exclusions
     exclusionsSnapshot, exclusionsLoading, exclusionsSaving, exclusionsError,
     // Locked limits
-    lockedLimits, lockedLimitsError, externalLimits, canLockLimits,
+    lockedLimits, lockedLimitsError, lockedLimitsWarning, externalLimits, canLockLimits,
     // Display values
     totalSignals, exclusionCount, chartFamilyLabel, capabilityHeadline, stratifyLabel,
     // Rolling capability
