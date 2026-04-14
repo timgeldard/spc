@@ -59,7 +59,17 @@ filtered_results AS (
             THEN TRY_CAST(r.TOLERANCE AS DOUBLE)
         END AS tolerance_half_width,
         r.TOLERANCE AS raw_tolerance,
-        r.INSPECTION_RESULT_VALUATION AS valuation
+        r.INSPECTION_RESULT_VALUATION AS valuation,
+        -- Unified MIC key: plant-scoped canonical identity for Gold reporting.
+        -- Groups Generic and Local MIC variants with the same normalised name and UoM.
+        -- Replace 'NO_UNIT' with UPPER(TRIM(COALESCE(r.UOM, 'NO_UNIT'))) once
+        -- gold_batch_quality_result_v exposes QASE.EINHEIT as a UOM column.
+        CONCAT_WS(
+            '||',
+            bm.plant_id,
+            UPPER(TRIM(r.MIC_NAME)),
+            'NO_UNIT'
+        ) AS unified_mic_key
     FROM `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
     INNER JOIN batch_metadata bm
         ON bm.material_id = r.MATERIAL_ID
@@ -98,7 +108,8 @@ subgroup_rollup AS (
         MAX(tolerance_half_width) AS tolerance_half_width,
         MAX(raw_tolerance) AS raw_tolerance,
         MAX(CASE WHEN valuation = 'R' THEN 1 ELSE 0 END) AS any_rejection,
-        MAX(CASE WHEN valuation = 'A' THEN 1 ELSE 0 END) AS any_acceptance
+        MAX(CASE WHEN valuation = 'A' THEN 1 ELSE 0 END) AS any_acceptance,
+        MAX(unified_mic_key) AS unified_mic_key
     FROM filtered_results
     GROUP BY
         material_id,
@@ -152,7 +163,8 @@ resolved_specs AS (
         tolerance_half_width,
         raw_tolerance,
         any_rejection,
-        any_acceptance
+        any_acceptance,
+        unified_mic_key
     FROM subgroup_rollup
 ),
 sample_grain AS (
@@ -183,6 +195,7 @@ sample_grain AS (
         sg.raw_tolerance,
         sg.any_rejection,
         sg.any_acceptance,
+        sg.unified_mic_key,
         ROW_NUMBER() OVER (
             PARTITION BY
                 fr.material_id,
@@ -276,6 +289,7 @@ SELECT
     ) AS spec_signature,
     any_rejection,
     any_acceptance,
+    unified_mic_key,
     CASE WHEN subgroup_row_number = 1 THEN 1 ELSE 0 END AS subgroup_rep,
     'unknown' AS normality_type,
     'shapiro_wilk_profile_pending' AS normality_method,

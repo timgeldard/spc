@@ -1,5 +1,5 @@
 import { InlineNotification } from '~/lib/carbon-feedback'
-import type { ExclusionAuditSnapshot } from '../types'
+import type { ExclusionAuditSnapshot, SpecDriftWarning } from '../types'
 
 interface ChartInfoBannersProps {
   lockedLimitsError?: string | null
@@ -7,6 +7,7 @@ interface ChartInfoBannersProps {
   exclusionsLoading?: boolean
   dataTruncated?: boolean
   exclusionAudit?: ExclusionAuditSnapshot | null
+  specDrift?: SpecDriftWarning | null
 }
 
 export default function ChartInfoBanners({
@@ -15,9 +16,19 @@ export default function ChartInfoBanners({
   exclusionsLoading = false,
   dataTruncated = false,
   exclusionAudit,
+  specDrift,
 }: ChartInfoBannersProps) {
   return (
     <>
+      {specDrift?.detected && (
+        <InlineNotification
+          kind="warning"
+          title="Specification drift detected."
+          subtitle={specDrift.message}
+          hideCloseButton
+          lowContrast
+        />
+      )}
       {lockedLimitsError && (
         <InlineNotification
           kind="error"

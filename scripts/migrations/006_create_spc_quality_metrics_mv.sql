@@ -31,6 +31,10 @@ dimensions:
     expr: mic_name
     display_name: MIC Name
     synonyms: ['characteristic', 'quality characteristic']
+  - name: unified_mic_key
+    expr: unified_mic_key
+    display_name: Unified MIC Key
+    synonyms: ['canonical mic', 'harmonised mic', 'unified characteristic key']
   - name: inspection_method
     expr: inspection_method
     display_name: Inspection Method

@@ -25,10 +25,21 @@ export interface MicRef {
   mic_id: string
   operation_id?: string | null
   mic_name?: string | null
+  mic_name_normalized?: string | null
   chart_type?: string | null
   avg_samples_per_batch?: number | null
   inspection_method?: string | null
   batch_count?: number | null
+  unified_mic_key?: string | null
+  routing_conflict?: boolean | null
+}
+
+export interface SpecDriftWarning {
+  detected: boolean
+  distinct_signatures: number
+  total_batches: number
+  signature_set: string[]
+  message: string
 }
 
 export interface ValidateMaterialResult {
@@ -750,6 +761,7 @@ export interface SPCProviderProps {
 export interface UseSPCChartDataResult {
   points: ChartDataPoint[]
   normality: NormalityResult | null
+  specDrift: SpecDriftWarning | null
   dataTruncated: boolean
   loading: boolean
   hydrating: boolean

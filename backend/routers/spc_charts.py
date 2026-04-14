@@ -11,6 +11,7 @@ from backend.dal.spc_charts_dal import (
     fetch_count_chart_data,
     fetch_locked_limits,
     fetch_p_chart_data,
+    fetch_spec_drift_summary,
     save_locked_limits,
 )
 from backend.dal.spc_shared import compute_normality_result
@@ -64,9 +65,11 @@ async def spc_chart_data(
         )
     except Exception as exc:
         handle_sql_error(exc)
-    try:
-        normality = (
-            compute_normality_result(
+    normality = None
+    spec_drift = None
+    if include_summary and cursor is None:
+        try:
+            normality = compute_normality_result(
                 await fetch_chart_data_values(
                     token,
                     body.material_id,
@@ -80,10 +83,35 @@ async def spc_chart_data(
                     operation_id=body.operation_id,
                 )
             )
-            if include_summary and cursor is None else None
-        )
-    except Exception as exc:
-        handle_sql_error(exc)
+        except Exception as exc:
+            handle_sql_error(exc)
+        try:
+            drift_raw = await fetch_spec_drift_summary(
+                token,
+                body.material_id,
+                body.mic_id,
+                body.plant_id,
+                body.date_from,
+                body.date_to,
+                body.operation_id,
+            )
+            if drift_raw["detected"]:
+                n = drift_raw["distinct_signatures"]
+                b = drift_raw["total_batches"]
+                spec_drift = {
+                    "detected": True,
+                    "distinct_signatures": n,
+                    "total_batches": b,
+                    "signature_set": drift_raw["signature_set"],
+                    "message": (
+                        f"Specification limits changed {n} time(s) across {b} batch(es) "
+                        "in this date range. Control limits computed over the full range "
+                        "may be invalid. Consider narrowing the date range to a single "
+                        "spec regime."
+                    ),
+                }
+        except Exception as exc:
+            handle_sql_error(exc)
 
     return await attach_data_freshness(
         {
@@ -96,6 +124,7 @@ async def spc_chart_data(
             "stratify_by": body.stratify_by,
             "data_truncated": False,
             "normality": normality,
+            "spec_drift": spec_drift,
         },
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
@@ -194,6 +223,10 @@ async def lock_limits(
             body.baseline_from,
             body.baseline_to,
             operation_id=body.operation_id,
+            unified_mic_key=body.unified_mic_key,
+            mic_origin=body.mic_origin,
+            spec_signature=body.spec_signature,
+            locking_note=body.locking_note,
         )
     except Exception as exc:
         handle_locked_limits_error(exc)

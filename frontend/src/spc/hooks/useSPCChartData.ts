@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { ChartDataPoint, NormalityResult, StratifyByKey, UseSPCChartDataResult } from '../types'
+import type { ChartDataPoint, NormalityResult, SpecDriftWarning, StratifyByKey, UseSPCChartDataResult } from '../types'
 
 interface PaginatedChartResponse {
   data?: ChartDataPoint[]
   next_cursor?: string | null
   has_more?: boolean
   normality?: NormalityResult | null
+  spec_drift?: SpecDriftWarning | null
 }
 
 const PAGE_SIZE = 1000
@@ -40,6 +41,7 @@ export function useSPCChartData(
 ): UseSPCChartDataResult {
   const [points, setPoints] = useState<ChartDataPoint[]>([])
   const [normality, setNormality] = useState<NormalityResult | null>(null)
+  const [specDrift, setSpecDrift] = useState<SpecDriftWarning | null>(null)
   const [dataTruncated, setDataTruncated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [hydrating, setHydrating] = useState(false)
@@ -48,6 +50,7 @@ export function useSPCChartData(
   useEffect(() => {
     setPoints([])
     setNormality(null)
+    setSpecDrift(null)
     setDataTruncated(false)
     setHydrating(false)
     setError(null)
@@ -77,6 +80,7 @@ export function useSPCChartData(
       let nextCursor: string | null = null
       let hasMore = true
       let summaryNormality: NormalityResult | null = null
+      let summarySpecDrift: SpecDriftWarning | null = null
       let truncated = false
       let firstPageLoaded = false
 
@@ -103,10 +107,12 @@ export function useSPCChartData(
         hasMore = Boolean(data.has_more)
         nextCursor = data.next_cursor ?? null
         if (data.normality) summaryNormality = data.normality
+        if (data.spec_drift) summarySpecDrift = data.spec_drift
 
         if (!cancelled) {
           setPoints(assignBatchSequence(allPoints))
           setNormality(summaryNormality)
+          setSpecDrift(summarySpecDrift)
           setDataTruncated(false)
         }
 
@@ -152,5 +158,5 @@ export function useSPCChartData(
     }
   }, [materialId, micId, operationId, dateFrom, dateTo, plantId, stratifyBy])
 
-  return { points, normality, dataTruncated, loading, hydrating, error }
+  return { points, normality, specDrift, dataTruncated, loading, hydrating, error }
 }

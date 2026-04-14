@@ -658,6 +658,77 @@ async def fetch_count_chart_data(
     return rows
 
 
+async def fetch_spec_drift_summary(
+    token: str,
+    material_id: str,
+    mic_id: str,
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    operation_id: Optional[str] = None,
+) -> dict:
+    """Pre-flight spec-drift check.
+
+    Queries spc_quality_metric_subgroup_v for the number of distinct spec_signature
+    values observed for this MIC/material/plant in the requested date range.
+    A count > 1 means the process was inspected against different tolerance limits
+    within the range — mixing them on one SPC chart produces invalid control limits.
+
+    Returns a dict with keys:
+        detected (bool), distinct_signatures (int), total_batches (int),
+        signature_set (list[str]).
+    """
+    params: list[dict] = [
+        sql_param("material_id", material_id),
+        sql_param("mic_id", mic_id),
+    ]
+    conditions = [
+        "material_id = :material_id",
+        "mic_id      = :mic_id",
+        "subgroup_rep = 1",
+    ]
+    if plant_id:
+        conditions.append("plant_id = :plant_id")
+        params.append(sql_param("plant_id", plant_id))
+    if date_from:
+        conditions.append("batch_date >= :date_from")
+        params.append(sql_param("date_from", date_from))
+    if date_to:
+        conditions.append("batch_date <= :date_to")
+        params.append(sql_param("date_to", date_to))
+    # spc_quality_metric_subgroup_v groups by inspection_method, not operation_id.
+    # When an operation scope is needed, filter by inspection_method.
+    if operation_id:
+        conditions.append("inspection_method = :inspection_method_filter")
+        params.append(sql_param("inspection_method_filter", operation_id))
+
+    where_clause = " AND ".join(conditions)
+    query = f"""
+        SELECT
+            COUNT(DISTINCT spec_signature)  AS distinct_signatures,
+            COUNT(DISTINCT batch_id)        AS total_batches,
+            COLLECT_SET(spec_signature)     AS signature_set
+        FROM (
+            SELECT DISTINCT batch_id, spec_signature
+            FROM {tbl('spc_quality_metric_subgroup_v')}
+            WHERE {where_clause}
+        ) t
+    """
+    rows = await run_sql_async(token, query, params)
+    row = rows[0] if rows else {}
+    distinct = int(float(row.get("distinct_signatures") or 1))
+    total = int(float(row.get("total_batches") or 0))
+    sig_set = row.get("signature_set") or []
+    if isinstance(sig_set, str):
+        sig_set = [sig_set]
+    return {
+        "detected": distinct > 1,
+        "distinct_signatures": distinct,
+        "total_batches": total,
+        "signature_set": list(sig_set),
+    }
+
+
 async def save_locked_limits(
     token: str,
     material_id: str,
@@ -673,6 +744,10 @@ async def save_locked_limits(
     baseline_from: Optional[str],
     baseline_to: Optional[str],
     operation_id: Optional[str] = None,
+    unified_mic_key: Optional[str] = None,
+    mic_origin: Optional[str] = None,
+    spec_signature: Optional[str] = None,
+    locking_note: Optional[str] = None,
 ) -> None:
     params = [
         sql_param("material_id", material_id),
@@ -686,6 +761,10 @@ async def save_locked_limits(
         sql_param("sigma_within", sigma_within),
         sql_param("baseline_from", baseline_from),
         sql_param("baseline_to", baseline_to),
+        sql_param("unified_mic_key", unified_mic_key),
+        sql_param("mic_origin", mic_origin),
+        sql_param("spec_signature", spec_signature),
+        sql_param("locking_note", locking_note),
     ]
     if plant_id:
         source_plant_expr = "CAST(:plant_id AS STRING)"
@@ -704,20 +783,24 @@ async def save_locked_limits(
     merge_sql = f"""
         MERGE INTO {tbl('spc_locked_limits')} AS t
         USING (SELECT
-            :material_id   AS material_id,
-            :mic_id        AS mic_id,
+            :material_id      AS material_id,
+            :mic_id           AS mic_id,
             {source_plant_expr} AS plant_id,
             {source_operation_id_expr} AS operation_id,
-            :chart_type    AS chart_type,
-            :cl            AS cl,
-            :ucl           AS ucl,
-            :lcl           AS lcl,
-            :ucl_r         AS ucl_r,
-            :lcl_r         AS lcl_r,
-            :sigma_within  AS sigma_within,
-            :baseline_from AS baseline_from,
-            :baseline_to   AS baseline_to,
-            CURRENT_USER() AS locked_by,
+            :chart_type       AS chart_type,
+            :cl               AS cl,
+            :ucl              AS ucl,
+            :lcl              AS lcl,
+            :ucl_r            AS ucl_r,
+            :lcl_r            AS lcl_r,
+            :sigma_within     AS sigma_within,
+            :baseline_from    AS baseline_from,
+            :baseline_to      AS baseline_to,
+            :unified_mic_key  AS unified_mic_key,
+            :mic_origin       AS mic_origin,
+            :spec_signature   AS spec_signature,
+            :locking_note     AS locking_note,
+            CURRENT_USER()    AS locked_by,
             CURRENT_TIMESTAMP() AS locked_at
         ) AS s
         ON t.material_id = s.material_id
@@ -726,24 +809,32 @@ async def save_locked_limits(
            AND {plant_on_clause}
            AND {operation_id_on_clause}
         WHEN MATCHED THEN UPDATE SET
-            t.cl = s.cl,
-            t.ucl = s.ucl,
-            t.lcl = s.lcl,
-            t.ucl_r = s.ucl_r,
-            t.lcl_r = s.lcl_r,
-            t.sigma_within = s.sigma_within,
-            t.baseline_from = s.baseline_from,
-            t.baseline_to = s.baseline_to,
-            t.locked_by = s.locked_by,
-            t.locked_at = s.locked_at
+            t.cl              = s.cl,
+            t.ucl             = s.ucl,
+            t.lcl             = s.lcl,
+            t.ucl_r           = s.ucl_r,
+            t.lcl_r           = s.lcl_r,
+            t.sigma_within    = s.sigma_within,
+            t.baseline_from   = s.baseline_from,
+            t.baseline_to     = s.baseline_to,
+            t.unified_mic_key = s.unified_mic_key,
+            t.mic_origin      = s.mic_origin,
+            t.spec_signature  = s.spec_signature,
+            t.locking_note    = s.locking_note,
+            t.locked_by       = s.locked_by,
+            t.locked_at       = s.locked_at
         WHEN NOT MATCHED THEN INSERT (
             material_id, mic_id, plant_id, operation_id, chart_type,
             cl, ucl, lcl, ucl_r, lcl_r, sigma_within,
-            baseline_from, baseline_to, locked_by, locked_at
+            baseline_from, baseline_to,
+            unified_mic_key, mic_origin, spec_signature, locking_note,
+            locked_by, locked_at
         ) VALUES (
             s.material_id, s.mic_id, s.plant_id, s.operation_id, s.chart_type,
             s.cl, s.ucl, s.lcl, s.ucl_r, s.lcl_r, s.sigma_within,
-            s.baseline_from, s.baseline_to, s.locked_by, s.locked_at
+            s.baseline_from, s.baseline_to,
+            s.unified_mic_key, s.mic_origin, s.spec_signature, s.locking_note,
+            s.locked_by, s.locked_at
         )
     """
     await run_sql_async(token, merge_sql, params)
@@ -776,7 +867,9 @@ async def fetch_locked_limits(
     query = f"""
         SELECT material_id, mic_id, plant_id, operation_id, chart_type,
                cl, ucl, lcl, ucl_r, lcl_r, sigma_within,
-               baseline_from, baseline_to, locked_by, locked_at
+               baseline_from, baseline_to,
+               unified_mic_key, mic_origin, spec_signature, locking_note,
+               locked_by, locked_at
         FROM {tbl('spc_locked_limits')}
         WHERE material_id = :material_id
           AND mic_id = :mic_id

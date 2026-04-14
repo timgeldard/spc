@@ -69,15 +69,26 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
                 AND MOVEMENT_CATEGORY = 'Production'
           )"""
         params.append(sql_param("plant_id", plant_id))
+    plant_id_expr = ":plant_id" if plant_id else "NULL"
     query = f"""
         SELECT
             MIC_ID                                                       AS mic_id,
             OPERATION_ID                                                 AS operation_id,
             MIC_NAME                                                     AS mic_name,
+            MAX(UPPER(TRIM(MIC_NAME)))                                   AS mic_name_normalized,
             INSPECTION_METHOD                                            AS inspection_method,
+            -- Unified MIC key: plant-scoped canonical identity.
+            -- Uses provided plant_id if available; otherwise uses 'NO_PLANT' as scope.
+            MAX(CONCAT_WS('||',
+                COALESCE({plant_id_expr}, 'NO_PLANT'),
+                UPPER(TRIM(MIC_NAME)),
+                'NO_UNIT'
+            ))                                                           AS unified_mic_key,
             MAX(CASE WHEN QUALITATIVE_RESULT IS NOT NULL
                           AND QUALITATIVE_RESULT != ''
                      THEN 1 ELSE 0 END)                                 AS is_attribute,
+            MAX(CASE WHEN QUANTITATIVE_RESULT IS NOT NULL
+                     THEN 1 ELSE 0 END)                                 AS has_quantitative,
             COUNT(DISTINCT BATCH_ID)                                     AS batch_count,
             COUNT(*)                                                     AS total_samples
         FROM {tbl('gold_batch_quality_result_v')}
@@ -94,9 +105,14 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
     attr_characteristics = []
     for row in rows:
         is_attr = int(float(row.get("is_attribute") or 0)) == 1
+        has_quant = int(float(row.get("has_quantitative") or 0)) == 1
+        row.pop("is_attribute", None)
+        row.pop("has_quantitative", None)
         value = row.get("inspection_method")
         row["inspection_method"] = str(value) if value is not None else None
         row["batch_count"] = int(float(row.get("batch_count") or 0))
+        # A MIC with both result types has a routing conflict.
+        row["routing_conflict"] = is_attr and has_quant
         if is_attr:
             row["chart_type"] = "p_chart"
             attr_characteristics.append(row)

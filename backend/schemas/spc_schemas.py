@@ -174,6 +174,20 @@ class CountChartDataRequest(_DateRangeMixin, _MicIdMixin):
         return v
 
 
+class SpecDriftWarning(BaseModel):
+    """Returned in /chart-data responses when spec limits changed within the date range.
+
+    A distinct_signatures count > 1 means the MIC was inspected against different
+    tolerance limits across the requested period. Control limits computed over the full
+    range are statistically invalid; the user should split by spec regime.
+    """
+    detected: bool
+    distinct_signatures: int
+    total_batches: int
+    signature_set: list[str]   # the actual 'LSL|USL|Nominal' strings observed
+    message: str
+
+
 class LockLimitsRequest(BaseModel):
     material_id: str
     mic_id: str
@@ -188,6 +202,11 @@ class LockLimitsRequest(BaseModel):
     sigma_within: Optional[float] = None
     baseline_from: Optional[str] = None
     baseline_to: Optional[str] = None
+    # Unified MIC identity metadata (populated by clients that have run Migration 013+)
+    unified_mic_key: Optional[str] = None
+    mic_origin: Optional[str] = None        # GENERIC | LOCAL | MIXED
+    spec_signature: Optional[str] = None   # LSL|USL|Nominal at lock time
+    locking_note: Optional[str] = None
 
     @field_validator("material_id")
     @classmethod

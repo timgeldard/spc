@@ -1,7 +1,7 @@
 import { usePChartData } from './usePChartData'
 import { useSPCChartData } from './useSPCChartData'
 import { useCountChartData } from './useCountChartData'
-import type { AttributeChartPoint, ChartDataPoint, NormalityResult, StratifyByKey } from '../types'
+import type { AttributeChartPoint, ChartDataPoint, NormalityResult, SpecDriftWarning, StratifyByKey } from '../types'
 import type { AttributeChartType, QuantChartType } from '../charts/ChartSettingsRail'
 
 function isQuantChartType(value: string | null | undefined): value is QuantChartType {
@@ -19,6 +19,7 @@ export interface ChartDataResult {
   // Data
   quantPoints: ChartDataPoint[]
   quantNormality: NormalityResult | null
+  specDrift: SpecDriftWarning | null
   dataTruncated: boolean
   hydrating: boolean
   attrPoints: AttributeChartPoint[]
@@ -59,6 +60,7 @@ export function useChartData(
   const {
     points: quantPoints,
     normality: quantNormality,
+    specDrift,
     dataTruncated,
     loading: quantLoading,
     hydrating,
@@ -112,6 +114,7 @@ export function useChartData(
     effectiveChartType,
     quantPoints,
     quantNormality,
+    specDrift: isQuantitative ? specDrift : null,
     dataTruncated,
     hydrating,
     attrPoints,

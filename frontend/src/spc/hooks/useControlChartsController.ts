@@ -16,6 +16,7 @@ import type {
   NormalityResult,
   RollingCapabilityPoint,
   SPCComputationResult,
+  SpecDriftWarning,
 } from '../types'
 import type { AttributeChartType, QuantChartType } from '../charts/ChartSettingsRail'
 import type { StratumSection } from '../charts/StratificationPanel'
@@ -52,6 +53,7 @@ export interface ControlChartsController {
   // Raw data
   quantPoints: ChartDataPoint[]
   quantNormality: NormalityResult | null
+  specDrift: SpecDriftWarning | null
   dataTruncated: boolean
   hydrating: boolean
   attrPoints: AttributeChartPoint[]
@@ -157,7 +159,7 @@ export function useControlChartsController(): ControlChartsController {
   // ── Data fetching ───────────────────────────────────────────────────────
   const {
     isAttributeChart, isPChart, isCountChart, isQuantitative, effectiveChartType,
-    quantPoints, quantNormality, dataTruncated, hydrating,
+    quantPoints, quantNormality, specDrift, dataTruncated, hydrating,
     attrPoints, countPoints, points, loading, error,
   } = useChartData(
     selectedMaterial?.material_id,
@@ -307,7 +309,7 @@ export function useControlChartsController(): ControlChartsController {
     cusumK, setCusumK,
     cusumH, setCusumH,
     // Raw data
-    quantPoints, quantNormality, dataTruncated, hydrating,
+    quantPoints, quantNormality, specDrift, dataTruncated, hydrating,
     attrPoints, countPoints, points, loading, analyticsLoading, analyticsError, error,
     // SPC computation
     spc, trendData, stratumSections, currentExcludedPoints,

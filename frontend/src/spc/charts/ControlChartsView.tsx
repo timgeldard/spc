@@ -405,6 +405,7 @@ export default function ControlChartsView() {
         exclusionsLoading={ctrl.exclusionsLoading}
         dataTruncated={ctrl.dataTruncated}
         exclusionAudit={state.exclusionAudit}
+        specDrift={ctrl.specDrift}
       />
 
       {ctrl.analyticsError ? (
