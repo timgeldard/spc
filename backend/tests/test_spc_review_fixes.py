@@ -185,22 +185,30 @@ def test_process_flow_request_rejects_out_of_range_lineage_depth():
         raise AssertionError("Expected ValidationError")
 
 
-def test_fetch_compare_scorecard_runs_parallel_queries(monkeypatch):
-    async def fake_fetch_scorecard(_token, material_id, _plant_id, _date_from, _date_to):
-        return [{"mic_id": f"MIC-{material_id}", "mic_name": f"MIC {material_id}", "ppk": 1.2, "batch_count": 4, "ooc_rate": 0.0}]
+def test_fetch_compare_scorecard_single_grouped_query(monkeypatch):
+    # New implementation issues one grouped query to spc_quality_metrics (plus a
+    # parallel names query to gold_material). fake_run_sql_async returns full rows
+    # that satisfy both call sites.
+    calls: list[str] = []
 
     async def fake_run_sql_async(_token, _query, _params=None):
+        calls.append(_query)
         return [
-            {"material_id": "MAT-1", "material_name": "Material 1"},
-            {"material_id": "MAT-2", "material_name": "Material 2"},
+            {"material_id": "MAT-1", "material_name": "Material 1",
+             "mic_id": "MIC-A", "mic_name": "MIC A", "batch_count": 4, "ppk": 1.2, "ooc_rate": 0.05},
+            {"material_id": "MAT-2", "material_name": "Material 2",
+             "mic_id": "MIC-A", "mic_name": "MIC A", "batch_count": 5, "ppk": 1.1, "ooc_rate": 0.03},
         ]
 
-    monkeypatch.setattr(spc_analysis_dal, "fetch_scorecard", fake_fetch_scorecard)
     monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
 
     result = asyncio.run(
         spc_analysis_dal.fetch_compare_scorecard("token", ["MAT-1", "MAT-2"], None, None, None)
     )
 
+    # Exactly 2 SQL calls (grouped scorecard + names), not N per-material calls.
+    assert len(calls) == 2
     assert [entry["material_id"] for entry in result["materials"]] == ["MAT-1", "MAT-2"]
     assert result["materials"][0]["material_name"] == "Material 1"
+    assert result["materials"][0]["scorecard"][0]["mic_id"] == "MIC-A"
+    assert result["common_mics"] == [{"mic_id": "MIC-A", "mic_name": "MIC A"}]
