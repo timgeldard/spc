@@ -182,7 +182,7 @@ async def fetch_process_flow(
                 WHEN has_rejection = 1 THEN batch_id
             END)                                                        AS rejected_batches,
             COUNT(DISTINCT mic_id)                                      AS mic_count
-        FROM {tbl('spc_process_flow_source_v')}
+        FROM {tbl('spc_process_flow_source_mv')}
         WHERE material_id IN ({in_clause})
           {date_filter}
         GROUP BY material_id
@@ -536,7 +536,7 @@ async def fetch_correlation(
                 mic_name,
                 batch_id,
                 avg_result
-            FROM {tbl('spc_correlation_source_v')}
+            FROM {tbl('spc_correlation_source_mv')}
             {where_sql}
         ),
         mic_batch_counts AS (
@@ -613,7 +613,7 @@ async def fetch_correlation_scatter(
     query = f"""
         WITH filtered_avgs AS (
             SELECT batch_id, batch_date, mic_id, mic_name, avg_result
-            FROM {tbl('spc_correlation_source_v')}
+            FROM {tbl('spc_correlation_source_mv')}
             {where_sql}
         ),
         mic_a_avgs AS (
