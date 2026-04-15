@@ -526,55 +526,31 @@ async def fetch_p_chart_data(
     operation_id: Optional[str] = None,
 ) -> list[dict]:
     params = [sql_param("material_id", material_id), sql_param("mic_id", mic_id)]
-    mb_clauses = []
+    clauses = ["material_id = :material_id", "mic_id = :mic_id"]
     if date_from:
-        mb_clauses.append("mb.POSTING_DATE >= :date_from")
+        clauses.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        mb_clauses.append("mb.POSTING_DATE <= :date_to")
+        clauses.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
     if plant_id:
-        mb_clauses.append("mb.PLANT_ID = :plant_id")
+        clauses.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
-    date_filter = ("AND " + " AND ".join(mb_clauses)) if mb_clauses else ""
     if operation_id:
+        clauses.append("operation_id = :operation_id")
         params.append(sql_param("operation_id", operation_id))
-    operation_id_filter = "AND r.OPERATION_ID = :operation_id" if operation_id else ""
+    where_sql = "WHERE " + " AND ".join(clauses)
 
     query = f"""
-        WITH batch_dates AS (
-            SELECT MATERIAL_ID, BATCH_ID, MIN(POSTING_DATE) AS batch_date
-            FROM {tbl('gold_batch_mass_balance_v')} mb
-            WHERE mb.MATERIAL_ID = :material_id
-              AND mb.MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        attr_data AS (
-            SELECT
-                r.BATCH_ID,
-                bd.batch_date,
-                COUNT(*) AS n_inspected,
-                SUM(CASE WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN 1 ELSE 0 END) AS n_nonconforming
-            FROM {tbl('gold_batch_quality_result_v')} r
-            INNER JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID       = :mic_id
-              {operation_id_filter}
-              AND r.QUALITATIVE_RESULT IS NOT NULL
-              AND r.QUALITATIVE_RESULT != ''
-              AND r.INSPECTION_RESULT_VALUATION IN ('A', 'R')
-            GROUP BY r.BATCH_ID, bd.batch_date
-        )
         SELECT
-            BATCH_ID        AS batch_id,
-            CAST(batch_date AS STRING) AS batch_date,
+            batch_id,
+            CAST(batch_date AS STRING)                              AS batch_date,
             n_inspected,
             n_nonconforming,
-            ROUND(n_nonconforming / GREATEST(n_inspected, 1), 4) AS p_value
-        FROM attr_data
-        ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID
+            ROUND(n_nonconforming / GREATEST(n_inspected, 1), 4)   AS p_value
+        FROM {tbl('spc_attribute_metric_source_v')}
+        {where_sql}
+        ORDER BY COALESCE(batch_date, '9999-12-31'), batch_id
         LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
     rows = await run_sql_async(token, query, params)
@@ -599,54 +575,30 @@ async def fetch_count_chart_data(
     operation_id: Optional[str] = None,
 ) -> list[dict]:
     params = [sql_param("material_id", material_id), sql_param("mic_id", mic_id)]
-    mb_clauses = []
+    clauses = ["material_id = :material_id", "mic_id = :mic_id"]
     if date_from:
-        mb_clauses.append("mb.POSTING_DATE >= :date_from")
+        clauses.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        mb_clauses.append("mb.POSTING_DATE <= :date_to")
+        clauses.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
     if plant_id:
-        mb_clauses.append("mb.PLANT_ID = :plant_id")
+        clauses.append("plant_id = :plant_id")
         params.append(sql_param("plant_id", plant_id))
-    date_filter = ("AND " + " AND ".join(mb_clauses)) if mb_clauses else ""
     if operation_id:
+        clauses.append("operation_id = :operation_id")
         params.append(sql_param("operation_id", operation_id))
-    operation_id_filter = "AND r.OPERATION_ID = :operation_id" if operation_id else ""
+    where_sql = "WHERE " + " AND ".join(clauses)
 
     query = f"""
-        WITH batch_dates AS (
-            SELECT MATERIAL_ID, BATCH_ID, MIN(POSTING_DATE) AS batch_date
-            FROM {tbl('gold_batch_mass_balance_v')} mb
-            WHERE mb.MATERIAL_ID = :material_id
-              AND mb.MOVEMENT_CATEGORY = 'Production'
-              {date_filter}
-            GROUP BY MATERIAL_ID, BATCH_ID
-        ),
-        counts AS (
-            SELECT
-                r.BATCH_ID,
-                bd.batch_date,
-                COUNT(*) AS n_inspected,
-                SUM(CASE WHEN r.INSPECTION_RESULT_VALUATION = 'R' THEN 1 ELSE 0 END) AS defect_count
-            FROM {tbl('gold_batch_quality_result_v')} r
-            INNER JOIN batch_dates bd
-                ON bd.MATERIAL_ID = r.MATERIAL_ID AND bd.BATCH_ID = r.BATCH_ID
-            WHERE r.MATERIAL_ID = :material_id
-              AND r.MIC_ID       = :mic_id
-              {operation_id_filter}
-              AND r.QUALITATIVE_RESULT IS NOT NULL
-              AND r.QUALITATIVE_RESULT != ''
-              AND r.INSPECTION_RESULT_VALUATION IN ('A', 'R')
-            GROUP BY r.BATCH_ID, bd.batch_date
-        )
         SELECT
-            BATCH_ID AS batch_id,
-            CAST(batch_date AS STRING) AS batch_date,
+            batch_id,
+            CAST(batch_date AS STRING)  AS batch_date,
             n_inspected,
-            defect_count
-        FROM counts
-        ORDER BY COALESCE(batch_date, '9999-12-31'), BATCH_ID
+            n_nonconforming             AS defect_count
+        FROM {tbl('spc_attribute_metric_source_v')}
+        {where_sql}
+        ORDER BY COALESCE(batch_date, '9999-12-31'), batch_id
         LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
     rows = await run_sql_async(token, query, params)

@@ -182,7 +182,7 @@ async def fetch_process_flow(
                 WHEN has_rejection = 1 THEN batch_id
             END)                                                        AS rejected_batches,
             COUNT(DISTINCT mic_id)                                      AS mic_count
-        FROM {tbl('spc_process_flow_source_v')}
+        FROM {tbl('spc_process_flow_source_mv')}
         WHERE material_id IN ({in_clause})
           {date_filter}
         GROUP BY material_id
@@ -366,9 +366,45 @@ async def fetch_compare_scorecard(
     date_to: Optional[str],
 ) -> dict:
     deduped_material_ids = list(dict.fromkeys(material_ids))
-    name_params = [sql_param(f"m{i}", mid) for i, mid in enumerate(deduped_material_ids)]
+    if not deduped_material_ids:
+        return {"materials": [], "common_mics": []}
+
+    mat_params = [sql_param(f"m{i}", mid) for i, mid in enumerate(deduped_material_ids)]
     in_clause = ", ".join(f":m{i}" for i in range(len(deduped_material_ids)))
 
+    filters = [f"material_id IN ({in_clause})"]
+    extra_params: list[dict] = []
+    if date_from:
+        filters.append("batch_date >= :date_from")
+        extra_params.append(sql_param("date_from", date_from))
+    if date_to:
+        filters.append("batch_date <= :date_to")
+        extra_params.append(sql_param("date_to", date_to))
+    if plant_id:
+        filters.append("plant_id = :plant_id")
+        extra_params.append(sql_param("plant_id", plant_id))
+    where_sql = "WHERE " + " AND ".join(filters)
+    params = mat_params + extra_params
+
+    # Single grouped query replaces N per-material fetch_scorecard() calls.
+    scorecard_query = f"""
+        SELECT
+            material_id,
+            material_name,
+            mic_id,
+            mic_name,
+            MEASURE(batch_count) AS batch_count,
+            MEASURE(ppk)         AS ppk,
+            MEASURE(ooc_rate)    AS ooc_rate
+        FROM {tbl('spc_quality_metrics')}
+        {where_sql}
+        GROUP BY material_id, material_name, mic_id, mic_name
+        HAVING MEASURE(batch_count) >= 3
+        ORDER BY material_id, mic_name
+    """
+
+    # Names query runs in parallel to cover materials whose every MIC is filtered
+    # out by the HAVING clause (empty scorecard edge case).
     names_query = f"""
         SELECT
             MATERIAL_ID AS material_id,
@@ -382,36 +418,44 @@ async def fetch_compare_scorecard(
         GROUP BY MATERIAL_ID
     """
 
-    scorecard_sets, name_rows = await asyncio.gather(
-        asyncio.gather(*[
-            fetch_scorecard(token, mat_id, plant_id, date_from, date_to)
-            for mat_id in deduped_material_ids
-        ]),
-        run_sql_async(token, names_query, name_params),
+    scorecard_rows, name_rows = await asyncio.gather(
+        run_sql_async(token, scorecard_query, params),
+        run_sql_async(token, names_query, mat_params),
     )
 
-    material_names = {
+    material_names: dict[str, str] = {
         str(row["material_id"]): str(row.get("material_name") or row["material_id"])
         for row in name_rows
     }
 
+    scorecards_by_mat: dict[str, list[dict]] = {mid: [] for mid in deduped_material_ids}
+    for row in scorecard_rows:
+        mid = str(row["material_id"])
+        if mid not in material_names and row.get("material_name"):
+            material_names[mid] = str(row["material_name"])
+        if mid in scorecards_by_mat:
+            ooc = _coerce_float(row.get("ooc_rate"))
+            scorecards_by_mat[mid].append({
+                "mic_id": row["mic_id"],
+                "mic_name": row["mic_name"],
+                "ppk": _coerce_float(row.get("ppk")),
+                "batch_count": _coerce_int(row.get("batch_count")),
+                "ooc_rate": round(ooc, 4) if ooc is not None else None,
+            })
+
+    # Match fetch_scorecard() sort: nulls last, ascending PPK.
+    for rows in scorecards_by_mat.values():
+        rows.sort(key=lambda r: (r.get("ppk") is None, r.get("ppk") or 0))
+
     results = []
     all_mic_sets: list[set[str]] = []
-    for mat_id, scorecard in zip(deduped_material_ids, scorecard_sets):
+    for mat_id in deduped_material_ids:
+        scorecard = scorecards_by_mat[mat_id]
         mic_ids_for_mat = {str(row["mic_id"]) for row in scorecard}
         results.append({
             "material_id": mat_id,
             "material_name": material_names.get(mat_id, mat_id),
-            "scorecard": [
-                {
-                    "mic_id": row["mic_id"],
-                    "mic_name": row["mic_name"],
-                    "ppk": row.get("ppk"),
-                    "batch_count": row.get("batch_count"),
-                    "ooc_rate": row.get("ooc_rate"),
-                }
-                for row in scorecard
-            ],
+            "scorecard": scorecard,
         })
         all_mic_sets.append(mic_ids_for_mat)
 
@@ -499,7 +543,7 @@ async def fetch_correlation(
                 mic_name,
                 batch_id,
                 avg_result
-            FROM {tbl('spc_correlation_source_v')}
+            FROM {tbl('spc_correlation_source_mv')}
             {where_sql}
         ),
         mic_batch_counts AS (
@@ -576,7 +620,7 @@ async def fetch_correlation_scatter(
     query = f"""
         WITH filtered_avgs AS (
             SELECT batch_id, batch_date, mic_id, mic_name, avg_result
-            FROM {tbl('spc_correlation_source_v')}
+            FROM {tbl('spc_correlation_source_mv')}
             {where_sql}
         ),
         mic_a_avgs AS (

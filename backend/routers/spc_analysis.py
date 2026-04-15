@@ -54,7 +54,7 @@ async def spc_process_flow(
     return await attach_data_freshness(
         payload,
         token,
-        ["gold_batch_lineage", "spc_process_flow_source_v"],
+        ["gold_batch_lineage", "spc_process_flow_source_mv"],
         request_path=request.url.path,
     )
 
@@ -167,7 +167,7 @@ async def spc_correlation(
     return await attach_data_freshness(
         payload,
         token,
-        ["spc_correlation_source_v"],
+        ["spc_correlation_source_mv"],
         request_path=request.url.path,
     )
 
@@ -221,6 +221,6 @@ async def spc_multivariate(
     return await attach_data_freshness(
         payload,
         token,
-        ["spc_correlation_source_v"],
+        ["spc_correlation_source_mv"],
         request_path=request.url.path,
     )

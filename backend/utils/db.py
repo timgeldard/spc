@@ -69,6 +69,8 @@ _SQL_POLL_MAX_DELAY_S = max(_SQL_POLL_INITIAL_DELAY_S, int(os.environ.get("SPC_S
 _sql_executor = ThreadPoolExecutor(max_workers=_SQL_MAX_WORKERS, thread_name_prefix="sql")
 _sql_cache = TTLCache(maxsize=100, ttl=300)
 _sql_cache_lock = threading.Lock()
+_freshness_cache: TTLCache = TTLCache(maxsize=50, ttl=300)
+_freshness_cache_lock = threading.Lock()
 _SQL_CACHE_ROW_LIMIT = 1000
 _WRITE_SQL_PREFIXES = ("INSERT", "MERGE", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP", "TRUNCATE", "OPTIMIZE", "VACUUM")
 _READ_SQL_PREFIXES = ("SELECT", "WITH", "SHOW", "DESCRIBE")
@@ -258,8 +260,9 @@ class _RestStatementExecutor:
         stmt_hash = _sql_stmt_hash(statement)
         param_count = len(params) if params else 0
         logger.info("sql.execute executor=rest hash=%s params=%d", stmt_hash, param_count)
+        body["query_tags"] = {"app": "spc", "stmt_hash": stmt_hash}
 
-        req = urllib.request.Request(url, data=payload, headers=auth_headers, method="POST")
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=auth_headers, method="POST")
         t0 = time.monotonic()
         try:
             with urllib.request.urlopen(req, timeout=180) as resp:
@@ -295,12 +298,25 @@ class _RestStatementExecutor:
             raise RuntimeError(msg)
 
         columns = [c["name"] for c in result["manifest"]["schema"]["columns"]]
-        rows = [
-            dict(zip(columns, row_data))
-            for row_data in result.get("result", {}).get("data_array", [])
-        ]
-        logger.info("sql.done executor=rest hash=%s state=SUCCEEDED rows=%d duration_ms=%d", stmt_hash, len(rows), elapsed_ms)
-        return rows
+        all_rows: list[dict] = []
+        chunk = result.get("result", {})
+        while True:
+            for row_data in chunk.get("data_array", []):
+                all_rows.append(dict(zip(columns, row_data)))
+            next_chunk_index = chunk.get("next_chunk_index")
+            if next_chunk_index is None:
+                break
+            chunk_url = f"{poll_url}/result/chunks/{next_chunk_index}"
+            chunk_req = urllib.request.Request(chunk_url, headers=auth_headers)
+            try:
+                with urllib.request.urlopen(chunk_req, timeout=60) as chunk_resp:
+                    chunk = json.loads(chunk_resp.read().decode())
+            except urllib.error.HTTPError as exc:
+                body_str = exc.read().decode() if exc.fp else ""
+                raise RuntimeError(f"SQL chunk fetch {exc.code}: {body_str[:1000]}") from exc
+
+        logger.info("sql.done executor=rest hash=%s state=SUCCEEDED rows=%d duration_ms=%d", stmt_hash, len(all_rows), elapsed_ms)
+        return all_rows
 
 
 class _ConnectorStatementExecutor:
@@ -353,7 +369,7 @@ _CONNECTOR_EXECUTOR: _SqlExecutor = _ConnectorStatementExecutor()
 
 
 def _configured_sql_executor_name() -> str:
-    configured = os.environ.get("SPC_SQL_EXECUTOR", "rest").strip().lower()
+    configured = os.environ.get("SPC_SQL_EXECUTOR", "connector").strip().lower()
     return configured if configured in {"rest", "connector"} else "rest"
 
 
@@ -460,6 +476,9 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
     Return per-view freshness metadata from information_schema.tables.last_altered.
 
     `source_views` must contain unqualified table/view names in TRACE_SCHEMA.
+    Results are cached for 5 minutes (TTL=300 s) because table metadata changes
+    only on DDL events, and the freshness query would otherwise double warehouse
+    calls on every hot-path endpoint invocation.
     """
     safe_views: list[str] = []
     for view in source_views:
@@ -469,6 +488,13 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
 
     if not safe_views:
         return {"generated_at_utc": int(time.time()), "sources": []}
+
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    cache_key = (token_hash, tuple(safe_views))
+    with _freshness_cache_lock:
+        cached = _freshness_cache.get(cache_key)
+    if cached is not None:
+        return deepcopy(cached)
 
     params = [
         sql_param("catalog_name", TRACE_CATALOG),
@@ -491,12 +517,15 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
         ORDER BY table_name
     """
     rows = run_sql(token, query, params)
-    return {
+    result = {
         "generated_at_utc": int(time.time()),
         "catalog": TRACE_CATALOG,
         "schema": TRACE_SCHEMA,
         "sources": rows,
     }
+    with _freshness_cache_lock:
+        _freshness_cache[cache_key] = deepcopy(result)
+    return result
 
 
 async def insert_spc_audit_event(

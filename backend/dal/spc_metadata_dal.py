@@ -5,18 +5,9 @@ from backend.utils.db import run_sql_async, sql_param, tbl
 
 async def fetch_plants(token: str, material_id: str) -> list[dict]:
     query = f"""
-        SELECT DISTINCT
-            mb.PLANT_ID AS plant_id,
-            COALESCE(p.PLANT_NAME, mb.PLANT_ID) AS plant_name
-        FROM {tbl('gold_batch_mass_balance_v')} mb
-        LEFT JOIN {tbl('gold_plant')} p
-            ON p.PLANT_ID = mb.PLANT_ID
-        INNER JOIN {tbl('gold_batch_quality_result_v')} r
-            ON r.MATERIAL_ID = mb.MATERIAL_ID
-           AND r.BATCH_ID    = mb.BATCH_ID
-           AND r.QUANTITATIVE_RESULT IS NOT NULL
-        WHERE mb.MATERIAL_ID = :material_id
-          AND mb.MOVEMENT_CATEGORY = 'Production'
+        SELECT plant_id, plant_name
+        FROM {tbl('spc_plant_material_dim_mv')}
+        WHERE material_id = :material_id
         ORDER BY plant_name
     """
     return await run_sql_async(token, query, [sql_param("material_id", material_id)])
@@ -42,15 +33,8 @@ async def validate_material(token: str, material_id: str) -> Optional[dict]:
 
 async def fetch_materials(token: str) -> list[dict]:
     query = f"""
-        SELECT DISTINCT
-            r.MATERIAL_ID   AS material_id,
-            COALESCE(m.MATERIAL_NAME, r.MATERIAL_ID) AS material_name
-        FROM {tbl('gold_batch_quality_result_v')} r
-        LEFT JOIN {tbl('gold_material')} m
-            ON m.MATERIAL_ID = r.MATERIAL_ID
-            AND m.LANGUAGE_ID = 'E'
-        WHERE r.QUANTITATIVE_RESULT IS NOT NULL
-          AND (r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')
+        SELECT material_id, material_name
+        FROM {tbl('spc_material_dim_mv')}
         ORDER BY material_name
     """
     return await run_sql_async(token, query)

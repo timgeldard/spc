@@ -39,7 +39,7 @@ async def spc_plants(
     return await attach_data_freshness(
         {"plants": rows},
         token,
-        ["gold_batch_mass_balance_v", "gold_plant", "gold_batch_quality_result_v"],
+        ["spc_plant_material_dim_mv"],
         request_path=request.url.path,
     )
 
@@ -89,7 +89,7 @@ async def spc_materials(
     return await attach_data_freshness(
         {"materials": rows},
         token,
-        ["gold_batch_quality_result_v", "gold_material"],
+        ["spc_material_dim_mv"],
         request_path=request.url.path,
     )
 
