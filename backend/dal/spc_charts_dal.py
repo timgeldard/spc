@@ -648,11 +648,9 @@ async def fetch_spec_drift_summary(
     if date_to:
         conditions.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
-    # spc_quality_metric_subgroup_v groups by inspection_method, not operation_id.
-    # When an operation scope is needed, filter by inspection_method.
     if operation_id:
-        conditions.append("inspection_method = :inspection_method_filter")
-        params.append(sql_param("inspection_method_filter", operation_id))
+        conditions.append("operation_id = :operation_id")
+        params.append(sql_param("operation_id", operation_id))
 
     where_clause = " AND ".join(conditions)
     query = f"""
@@ -732,6 +730,13 @@ async def save_locked_limits(
     else:
         source_operation_id_expr = "NULL"
         operation_id_on_clause = "t.operation_id IS NULL AND s.operation_id IS NULL"
+    if unified_mic_key:
+        mic_identity_on_clause = (
+            "(COALESCE(t.unified_mic_key, '') = COALESCE(s.unified_mic_key, '') "
+            "OR (t.unified_mic_key IS NULL AND t.mic_id = s.mic_id))"
+        )
+    else:
+        mic_identity_on_clause = "t.mic_id = s.mic_id"
     merge_sql = f"""
         MERGE INTO {tbl('spc_locked_limits')} AS t
         USING (SELECT
@@ -756,8 +761,8 @@ async def save_locked_limits(
             CURRENT_TIMESTAMP() AS locked_at
         ) AS s
         ON t.material_id = s.material_id
-           AND t.mic_id  = s.mic_id
            AND t.chart_type = s.chart_type
+           AND {mic_identity_on_clause}
            AND {plant_on_clause}
            AND {operation_id_on_clause}
         WHEN MATCHED THEN UPDATE SET
@@ -800,12 +805,21 @@ async def fetch_locked_limits(
     plant_id: Optional[str],
     chart_type: str,
     operation_id: Optional[str] = None,
+    unified_mic_key: Optional[str] = None,
 ) -> Optional[dict]:
     params = [
         sql_param("material_id", material_id),
-        sql_param("mic_id", mic_id),
         sql_param("chart_type", chart_type),
     ]
+    if unified_mic_key:
+        mic_scope_filter = "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)"
+        mic_scope_order = "CASE WHEN unified_mic_key = :unified_mic_key THEN 0 ELSE 1 END,"
+        params.append(sql_param("unified_mic_key", unified_mic_key))
+        params.append(sql_param("mic_id", mic_id))
+    else:
+        mic_scope_filter = "AND mic_id = :mic_id"
+        mic_scope_order = ""
+        params.append(sql_param("mic_id", mic_id))
     if plant_id:
         plant_filter = "AND plant_id = :plant_id"
         params.append(sql_param("plant_id", plant_id))
@@ -824,11 +838,11 @@ async def fetch_locked_limits(
                locked_by, locked_at
         FROM {tbl('spc_locked_limits')}
         WHERE material_id = :material_id
-          AND mic_id = :mic_id
           AND chart_type = :chart_type
+          {mic_scope_filter}
           {plant_filter}
           {operation_id_filter}
-        ORDER BY locked_at DESC
+        ORDER BY {mic_scope_order} locked_at DESC
         LIMIT 1
     """
     rows = await run_sql_async(token, query, params)
@@ -850,12 +864,19 @@ async def delete_locked_limits(
     plant_id: Optional[str],
     chart_type: str,
     operation_id: Optional[str] = None,
+    unified_mic_key: Optional[str] = None,
 ) -> None:
     params = [
         sql_param("material_id", material_id),
-        sql_param("mic_id", mic_id),
         sql_param("chart_type", chart_type),
     ]
+    if unified_mic_key:
+        mic_scope_filter = "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)"
+        params.append(sql_param("unified_mic_key", unified_mic_key))
+        params.append(sql_param("mic_id", mic_id))
+    else:
+        mic_scope_filter = "AND mic_id = :mic_id"
+        params.append(sql_param("mic_id", mic_id))
     if plant_id:
         plant_filter = "AND plant_id = :plant_id"
         params.append(sql_param("plant_id", plant_id))
@@ -869,8 +890,8 @@ async def delete_locked_limits(
     query = f"""
         DELETE FROM {tbl('spc_locked_limits')}
         WHERE material_id = :material_id
-          AND mic_id = :mic_id
           AND chart_type = :chart_type
+          {mic_scope_filter}
           {plant_filter}
           {operation_id_filter}
     """

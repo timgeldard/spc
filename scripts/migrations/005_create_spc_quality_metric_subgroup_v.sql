@@ -36,6 +36,7 @@ filtered_results AS (
         bm.plant_id,
         COALESCE(p.PLANT_NAME, bm.plant_id) AS plant_name,
         r.MIC_ID AS mic_id,
+        CAST(r.OPERATION_ID AS STRING) AS operation_id,
         r.MIC_NAME AS mic_name,
         r.INSPECTION_METHOD AS inspection_method,
         CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value,
@@ -95,6 +96,7 @@ subgroup_rollup AS (
         plant_id,
         plant_name,
         mic_id,
+        operation_id,
         mic_name,
         inspection_method,
         COUNT(*) AS batch_n,
@@ -123,6 +125,7 @@ subgroup_rollup AS (
         plant_id,
         plant_name,
         mic_id,
+        operation_id,
         mic_name,
         inspection_method
 ),
@@ -139,6 +142,7 @@ resolved_specs AS (
         plant_id,
         plant_name,
         mic_id,
+        operation_id,
         mic_name,
         inspection_method,
         batch_n,
@@ -180,6 +184,7 @@ sample_grain AS (
         fr.plant_id,
         fr.plant_name,
         fr.mic_id,
+        fr.operation_id,
         fr.mic_name,
         fr.inspection_method,
         fr.value,
@@ -202,6 +207,7 @@ sample_grain AS (
                 fr.batch_id,
                 fr.plant_id,
                 fr.mic_id,
+                COALESCE(fr.operation_id, ''),
                 fr.inspection_method
             ORDER BY
                 fr.value,
@@ -220,6 +226,7 @@ sample_grain AS (
        AND sg.plant_id = fr.plant_id
        AND sg.plant_name = fr.plant_name
        AND sg.mic_id = fr.mic_id
+       AND COALESCE(sg.operation_id, '') = COALESCE(fr.operation_id, '')
        AND sg.mic_name = fr.mic_name
        AND sg.inspection_method = fr.inspection_method
 )
@@ -235,6 +242,7 @@ SELECT
     plant_id,
     plant_name,
     mic_id,
+    operation_id,
     mic_name,
     inspection_method,
     value,

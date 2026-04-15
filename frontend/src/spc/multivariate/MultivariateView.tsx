@@ -9,6 +9,12 @@ import FieldHelp from '../components/FieldHelp'
 import InfoBanner from '../components/InfoBanner'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import ModuleEmptyState from '../components/ModuleEmptyState'
+
+function formatSelectionKey(selectionKey: string): string {
+  const [micId, operationId] = selectionKey.split('||')
+  if (!operationId || operationId === 'NO_OP') return micId
+  return `${micId} · Op ${operationId}`
+}
 import { useMultivariate } from '../hooks/useMultivariate'
 import type { EventParamLike, MultivariateContribution, MultivariatePoint } from '../types'
 
@@ -243,7 +249,7 @@ export default function MultivariateView() {
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {state.selectedMultivariateMicIds.map(micId => (
-              <Tag key={micId} type="blue" size="sm">{micId}</Tag>
+              <Tag key={micId} type="blue" size="sm">{formatSelectionKey(micId)}</Tag>
             ))}
           </div>
         </Stack>

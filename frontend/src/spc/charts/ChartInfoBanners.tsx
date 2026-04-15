@@ -3,6 +3,7 @@ import type { ExclusionAuditSnapshot, SpecDriftWarning } from '../types'
 
 interface ChartInfoBannersProps {
   lockedLimitsError?: string | null
+  lockedLimitsWarning?: string | null
   exclusionsError?: string | null
   exclusionsLoading?: boolean
   dataTruncated?: boolean
@@ -12,6 +13,7 @@ interface ChartInfoBannersProps {
 
 export default function ChartInfoBanners({
   lockedLimitsError,
+  lockedLimitsWarning,
   exclusionsError,
   exclusionsLoading = false,
   dataTruncated = false,
@@ -34,6 +36,15 @@ export default function ChartInfoBanners({
           kind="error"
           title="Locked limits error:"
           subtitle={lockedLimitsError}
+          hideCloseButton
+          lowContrast
+        />
+      )}
+      {lockedLimitsWarning && (
+        <InlineNotification
+          kind="warning"
+          title="Locked limits warning:"
+          subtitle={lockedLimitsWarning}
           hideCloseButton
           lowContrast
         />

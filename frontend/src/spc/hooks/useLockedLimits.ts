@@ -21,9 +21,11 @@ export function useLockedLimits(
   plantId: string | null | undefined,
   chartType: string | null | undefined,
   operationId: string | null | undefined = null,
+  unifiedMicKey: string | null | undefined = null,
+  currentSpecSignature: string | null | undefined = null,
 ): UseLockedLimitsResult {
   const queryClient = useQueryClient()
-  const queryKey = spcQueryKeys.lockedLimits(materialId, micId, plantId, chartType, operationId)
+  const queryKey = spcQueryKeys.lockedLimits(materialId, micId, plantId, chartType, operationId, unifiedMicKey)
 
   const query = useQuery({
     queryKey,
@@ -34,6 +36,7 @@ export function useLockedLimits(
         chartType as string,
         plantId ?? null,
         operationId ?? null,
+        unifiedMicKey ?? null,
         signal,
       ),
     enabled: Boolean(materialId && micId && chartType),
@@ -47,6 +50,7 @@ export function useLockedLimits(
         chartType as string,
         plantId ?? null,
         operationId ?? null,
+        unifiedMicKey ?? null,
         limitsObj,
       )
       return await queryClient.fetchQuery({
@@ -58,6 +62,7 @@ export function useLockedLimits(
             chartType as string,
             plantId ?? null,
             operationId ?? null,
+            unifiedMicKey ?? null,
             signal,
           ),
       })
@@ -72,6 +77,7 @@ export function useLockedLimits(
         chartType as string,
         plantId ?? null,
         operationId ?? null,
+        unifiedMicKey ?? null,
       )
     },
     onSuccess: () => {
@@ -79,8 +85,21 @@ export function useLockedLimits(
     },
   })
 
+  const lockedLimits = materialId && micId && chartType ? (query.data ?? null) : null
+  const decoratedLockedLimits = lockedLimits
+    ? {
+        ...lockedLimits,
+        live_spec_signature: currentSpecSignature ?? null,
+        stale_spec: Boolean(
+          currentSpecSignature &&
+          lockedLimits.spec_signature &&
+          lockedLimits.spec_signature !== currentSpecSignature,
+        ),
+      }
+    : null
+
   return {
-    lockedLimits: materialId && micId && chartType ? (query.data ?? null) : null,
+    lockedLimits: decoratedLockedLimits,
     loading: query.isLoading || query.isFetching || saveMutation.isPending || deleteMutation.isPending,
     error:
       (query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null) ??

@@ -123,6 +123,41 @@ def test_chart_data_skips_normality_fetch_on_non_initial_pages(monkeypatch):
     assert response.json()["normality"] is None
 
 
+def test_chart_data_survives_spec_drift_summary_failure(monkeypatch):
+    monkeypatch.setattr(spc_charts_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(spc_charts_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    async def fake_fetch_chart_data_page(*_args, **_kwargs):
+        return {
+            "data": [{"batch_id": "B1", "batch_date": "2026-04-01", "sample_seq": 1, "value": 1.23}],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+    async def fake_fetch_chart_data_values(*_args, **_kwargs):
+        return [1.23, 1.25, 1.22]
+
+    async def failing_fetch_spec_drift_summary(*_args, **_kwargs):
+        raise RuntimeError("warehouse side-car summary unavailable")
+
+    async def passthrough_attach(payload, *_args, **_kwargs):
+        return payload
+
+    monkeypatch.setattr(spc_charts_module, "fetch_chart_data_page", fake_fetch_chart_data_page)
+    monkeypatch.setattr(spc_charts_module, "fetch_chart_data_values", fake_fetch_chart_data_values)
+    monkeypatch.setattr(spc_charts_module, "fetch_spec_drift_summary", failing_fetch_spec_drift_summary)
+    monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
+
+    response = client.post(
+        "/api/spc/chart-data?include_summary=true",
+        headers={"x-forwarded-access-token": "not-a-real-jwt"},
+        json={"material_id": "MAT-1", "mic_id": "MIC-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["spec_drift"] is None
+
+
 def test_encode_and_decode_chart_cursor_round_trip():
     cursor = spc_charts_dal.encode_chart_cursor(1711929600, "BATCH:01", "SAMPLE/1", "LOT:9", "OP/4")
     assert cursor == "1711929600:BATCH%3A01:SAMPLE%2F1:LOT%3A9:OP%2F4"

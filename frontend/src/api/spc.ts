@@ -245,6 +245,7 @@ export async function fetchLockedLimits(
   chartType: string,
   plantId: string | null,
   operationId: string | null,
+  unifiedMicKey: string | null,
   signal?: AbortSignal,
 ): Promise<LockedLimits | null> {
   const params = new URLSearchParams({
@@ -254,6 +255,7 @@ export async function fetchLockedLimits(
   })
   if (plantId) params.append('plant_id', plantId)
   if (operationId) params.append('operation_id', operationId)
+  if (unifiedMicKey) params.append('unified_mic_key', unifiedMicKey)
   const data = await fetchJson<{ locked_limits?: LockedLimits | null }>(
     `/api/spc/locked-limits?${params.toString()}`,
     { signal },
@@ -267,6 +269,7 @@ export async function saveLockedLimits(
   chartType: string,
   plantId: string | null,
   operationId: string | null,
+  unifiedMicKey: string | null,
   limits: LockedLimits,
 ): Promise<void> {
   await fetchJson(
@@ -279,6 +282,7 @@ export async function saveLockedLimits(
         mic_id: micId,
         plant_id: plantId ?? null,
         operation_id: operationId ?? null,
+        unified_mic_key: unifiedMicKey ?? limits.unified_mic_key ?? null,
         chart_type: chartType,
         ...limits,
       }),
@@ -292,6 +296,7 @@ export async function deleteLockedLimits(
   chartType: string,
   plantId: string | null,
   operationId: string | null,
+  unifiedMicKey: string | null,
 ): Promise<void> {
   await fetchJson(
     '/api/spc/locked-limits',
@@ -303,6 +308,7 @@ export async function deleteLockedLimits(
         mic_id: micId,
         plant_id: plantId ?? null,
         operation_id: operationId ?? null,
+        unified_mic_key: unifiedMicKey ?? null,
         chart_type: chartType,
       }),
     },

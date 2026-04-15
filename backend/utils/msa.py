@@ -199,9 +199,6 @@ def compute_grr_anova(data: MeasurementCube, tolerance: float) -> dict[str, Any]
     df_interaction = df_ops * df_parts
     df_repeat = n_operators * n_parts * (n_replicates - 1)
 
-    if df_repeat <= 0:
-        return {"error": "Insufficient replication to estimate repeatability."}
-
     ms_ops = ss_ops / df_ops if df_ops > 0 else 0.0
     ms_parts = ss_parts / df_parts if df_parts > 0 else 0.0
     ms_interaction = ss_interaction / df_interaction if df_interaction > 0 else 0.0

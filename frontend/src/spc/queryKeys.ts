@@ -51,5 +51,6 @@ export const spcQueryKeys = {
     plantId: string | null | undefined,
     chartType: string | null | undefined,
     operationId: string | null | undefined,
-  ) => ['spc', 'lockedLimits', materialId ?? null, micId ?? null, plantId ?? null, chartType ?? null, operationId ?? null] as const,
+    unifiedMicKey: string | null | undefined,
+  ) => ['spc', 'lockedLimits', materialId ?? null, micId ?? null, plantId ?? null, chartType ?? null, operationId ?? null, unifiedMicKey ?? null] as const,
 }

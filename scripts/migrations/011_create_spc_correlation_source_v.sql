@@ -1,7 +1,7 @@
 -- Migration 011: create the shared correlation source view.
 
 CREATE OR REPLACE VIEW `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_correlation_source_v`
-COMMENT 'Shared quantitative correlation source view at material/batch/MIC grain for CORR-based analysis.'
+COMMENT 'Shared quantitative correlation source view at material/batch/MIC grain for CORR-based analysis, preserving operation-scoped characteristic identity.'
 AS
 WITH batch_metadata AS (
     SELECT
@@ -23,7 +23,16 @@ SELECT
     bm.batch_month,
     bm.plant_id,
     r.MIC_ID AS mic_id,
+    CAST(r.OPERATION_ID AS STRING) AS operation_id,
+    CONCAT_WS('||', r.MIC_ID, COALESCE(CAST(r.OPERATION_ID AS STRING), 'NO_OP')) AS mic_selection_key,
     ANY_VALUE(r.MIC_NAME) AS mic_name,
+    ANY_VALUE(
+        CASE
+            WHEN r.OPERATION_ID IS NOT NULL
+            THEN CONCAT(r.MIC_NAME, ' · Op ', CAST(r.OPERATION_ID AS STRING))
+            ELSE r.MIC_NAME
+        END
+    ) AS mic_display_name,
     AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE)) AS avg_result
 FROM `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
 LEFT JOIN batch_metadata bm
@@ -38,4 +47,5 @@ GROUP BY
     bm.batch_week,
     bm.batch_month,
     bm.plant_id,
-    r.MIC_ID;
+    r.MIC_ID,
+    CAST(r.OPERATION_ID AS STRING);

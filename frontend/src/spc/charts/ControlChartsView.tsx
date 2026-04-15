@@ -279,6 +279,8 @@ export default function ControlChartsView() {
     material_id:  selectedMaterial?.material_id ?? null,
     mic_id:       selectedMIC?.mic_id           ?? null,
     plant_id:     selectedPlant?.plant_id       ?? null,
+    operation_id: selectedMIC?.operation_id     ?? null,
+    chart_type:   ctrl.isAttributeChart ? ctrl.attrChartType : ctrl.effectiveChartType,
     date_from:    dateFrom || null,
     date_to:      dateTo   || null,
   }
@@ -401,6 +403,7 @@ export default function ControlChartsView() {
 
       <ChartInfoBanners
         lockedLimitsError={ctrl.lockedLimitsError}
+        lockedLimitsWarning={ctrl.lockedLimitsWarning}
         exclusionsError={ctrl.exclusionsError}
         exclusionsLoading={ctrl.exclusionsLoading}
         dataTruncated={ctrl.dataTruncated}

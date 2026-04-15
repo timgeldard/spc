@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -29,6 +30,7 @@ from backend.utils.rate_limit import limiter
 
 router = APIRouter()
 _NORMALITY_MAX_POINTS = 5000
+logger = logging.getLogger(__name__)
 
 
 @router.post("/chart-data")
@@ -111,7 +113,13 @@ async def spc_chart_data(
                     ),
                 }
         except Exception as exc:
-            handle_sql_error(exc)
+            logger.warning(
+                "spc.spec_drift_summary_failed material_id=%s mic_id=%s operation_id=%s",
+                body.material_id,
+                body.mic_id,
+                body.operation_id,
+                exc_info=exc,
+            )
 
     return await attach_data_freshness(
         {
@@ -238,6 +246,7 @@ async def get_locked_limits(
     request: Request,
     material_id: str,
     mic_id: str,
+    unified_mic_key: Optional[str] = None,
     plant_id: Optional[str] = None,
     operation_id: Optional[str] = None,
     chart_type: str = "imr",
@@ -250,6 +259,7 @@ async def get_locked_limits(
         GetLockedLimitsRequest(
             material_id=material_id,
             mic_id=mic_id,
+            unified_mic_key=unified_mic_key,
             plant_id=plant_id,
             operation_id=operation_id,
             chart_type=chart_type,
@@ -258,7 +268,15 @@ async def get_locked_limits(
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     try:
-        row = await fetch_locked_limits(token, material_id, mic_id, plant_id, chart_type, operation_id=operation_id)
+        row = await fetch_locked_limits(
+            token,
+            material_id,
+            mic_id,
+            plant_id,
+            chart_type,
+            operation_id=operation_id,
+            unified_mic_key=unified_mic_key,
+        )
     except Exception as exc:
         handle_locked_limits_error(exc)
 
@@ -276,6 +294,14 @@ async def delete_locked_limits_route(
     token = resolve_token(x_forwarded_access_token, authorization)
     check_warehouse_config()
     try:
-        return await delete_locked_limits(token, body.material_id, body.mic_id, body.plant_id, body.chart_type, operation_id=body.operation_id)
+        return await delete_locked_limits(
+            token,
+            body.material_id,
+            body.mic_id,
+            body.plant_id,
+            body.chart_type,
+            operation_id=body.operation_id,
+            unified_mic_key=body.unified_mic_key,
+        )
     except Exception as exc:
         handle_locked_limits_error(exc)
