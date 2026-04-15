@@ -37,6 +37,9 @@ batch_quality AS (
     FROM `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
     GROUP BY r.MATERIAL_ID, r.BATCH_ID
 )
+-- batch_metadata is the driving table so only Production batches are included;
+-- an INNER JOIN filters out orphan/non-production quality rows that have no
+-- matching batch in gold_batch_mass_balance_v.
 SELECT DISTINCT
     r.MATERIAL_ID                                   AS material_id,
     COALESCE(m.MATERIAL_NAME, r.MATERIAL_ID)        AS material_name,
@@ -48,8 +51,8 @@ SELECT DISTINCT
     COALESCE(p.PLANT_NAME, bm.plant_id)             AS plant_name_resolved,
     r.MIC_ID                                        AS mic_id,
     COALESCE(bq.has_rejection, 0)                   AS has_rejection
-FROM `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
-LEFT JOIN batch_metadata bm
+FROM batch_metadata bm
+JOIN `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
     ON bm.material_id = r.MATERIAL_ID
    AND bm.batch_id    = r.BATCH_ID
 LEFT JOIN batch_quality bq

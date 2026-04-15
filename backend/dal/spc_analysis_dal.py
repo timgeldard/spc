@@ -366,6 +366,9 @@ async def fetch_compare_scorecard(
     date_to: Optional[str],
 ) -> dict:
     deduped_material_ids = list(dict.fromkeys(material_ids))
+    if not deduped_material_ids:
+        return {"materials": [], "common_mics": []}
+
     mat_params = [sql_param(f"m{i}", mid) for i, mid in enumerate(deduped_material_ids)]
     in_clause = ", ".join(f":m{i}" for i in range(len(deduped_material_ids)))
 
@@ -439,6 +442,10 @@ async def fetch_compare_scorecard(
                 "batch_count": _coerce_int(row.get("batch_count")),
                 "ooc_rate": round(ooc, 4) if ooc is not None else None,
             })
+
+    # Match fetch_scorecard() sort: nulls last, ascending PPK.
+    for rows in scorecards_by_mat.values():
+        rows.sort(key=lambda r: (r.get("ppk") is None, r.get("ppk") or 0))
 
     results = []
     all_mic_sets: list[set[str]] = []

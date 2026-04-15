@@ -260,7 +260,7 @@ class _RestStatementExecutor:
         stmt_hash = _sql_stmt_hash(statement)
         param_count = len(params) if params else 0
         logger.info("sql.execute executor=rest hash=%s params=%d", stmt_hash, param_count)
-        body["query_tags"] = json.dumps({"app": "spc", "stmt_hash": stmt_hash})
+        body["query_tags"] = {"app": "spc", "stmt_hash": stmt_hash}
 
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=auth_headers, method="POST")
         t0 = time.monotonic()
@@ -489,11 +489,12 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
     if not safe_views:
         return {"generated_at_utc": int(time.time()), "sources": []}
 
-    cache_key = tuple(safe_views)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    cache_key = (token_hash, tuple(safe_views))
     with _freshness_cache_lock:
         cached = _freshness_cache.get(cache_key)
     if cached is not None:
-        return cached
+        return deepcopy(cached)
 
     params = [
         sql_param("catalog_name", TRACE_CATALOG),
@@ -523,7 +524,7 @@ def get_data_freshness(token: str, source_views: list[str]) -> dict:
         "sources": rows,
     }
     with _freshness_cache_lock:
-        _freshness_cache[cache_key] = result
+        _freshness_cache[cache_key] = deepcopy(result)
     return result
 
 
