@@ -30,9 +30,15 @@ PROCESS_FLOW_SOURCE_MIGRATION ?= $(MIGRATIONS_DIR)/009_create_spc_process_flow_s
 PROCESS_FLOW_MV_MIGRATION ?= $(MIGRATIONS_DIR)/010_create_spc_process_flow_metrics_mv.sql
 CORRELATION_SOURCE_MIGRATION ?= $(MIGRATIONS_DIR)/011_create_spc_correlation_source_v.sql
 NORMAL_CDF_UDF_MIGRATION ?= $(MIGRATIONS_DIR)/012_create_spc_normal_cdf_udf.sql
+UNIFIED_MIC_VIEWS_MIGRATION ?= $(MIGRATIONS_DIR)/013_create_spc_unified_mic_views.sql
+PROCESS_FLOW_SOURCE_MV_MIGRATION ?= $(MIGRATIONS_DIR)/015_create_spc_process_flow_source_mv.sql
+CORRELATION_SOURCE_MV_MIGRATION ?= $(MIGRATIONS_DIR)/016_create_spc_correlation_source_mv.sql
+MATERIAL_DIM_MV_MIGRATION ?= $(MIGRATIONS_DIR)/017_create_spc_material_dim_mv.sql
+PLANT_MATERIAL_DIM_MV_MIGRATION ?= $(MIGRATIONS_DIR)/018_create_spc_plant_material_dim_mv.sql
+LOCKED_LIMITS_UNIFIED_KEY_MIGRATION ?= $(MIGRATIONS_DIR)/014_add_unified_mic_key_to_locked_limits.sql
 GENIE_METADATA ?= true
 
-.PHONY: apply-migration build check-env check-metric-view-support deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions setup-metric-views
+.PHONY: apply-migration build check-env check-metric-view-support deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions setup-metric-views setup-unified-mic-views setup-locked-limits-unified-key
 
 check-env:
 	@databricks current-user me --profile $(PROFILE) -o json > /dev/null 2>&1 || \
@@ -57,7 +63,9 @@ deploy: check-env build render-app-config
 	$(MAKE) setup-query-audit PROFILE=$(PROFILE)
 	$(MAKE) setup-operation-id-locked-limits PROFILE=$(PROFILE)
 	$(MAKE) setup-operation-id-exclusions PROFILE=$(PROFILE)
+	$(MAKE) setup-locked-limits-unified-key PROFILE=$(PROFILE)
 	$(MAKE) setup-metric-views PROFILE=$(PROFILE)
+	$(MAKE) setup-unified-mic-views PROFILE=$(PROFILE)
 
 apply-migration: check-env
 	@echo "Applying $(NAME) migration from $(FILE)..."
@@ -112,6 +120,12 @@ setup-operation-id-locked-limits:
 setup-operation-id-exclusions:
 	@$(MAKE) apply-migration NAME=spc_exclusions_operation_id FILE=$(ADD_OPERATION_ID_EXCLUSIONS_MIGRATION) PROFILE=$(PROFILE)
 
+setup-unified-mic-views:
+	@$(MAKE) apply-migration NAME=spc_unified_mic_views FILE=$(UNIFIED_MIC_VIEWS_MIGRATION) PROFILE=$(PROFILE)
+
+setup-locked-limits-unified-key:
+	@$(MAKE) apply-migration NAME=spc_locked_limits_unified_key FILE=$(LOCKED_LIMITS_UNIFIED_KEY_MIGRATION) PROFILE=$(PROFILE)
+
 setup-metric-views: check-metric-view-support
 	@[ "$(GENIE_METADATA)" = "true" ] || \
 	  (echo "ERROR: Release 1 metric-view migrations are authored with YAML 1.1 Genie metadata. Use GENIE_METADATA=true for setup-metric-views." && exit 1)
@@ -122,3 +136,7 @@ setup-metric-views: check-metric-view-support
 	@$(MAKE) apply-migration NAME=spc_process_flow_source FILE=$(PROCESS_FLOW_SOURCE_MIGRATION) PROFILE=$(PROFILE)
 	@$(MAKE) apply-migration NAME=spc_process_flow_metrics FILE=$(PROCESS_FLOW_MV_MIGRATION) PROFILE=$(PROFILE)
 	@$(MAKE) apply-migration NAME=spc_correlation_source FILE=$(CORRELATION_SOURCE_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_process_flow_source_mv FILE=$(PROCESS_FLOW_SOURCE_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_correlation_source_mv FILE=$(CORRELATION_SOURCE_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_material_dim_mv FILE=$(MATERIAL_DIM_MV_MIGRATION) PROFILE=$(PROFILE)
+	@$(MAKE) apply-migration NAME=spc_plant_material_dim_mv FILE=$(PLANT_MATERIAL_DIM_MV_MIGRATION) PROFILE=$(PROFILE)
