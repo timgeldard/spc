@@ -9,9 +9,12 @@ venv/
 # Node
 frontend/node_modules/
 
-# Build artifacts — produced by `npm run build` at deploy time (Makefile: deploy → build).
-# Do NOT commit; run `git rm -r --cached frontend/dist/` once in a dedicated cleanup commit.
-frontend/dist/
+# NOTE: frontend/dist/ is intentionally tracked in git today because the
+# Databricks CLI's bundle deploy uses .gitignore to decide what to upload,
+# and the backend serves the built frontend from this directory. Moving dist
+# out of git (Phase 3.1) requires first teaching the CLI to upload dist
+# without a tracked-in-git signal (e.g. `databricks workspace import-dir`
+# as a separate post-bundle-deploy step). Until then, leave dist tracked.
 
 # Databricks / tooling state
 .databricks/

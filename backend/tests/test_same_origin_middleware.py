@@ -75,6 +75,49 @@ def test_env_allowed_origins_override(monkeypatch):
     assert r_bad.status_code == 403
 
 
+def test_x_forwarded_host_is_trusted_when_origin_matches():
+    """Databricks Apps / ALB / nginx reverse proxies: the browser sees the
+    external hostname (in Origin) while the backend sees an internal Host.
+    The middleware must accept the request when Origin matches X-Forwarded-Host."""
+    app = _make_app()
+    client = TestClient(app, base_url="http://internal.service.local")
+    r = client.post(
+        "/write",
+        headers={
+            "Origin": "https://spc-abc123.azure.databricksapps.com",
+            "X-Forwarded-Host": "spc-abc123.azure.databricksapps.com",
+        },
+    )
+    assert r.status_code == 200
+
+
+def test_x_forwarded_host_chain_uses_first_hop():
+    app = _make_app()
+    client = TestClient(app, base_url="http://internal.service.local")
+    r = client.post(
+        "/write",
+        headers={
+            "Origin": "https://spc-abc123.azure.databricksapps.com",
+            # Chained proxies — only the first entry is the client-facing host.
+            "X-Forwarded-Host": "spc-abc123.azure.databricksapps.com, lb.internal",
+        },
+    )
+    assert r.status_code == 200
+
+
+def test_origin_mismatching_both_host_and_forwarded_still_blocked():
+    app = _make_app()
+    client = TestClient(app, base_url="http://internal.service.local")
+    r = client.post(
+        "/write",
+        headers={
+            "Origin": "https://evil.example.com",
+            "X-Forwarded-Host": "spc-abc123.azure.databricksapps.com",
+        },
+    )
+    assert r.status_code == 403
+
+
 def test_referer_fallback_when_no_origin_header():
     app = _make_app()
     client = TestClient(app, base_url="http://testserver")

@@ -9,11 +9,16 @@ future deployment that accidentally disables token passthrough.
 
 Behaviour:
 - GET/HEAD/OPTIONS are never checked — they are safe by HTTP semantics.
-- Other methods require `Origin` (or `Referer`) to match the request's host.
-- `SPC_ALLOWED_ORIGINS` (comma-separated) extends the allowlist — intended for
-  integration tests that hit the API from a different host.
-- Missing Origin/Referer is allowed for backend-to-backend clients (no browser
-  in the loop), which are already authenticated via Bearer token.
+- Other methods require `Origin` (or `Referer`) to match any of:
+    - the request's `X-Forwarded-Host` header (proxy-aware: what the browser saw), or
+    - the request's `Host` header (direct case), or
+    - an entry in `SPC_ALLOWED_ORIGINS` (comma-separated env var for tests).
+- Missing Origin/Referer is allowed for non-browser clients (CLI,
+  backend-to-backend), which are already authenticated via Bearer token.
+
+Databricks Apps set `X-Forwarded-Host` to the external app hostname while the
+internal `Host` header reflects the container's service address, so we must
+accept either.
 """
 
 from __future__ import annotations
@@ -66,7 +71,13 @@ class SameOriginMiddleware(BaseHTTPMiddleware):
         if request.method.upper() in _SAFE_METHODS:
             return await call_next(request)
 
-        host = request.headers.get("host", "").lower().strip()
+        # Prefer X-Forwarded-Host (what the browser actually connected to)
+        # when running behind a proxy like Databricks Apps; fall back to Host.
+        # X-Forwarded-Host may contain a comma-separated chain ("a,b,c"); the
+        # first entry is the original client-facing host.
+        forwarded_chain = request.headers.get("x-forwarded-host", "")
+        forwarded_host = forwarded_chain.split(",", 1)[0].lower().strip()
+        direct_host = request.headers.get("host", "").lower().strip()
         origin_header = request.headers.get("origin") or ""
         referer_header = request.headers.get("referer") or ""
 
@@ -77,14 +88,16 @@ class SameOriginMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         allowed = self._static_allowed | _parse_env_allowed_origins()
-        if origin_host == host or origin_host in allowed:
+        candidates = {h for h in (forwarded_host, direct_host) if h} | allowed
+        if origin_host in candidates:
             return await call_next(request)
 
         _log.warning(
-            "cross_origin_mutation_blocked method=%s path=%s host=%s origin=%s",
+            "cross_origin_mutation_blocked method=%s path=%s host=%s forwarded_host=%s origin=%s",
             request.method,
             request.url.path,
-            host,
+            direct_host,
+            forwarded_host,
             origin_host,
         )
         return JSONResponse(

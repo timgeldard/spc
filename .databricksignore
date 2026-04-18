@@ -6,6 +6,7 @@ frontend/package.json
 frontend/package-lock.json
 frontend/vite.config.js
 
+
 # Databricks / tooling state
 .databricks
 .claude
