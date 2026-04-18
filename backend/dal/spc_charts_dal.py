@@ -9,6 +9,7 @@ from pypika.terms import Criterion, LiteralValue
 
 from backend.dal.spc_shared import infer_spec_type
 from backend.utils.db import TRACE_CATALOG, TRACE_SCHEMA, run_sql_async, sql_param, tbl
+from backend.utils.schema_contract import detect_optional_columns
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
@@ -365,6 +366,11 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
     if "stratify_value" in filters.select_extra_columns:
         select_columns.append(qd.stratify_value)
 
+    # CRITICAL: ORDER BY must use the same columns as the cursor WHERE clause,
+    # otherwise keyset pagination silently skips rows at page boundaries when
+    # raw INSPECTION_LOT_ID / OPERATION_ID (BIGINT) sort order differs from the
+    # string-casted cursor columns. Manifests as missing X-bar / Range points
+    # in the X-R chart (each paginated gap drops samples from a subgroup).
     final_query = (
         MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
         .with_(_build_quality_data_cte(filters), "quality_data")
@@ -373,8 +379,8 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
         .orderby(qd.cursor_batch_date_epoch)
         .orderby(qd.batch_id)
         .orderby(qd.cursor_sample_id)
-        .orderby(qd.INSPECTION_LOT_ID)
-        .orderby(qd.OPERATION_ID)
+        .orderby(qd.cursor_inspection_lot_id)
+        .orderby(qd.cursor_operation_id)
         .limit(limit + 1)
     )
     final_query = _apply_conditions(final_query, filters.final_where_conditions)
@@ -1009,6 +1015,41 @@ async def fetch_data_quality_summary(
     rows = await run_sql_async(token, query, params)
     row = rows[0] if rows else {}
 
+    # Phase 2.2: opportunistically probe for the optional USAGE_DECISION_CODE
+    # column. If present upstream, run a second aggregate to return a
+    # disposition breakdown; otherwise return None so the frontend knows the
+    # feature is dormant. No failure if the probe or breakdown query errors.
+    disposition_breakdown: Optional[dict] = None
+    try:
+        optional_cols = await detect_optional_columns(
+            token, TRACE_CATALOG, TRACE_SCHEMA, "gold_batch_quality_result_v"
+        )
+    except Exception:
+        optional_cols = set()
+    if "USAGE_DECISION_CODE" in optional_cols:
+        try:
+            disp_query = f"""
+                SELECT
+                    COALESCE(r.USAGE_DECISION_CODE, '__UNSET__') AS code,
+                    COUNT(*)                                     AS n
+                FROM {tbl('gold_batch_quality_result_v')} r
+                JOIN (
+                    SELECT BATCH_ID, MATERIAL_ID, MIN(POSTING_DATE) AS POSTING_DATE, MAX(PLANT_ID) AS PLANT_ID
+                    FROM {tbl('gold_batch_mass_balance_v')}
+                    WHERE MOVEMENT_CATEGORY = 'Production'
+                    GROUP BY BATCH_ID, MATERIAL_ID
+                ) mb ON mb.BATCH_ID = r.BATCH_ID AND mb.MATERIAL_ID = r.MATERIAL_ID
+                WHERE {where_clause}
+                GROUP BY COALESCE(r.USAGE_DECISION_CODE, '__UNSET__')
+            """
+            disp_rows = await run_sql_async(token, disp_query, params)
+            disposition_breakdown = {
+                str(drow.get("code") or "__UNSET__"): int(float(drow.get("n") or 0))
+                for drow in disp_rows
+            }
+        except Exception:
+            disposition_breakdown = None
+
     def _num(val, default=0):
         if val is None:
             return default
@@ -1040,4 +1081,9 @@ async def fetch_data_quality_summary(
         "median_gap_days": None if row.get("median_gap_days") is None else round(_num(row.get("median_gap_days")), 2),
         "p95_gap_days": None if row.get("p95_gap_days") is None else round(_num(row.get("p95_gap_days")), 2),
         "max_gap_days": None if row.get("max_gap_days") is None else round(_num(row.get("max_gap_days")), 2),
+        # Phase 2.2: null when upstream gold view has no USAGE_DECISION_CODE
+        # column; otherwise a {code: count} map. UI renders a chip row when
+        # non-null, and the rework-filter affordance on SPCFilterBar becomes
+        # available.
+        "disposition_breakdown": disposition_breakdown,
     }

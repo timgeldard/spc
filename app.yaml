@@ -20,3 +20,12 @@ env:
 
   - name: GENIE_SPACE_ID
     value: "01f134d334681d2398e1205b9b2739c4"
+
+  # Readiness probe token — MUST come from a Databricks secret scope, not a
+  # literal value. Canonical pattern (uncomment and adjust scope/key):
+  #
+  # - name: DATABRICKS_READINESS_TOKEN
+  #   valueFrom: spc-app/readiness_token
+  #
+  # See docs/OPS.md for scope creation, rotation, and the `make deploy`
+  # preflight that verifies the app can read the secret.

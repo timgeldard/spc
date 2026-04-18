@@ -35,20 +35,41 @@ See `gold_views.v1.json`. Human summary:
 | | `MOVEMENT_CATEGORY` | Filtered to `'Production'` |
 | `gold_material` | `MATERIAL_ID`, `MATERIAL_NAME`, `LANGUAGE_ID` | Display names — LANGUAGE_ID filtered to `'E'` |
 
+### Optional columns (forward-compatible extensions)
+
+Separate from the hard contract, `gold_views.v1.json` lists **optional
+columns** that the app probes for at runtime but does **not** require. When
+present upstream, features quietly activate; when absent, features stay
+dormant. No coordinated deploy.
+
+Currently documented optionals on `gold_batch_quality_result_v`:
+
+| Column | Purpose | What activates |
+|---|---|---|
+| `USAGE_DECISION_CODE` | SAP QAVE disposition (A=accepted, R=rework, S=scrap, etc.) | Disposition chip row in Data Quality panel; opens the path for a default rework-exclusion filter |
+| `USAGE_DECISION_TEXT` | Human-readable label | Tooltip copy on the chip row |
+| `INSPECTION_PHASE` | Incoming / in-process / final | Mandatory filter in `SPCFilterBar` so phases can't be mixed on one chart |
+
+The probe runs on `system.information_schema.columns`, is cached in-process
+for 10 minutes, and degrades to "column absent" on any error so a flaky
+probe never crashes the request. See `backend.utils.schema_contract.detect_optional_columns`.
+
 ### Explicit non-guarantees
 
 The app **does not** rely on:
 
 - SAP QM table-level fields not listed above (QALS, QAMV, QAMB, QAMR, QAVE) —
   those are the domain of the upstream gold-layer ETL.
-- Usage-decision / disposition fields (rework, hold, scrap) — these are
-  **not yet modelled**. Phase 2.2 will request upstream to add them; until
-  then, the app cannot distinguish normal from rework lots.
-- Inspection-phase fields (incoming / in-process / final) — same status as
-  above. Phase 2.2 will add them.
+- Usage-decision / disposition fields as **required** data — see optional
+  columns above. Until upstream adds them, the app can't distinguish normal
+  from rework lots.
+- Inspection-phase fields as required data — same status.
 
-If the ETL team intends to add such fields, that is welcomed and unblocks
-Phase 2.2 directly — coordinate before the schema version is bumped.
+When the ETL team publishes these optional columns, no SPC-app deploy is
+needed — the feature activates on the next `/spc/data-quality` request, and
+a future UI workstream can add the rework-exclusion filter and phase chip
+(tracked as Phase 2.2 follow-up; Phase 2.2 groundwork — probe + breakdown
+in DQ payload — already shipped).
 
 ## Runtime enforcement
 

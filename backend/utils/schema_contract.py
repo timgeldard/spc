@@ -24,6 +24,12 @@ from typing import Any, Optional
 _SCHEMA_FILE = Path(__file__).parent.parent / "schema" / "gold_views.v1.json"
 _CACHE_TTL_SECONDS = 60.0
 
+# Separate, longer-lived cache for optional-column probes. Optional columns
+# change rarely (they're upstream ETL extensions); a 10-minute cache keeps the
+# warehouse quiet without hiding new columns for long.
+_OPTIONAL_CACHE_TTL_SECONDS = 600.0
+_optional_cache: dict[tuple[str, str, str], tuple[float, set[str]]] = {}
+
 
 @dataclass
 class SchemaCheckResult:
@@ -54,9 +60,67 @@ _CACHED_AT: float = 0.0
 
 def clear_cache() -> None:
     """Test seam — drop the in-process cache."""
-    global _CACHED_RESULT, _CACHED_AT
+    global _CACHED_RESULT, _CACHED_AT, _optional_cache
     _CACHED_RESULT = None
     _CACHED_AT = 0.0
+    _optional_cache = {}
+
+
+async def detect_optional_columns(
+    token: str,
+    catalog: str,
+    schema: str,
+    view_name: str,
+    *,
+    run_sql_async=None,
+) -> set[str]:
+    """Return the subset of the view's documented optional columns that
+    actually exist on the live warehouse, uppercased.
+
+    Intended for feature-flagging forward-compatible extensions (Phase 2.2
+    usage_decision / inspection_phase, Phase 2.3 spec_change_reference) —
+    features quietly activate when the upstream ETL team publishes the column,
+    with no coordinated deploy required.
+
+    Empty set if the view has no optional columns listed in the contract, or
+    if the information_schema probe fails.
+    """
+    now = time.monotonic()
+    cache_key = (catalog, schema, view_name)
+    cached = _optional_cache.get(cache_key)
+    if cached is not None and (now - cached[0]) < _OPTIONAL_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    contract = _load_contract()
+    view = contract["views"].get(view_name, {})
+    optional = view.get("optional_columns", {}) or {}
+    if not optional:
+        _optional_cache[cache_key] = (now, set())
+        return set()
+
+    if run_sql_async is None:
+        from backend.utils.db import run_sql_async as _real_run_sql_async
+        run_sql_async = _real_run_sql_async
+
+    in_clause = ", ".join(f"'{c.upper()}'" for c in optional.keys())
+    query = f"""
+        SELECT UPPER(column_name) AS column_name
+        FROM system.information_schema.columns
+        WHERE table_catalog = '{catalog}'
+          AND table_schema = '{schema}'
+          AND table_name = '{view_name}'
+          AND UPPER(column_name) IN ({in_clause})
+    """
+    try:
+        rows = await run_sql_async(token, query)
+    except Exception:
+        _optional_cache[cache_key] = (now, set())
+        return set()
+
+    present = {str(row.get("column_name") or "").strip().upper() for row in rows}
+    present.discard("")
+    _optional_cache[cache_key] = (now, present)
+    return present
 
 
 async def assert_gold_view_schema(

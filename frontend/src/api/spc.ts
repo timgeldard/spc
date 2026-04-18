@@ -65,6 +65,10 @@ export interface DataQualitySummary {
   median_gap_days: number | null
   p95_gap_days: number | null
   max_gap_days: number | null
+  // Phase 2.2: {usage_decision_code: sample_count} when upstream gold view
+  // exposes USAGE_DECISION_CODE; null otherwise. UI renders a chip row and
+  // enables the rework-exclusion filter only when this is non-null.
+  disposition_breakdown?: Record<string, number> | null
 }
 
 export async function fetchDataQuality(

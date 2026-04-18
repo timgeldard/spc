@@ -19,6 +19,11 @@
         "TARGET_VALUE": { "type": "string", "nullable": true, "note": "Cast to DOUBLE as nominal; varies by MIC" },
         "TOLERANCE": { "type": "string", "nullable": true, "note": "Either symmetric ('±0.5') or asymmetric ('0.3...0.7') — parsed by LOCATE('...')" },
         "INSPECTION_RESULT_VALUATION": { "type": "string", "nullable": true }
+      },
+      "optional_columns": {
+        "USAGE_DECISION_CODE": { "type": "string", "nullable": true, "note": "SAP QAVE disposition code (e.g. A=accepted, R=rework, S=scrap). When present, DAL includes disposition breakdown in /spc/data-quality and enables rework filtering on control charts. Absence does not fail /api/ready; feature simply stays dormant. Phase 2.2 extension." },
+        "USAGE_DECISION_TEXT": { "type": "string", "nullable": true, "note": "Human-readable disposition label for tooltips. Optional partner field to USAGE_DECISION_CODE." },
+        "INSPECTION_PHASE": { "type": "string", "nullable": true, "note": "Inspection point classification (incoming / in-process / final). When present, a mandatory filter appears in SPCFilterBar to prevent mixing phases on one chart. Phase 2.2 extension." }
       }
     },
     "gold_batch_mass_balance_v": {

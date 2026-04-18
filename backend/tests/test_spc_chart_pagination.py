@@ -263,6 +263,42 @@ def test_fetch_chart_data_page_uses_full_cursor_tie_breakers(monkeypatch):
     assert any(param["name"] == "cursor_operation_id" and param["value"] == "OP-4" for param in params)
 
 
+def test_fetch_chart_data_page_orderby_uses_cursor_columns(monkeypatch):
+    """Regression: ORDER BY must use the string-casted cursor columns, NOT the
+    raw INSPECTION_LOT_ID / OPERATION_ID, so that keyset pagination does not
+    skip rows at page boundaries. Missing samples manifest as missing points
+    in the X-R chart (subgroups lose members)."""
+    captured: dict[str, object] = {}
+
+    async def fake_run_sql_async(_token, query, params=None):
+        captured["query"] = query
+        captured["params"] = params or []
+        return []
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    asyncio.run(
+        spc_charts_dal.fetch_chart_data_page(
+            "token", "MAT-1", "MIC-1", None, None, None, None, None,
+            cursor="1711929600:B1:S1:LOT-9:OP-4", limit=1000,
+        )
+    )
+
+    query = str(captured["query"]).lower()
+    # The ORDER BY must reference the cursor-shaped (string-cast) columns so
+    # that its sort order matches the cursor WHERE clause. Bare references to
+    # INSPECTION_LOT_ID / OPERATION_ID in ORDER BY indicate the old bug.
+    order_by_section = query.split("order by", 1)[-1]
+    assert "cursor_inspection_lot_id" in order_by_section
+    assert "cursor_operation_id" in order_by_section
+    # Guard against regression: the raw columns must not appear in ORDER BY.
+    # (They do appear earlier in the CTE SELECT, which is fine.)
+    # We assert substring absence on the ORDER BY fragment only.
+    order_by_only = order_by_section.split("limit", 1)[0]
+    assert "`inspection_lot_id`" not in order_by_only
+    assert "`operation_id`" not in order_by_only
+
+
 def test_chart_data_rejects_invalid_stratify_key(monkeypatch):
     monkeypatch.setattr(spc_charts_module, "resolve_token", lambda *_args, **_kwargs: "token")
     monkeypatch.setattr(spc_charts_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")

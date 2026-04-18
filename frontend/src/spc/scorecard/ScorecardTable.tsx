@@ -20,6 +20,14 @@ import { Tag } from '~/lib/carbon-layout'
 import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useExport } from '../hooks/useExport'
 import type { ScorecardRow } from '../types'
+import VirtualizedRows from './VirtualizedRows'
+
+// Row count at which Carbon DataTable's non-virtualized rendering begins to
+// cost perceptible frame budget on mid-range laptops. Above this, we offer
+// the virtualized mode as an opt-in via the overflow menu. Chosen as a safe
+// headroom number rather than a measured cutoff — actual DOM-binding cost
+// depends on column count and cell complexity.
+const VIRTUALIZATION_THRESHOLD = 250
 
 // ── Column definitions ─────────────────────────────────────────────────────
 
@@ -158,6 +166,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
   const [searchTerm,    setSearchTerm]    = useState('')
   const [page,          setPage]          = useState(1)
   const [pageSize,      setPageSize]      = useState(10)
+  const [virtualize,    setVirtualize]    = useState(false)
 
   // ── Navigation ───────────────────────────────────────────────────────────
   const openChart = useCallback((row: ScorecardRow) => {
@@ -272,7 +281,104 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Virtualized-mode render: skip the Carbon DataTable chrome and use a
+  // scroll-windowed list. Visual fidelity is reduced (simpler columns, no
+  // zebra stripes) in exchange for smooth scrolling on large datasets.
+  if (virtualize) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+            <input
+              type="search"
+              placeholder="Filter by characteristic name…"
+              value={searchTerm}
+              onChange={e => { setSearchTerm(e.target.value); setPage(1) }}
+              style={{
+                flex: 1,
+                padding: '0.375rem 0.75rem',
+                fontSize: '0.875rem',
+                border: '1px solid var(--cds-border-strong-01)',
+                background: 'var(--cds-layer)',
+                color: 'var(--cds-text-primary)',
+              }}
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--cds-text-secondary)', whiteSpace: 'nowrap' }}>
+              {filteredRows.length} characteristic{filteredRows.length !== 1 ? 's' : ''} (virtualized)
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button kind="ghost" size="sm" onClick={() => setVirtualize(false)}>Use paginated view</Button>
+            <Button kind="ghost" size="sm" onClick={exportCSV}>Export CSV</Button>
+            <Button kind="ghost" size="sm" onClick={exportExcel} disabled={exporting}>Export Excel</Button>
+          </div>
+        </div>
+        {/* Header row */}
+        <div
+          role="row"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+            gap: '0.5rem',
+            padding: '0.5rem 0.75rem',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: 'var(--cds-text-secondary)',
+            borderBottom: '1px solid var(--cds-border-subtle-01)',
+          }}
+        >
+          <span>Characteristic</span>
+          <span style={{ textAlign: 'right' }}>Cpk</span>
+          <span style={{ textAlign: 'right' }}>Ppk</span>
+          <span style={{ textAlign: 'right' }}>OOC rate</span>
+          <span>Status</span>
+        </div>
+        <VirtualizedRows
+          rows={filteredRows}
+          rowHeightPx={40}
+          viewportHeightPx={560}
+          ariaLabel="Scorecard characteristics (virtualized)"
+          renderRow={(row) => (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                gap: '0.5rem',
+                width: '100%',
+                fontSize: '0.875rem',
+                alignItems: 'center',
+              }}
+            >
+              <Button
+                kind="ghost"
+                size="sm"
+                style={{ padding: 0, textAlign: 'left', minHeight: 'unset' }}
+                onClick={() => openChart(row)}
+              >
+                {row.mic_name}
+              </Button>
+              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <CapabilityTag value={row.cpk} unstable={row.is_stable === false} />
+              </span>
+              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <CapabilityTag value={row.ppk} unstable={row.is_stable === false} />
+              </span>
+              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <OOCTag value={row.ooc_rate} />
+              </span>
+              <span>
+                <StatusTag value={row.capability_status} unstable={row.is_stable === false} />
+              </span>
+            </div>
+          )}
+        />
+      </div>
+    )
+  }
+
+  // ── Render (paginated, Carbon DataTable) ─────────────────────────────────
   return (
     // DataTable manages its own internal selection/expansion state;
     // sort is disabled (isSortable absent) — handled externally above.
@@ -309,6 +415,12 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
               <TableToolbarMenu iconDescription="Export options">
                 <OverflowMenuItem itemText="Export CSV"   onClick={exportCSV} />
                 <OverflowMenuItem itemText="Export Excel" onClick={exportExcel} disabled={exporting} />
+                {filteredRows.length > VIRTUALIZATION_THRESHOLD && (
+                  <OverflowMenuItem
+                    itemText={`Show all ${filteredRows.length} (virtualized)`}
+                    onClick={() => setVirtualize(true)}
+                  />
+                )}
               </TableToolbarMenu>
             </TableToolbarContent>
           </TableToolbar>
@@ -362,7 +474,7 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
           <Pagination
             totalItems={filteredRows.length}
             pageSize={pageSize}
-            pageSizes={[10, 25, 50]}
+            pageSizes={[10, 25, 50, 100, 250]}
             page={page}
             onChange={({ page: p, pageSize: ps }) => {
               setPage(p)

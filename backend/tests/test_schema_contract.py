@@ -117,6 +117,61 @@ def test_assert_gold_view_schema_result_is_cached():
     assert calls["n"] == 1
 
 
+def test_detect_optional_columns_returns_present_subset():
+    async def fake_run(_token, _query):
+        return [{"column_name": "USAGE_DECISION_CODE"}]
+
+    present = asyncio.run(
+        schema_contract.detect_optional_columns(
+            "token", "cat", "schema", "gold_batch_quality_result_v",
+            run_sql_async=fake_run,
+        )
+    )
+    assert present == {"USAGE_DECISION_CODE"}
+
+
+def test_detect_optional_columns_empty_when_none_present():
+    async def fake_run(_token, _query):
+        return []
+
+    present = asyncio.run(
+        schema_contract.detect_optional_columns(
+            "token", "cat", "schema", "gold_batch_quality_result_v",
+            run_sql_async=fake_run,
+        )
+    )
+    assert present == set()
+
+
+def test_detect_optional_columns_tolerates_probe_failure():
+    async def failing(_token, _query):
+        raise RuntimeError("information_schema unreachable")
+
+    present = asyncio.run(
+        schema_contract.detect_optional_columns(
+            "token", "cat", "schema", "gold_batch_quality_result_v",
+            run_sql_async=failing,
+        )
+    )
+    # Absence of signal is treated as "column not present" so features stay
+    # dormant rather than crashing on unrelated probe flakes.
+    assert present == set()
+
+
+def test_detect_optional_columns_returns_empty_for_view_without_optionals():
+    async def fake_run(_token, _query):
+        return [{"column_name": "ANYTHING"}]
+
+    # gold_material has no optional_columns in the contract.
+    present = asyncio.run(
+        schema_contract.detect_optional_columns(
+            "token", "cat", "schema", "gold_material",
+            run_sql_async=fake_run,
+        )
+    )
+    assert present == set()
+
+
 def test_clear_cache_forces_requery():
     calls = {"n": 0}
 

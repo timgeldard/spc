@@ -135,6 +135,30 @@ export default function DataQualityPanel({ summary, loading, error }: DataQualit
           Range: {summary.first_batch_date} → {summary.last_batch_date}
         </p>
       )}
+      {summary.disposition_breakdown && Object.keys(summary.disposition_breakdown).length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <span style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--cds-text-secondary)' }}>
+            Disposition (SAP usage decision)
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', fontSize: '0.75rem' }}>
+            {Object.entries(summary.disposition_breakdown).map(([code, count]) => (
+              <span
+                key={code}
+                title="Upstream SAP QAVE usage-decision code"
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: 'var(--cds-layer)',
+                  border: '1px solid var(--cds-border-subtle-01)',
+                  color: 'var(--cds-text-primary)',
+                }}
+              >
+                {code === '__UNSET__' ? '(none)' : code}: {count.toLocaleString()}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
