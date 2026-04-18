@@ -7,6 +7,57 @@ import {
 } from '../../components/charts/CapabilityPanel'
 import type { SPCComputationResult } from '../types'
 
+// Env flag lets ops disable the guard without shipping a revert.
+// Default on. To disable: VITE_DISABLE_STABILITY_GUARD=true.
+const STABILITY_GUARD_ENABLED = import.meta.env?.VITE_DISABLE_STABILITY_GUARD !== 'true'
+
+interface SuppressedCapabilityCardProps {
+  reason: string
+  onOverride: () => void
+}
+
+function SuppressedCapabilityCard({ reason, onOverride }: SuppressedCapabilityCardProps) {
+  return (
+    <div
+      role="region"
+      aria-label="Capability indices suppressed"
+      style={{
+        borderRadius: 4,
+        border: '1px solid var(--cds-support-warning)',
+        background: 'var(--cds-notification-background-warning)',
+        padding: '0.75rem 1rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+      }}
+    >
+      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--cds-text-primary)' }}>
+        Capability indices suppressed
+      </div>
+      <div style={{ fontSize: '0.8125rem', color: 'var(--cds-text-primary)', lineHeight: 1.4 }}>
+        {reason} Per AIAG SPC §V, capability indices are only meaningful on a stable process.
+        Investigate the assignable cause before reporting Cpk/Ppk.
+      </div>
+      <button
+        type="button"
+        onClick={onOverride}
+        style={{
+          alignSelf: 'flex-start',
+          background: 'transparent',
+          border: '1px solid var(--cds-border-strong)',
+          color: 'var(--cds-text-primary)',
+          padding: '0.25rem 0.75rem',
+          fontSize: '0.75rem',
+          cursor: 'pointer',
+          borderRadius: 2,
+        }}
+      >
+        Show capability anyway
+      </button>
+    </div>
+  )
+}
+
 interface StabilityWarningProps {
   signals?: SPCComputationResult['signals']
   mrSignals?: SPCComputationResult['mrSignals']
@@ -89,6 +140,7 @@ interface CapabilityPanelProps {
 
 export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [overrideSuppression, setOverrideSuppression] = useState(false)
 
   if (!spc?.capability) return null
 
@@ -114,11 +166,15 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
     empiricalP00135,
     empiricalP50,
     empiricalP99865,
+    isStable,
+    instabilityReason,
   } = spc.capability
   const hasNoSpecification = spec_type === 'unspecified'
   const isUnilateral = spec_type === 'unilateral_upper' || spec_type === 'unilateral_lower'
   const cpkTier = getTier(cpk)
   const usesNonParametricCapability = capabilityMethod === 'non_parametric'
+  const suppressCapability =
+    STABILITY_GUARD_ENABLED && isStable === false && !overrideSuppression && !hasNoSpecification
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -149,13 +205,20 @@ export default function CapabilityPanel({ spc }: CapabilityPanelProps) {
         <p style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: 'var(--cds-text-secondary)', margin: 0 }}>{normality.warning}</p>
       )}
 
-      {/* Headline metric always visible */}
-      <IndustrialCapabilityPanel
-        cp={isUnilateral ? null : cp}
-        cpk={cpk}
-        pp={isUnilateral ? null : pp}
-        ppk={ppk}
-      />
+      {/* Headline metric — suppressed when the process is not in statistical control. */}
+      {suppressCapability ? (
+        <SuppressedCapabilityCard
+          reason={instabilityReason ?? 'Process not in statistical control.'}
+          onOverride={() => setOverrideSuppression(true)}
+        />
+      ) : (
+        <IndustrialCapabilityPanel
+          cp={isUnilateral ? null : cp}
+          cpk={cpk}
+          pp={isUnilateral ? null : pp}
+          ppk={ppk}
+        />
+      )}
 
       {/* Progressive disclosure for secondary stats */}
       <div style={{ borderTop: '1px solid var(--cds-border-subtle-01)', paddingTop: '0.5rem' }}>

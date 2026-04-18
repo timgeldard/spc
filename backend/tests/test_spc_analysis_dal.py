@@ -126,3 +126,55 @@ def test_fetch_scorecard_marks_out_of_spec_mean_distinctly(monkeypatch):
 
     assert rows[0]["ppk"] < 0
     assert rows[0]["capability_status"] == "out_of_spec_mean"
+
+
+def _stable_row(ooc_batches: int) -> dict:
+    return {
+        "mic_id": "MIC-STAB",
+        "mic_name": "Temperature",
+        "batch_count": 10,
+        "sample_count": 30,
+        "mean_value": 50.0,
+        "stddev_overall": 1.0,
+        "min_value": 47.0,
+        "max_value": 53.0,
+        "nominal_target": 50.0,
+        "lsl": 45.0,
+        "usl": 55.0,
+        "ooc_batches": ooc_batches,
+        "accepted_batches": 10 - ooc_batches,
+        "ooc_rate": ooc_batches / 10.0,
+        "sigma_within": 1.0,
+        "pp": 1.67,
+        "ppk": 1.67,
+        "cp": 1.67,
+        "cpk": 1.67,
+        "z_score": 5.0,
+        "dpmo": 233,
+        "distinct_spec_count": 1,
+        "performance_capability_method": "parametric",
+        "mean_out_of_spec_flag": 0,
+    }
+
+
+def test_fetch_scorecard_marks_stable_when_no_ooc_batches(monkeypatch):
+    async def fake_run_sql_async(_token, _query, _params=None):
+        return [_stable_row(ooc_batches=0)]
+
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    rows = asyncio.run(spc_analysis_dal.fetch_scorecard("token", "MAT-1", None, None, None))
+
+    assert rows[0]["is_stable"] is True
+    assert rows[0]["stability_basis"] == "ooc_batches_rule1_proxy"
+
+
+def test_fetch_scorecard_marks_unstable_when_any_ooc_batch(monkeypatch):
+    async def fake_run_sql_async(_token, _query, _params=None):
+        return [_stable_row(ooc_batches=1)]
+
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    rows = asyncio.run(spc_analysis_dal.fetch_scorecard("token", "MAT-1", None, None, None))
+
+    # One OOC batch is a WECO rule-1 violation — capability should be flagged.
+    assert rows[0]["is_stable"] is False
+    assert rows[0]["stability_basis"] == "ooc_batches_rule1_proxy"

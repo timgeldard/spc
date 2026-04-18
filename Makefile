@@ -36,9 +36,10 @@ CORRELATION_SOURCE_MV_MIGRATION ?= $(MIGRATIONS_DIR)/016_create_spc_correlation_
 MATERIAL_DIM_MV_MIGRATION ?= $(MIGRATIONS_DIR)/017_create_spc_material_dim_mv.sql
 PLANT_MATERIAL_DIM_MV_MIGRATION ?= $(MIGRATIONS_DIR)/018_create_spc_plant_material_dim_mv.sql
 LOCKED_LIMITS_UNIFIED_KEY_MIGRATION ?= $(MIGRATIONS_DIR)/014_add_unified_mic_key_to_locked_limits.sql
+MIC_CHART_CONFIG_MIGRATION ?= $(MIGRATIONS_DIR)/019_create_spc_mic_chart_config.sql
 GENIE_METADATA ?= true
 
-.PHONY: apply-migration build check-env check-metric-view-support deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions setup-metric-views setup-unified-mic-views setup-locked-limits-unified-key
+.PHONY: apply-migration build check-env check-metric-view-support deploy render-app-config setup-locked-limits setup-exclusions setup-query-audit setup-operation-id-locked-limits setup-operation-id-exclusions setup-metric-views setup-unified-mic-views setup-locked-limits-unified-key setup-mic-chart-config
 
 check-env:
 	@databricks current-user me --profile $(PROFILE) -o json > /dev/null 2>&1 || \
@@ -66,6 +67,7 @@ deploy: check-env build render-app-config
 	$(MAKE) setup-locked-limits-unified-key PROFILE=$(PROFILE)
 	$(MAKE) setup-metric-views PROFILE=$(PROFILE)
 	$(MAKE) setup-unified-mic-views PROFILE=$(PROFILE)
+	$(MAKE) setup-mic-chart-config PROFILE=$(PROFILE)
 
 apply-migration: check-env
 	@echo "Applying $(NAME) migration from $(FILE)..."
@@ -125,6 +127,9 @@ setup-unified-mic-views:
 
 setup-locked-limits-unified-key:
 	@$(MAKE) apply-migration NAME=spc_locked_limits_unified_key FILE=$(LOCKED_LIMITS_UNIFIED_KEY_MIGRATION) PROFILE=$(PROFILE)
+
+setup-mic-chart-config:
+	@$(MAKE) apply-migration NAME=spc_mic_chart_config FILE=$(MIC_CHART_CONFIG_MIGRATION) PROFILE=$(PROFILE)
 
 setup-metric-views: check-metric-view-support
 	@[ "$(GENIE_METADATA)" = "true" ] || \

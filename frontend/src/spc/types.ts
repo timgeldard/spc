@@ -40,6 +40,10 @@ export interface SpecDriftWarning {
   total_batches: number
   signature_set: string[]
   message: string
+  // Optional engineering-change-order references for each spec regime.
+  // Populated once upstream gold view exposes a spec_change_reference column
+  // (see docs/DATA_CONTRACT.md Phase 2.3 extension procedure). Null today.
+  change_references?: string[] | null
 }
 
 export interface ValidateMaterialResult {
@@ -147,6 +151,8 @@ export interface CapabilityMetrics {
   ppkUpper95?: number | null
   dpmo_convention?: string | null
   hasMixedSpec?: boolean
+  isStable?: boolean
+  instabilityReason?: string | null
 }
 
 export interface CapabilityResult extends ControlLimits, CapabilityMetrics {
@@ -194,6 +200,14 @@ export interface SPCSignal {
   indices: number[]
   description?: string
   chart?: string
+}
+
+export interface AutocorrelationResult {
+  rho: number
+  n: number
+  suspected: boolean
+  threshold: number
+  basis: 'values' | 'subgroup_means'
 }
 
 export interface AutoCleanPhaseIIterationLog {
@@ -376,6 +390,7 @@ export interface SPCComputationResult {
   cusum?: CUSUMResult | null
   subgroups?: XbarSubgroup[] | null
   normality?: NormalityResult | null
+  autocorrelation?: AutocorrelationResult | null
   [key: string]: unknown
 }
 
@@ -404,6 +419,8 @@ export interface ScorecardRow {
   dpmo?: number | null
   ooc_rate?: number | null
   capability_status?: 'excellent' | 'good' | 'marginal' | 'poor' | 'grey' | 'out_of_spec_mean' | string
+  is_stable?: boolean
+  stability_basis?: string | null
 }
 
 export interface ExportPayload {

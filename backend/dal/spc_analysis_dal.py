@@ -34,6 +34,8 @@ class _ScorecardRow(TypedDict, total=False):
     capability_status: str
     ppk: float | None
     ooc_rate: float | None
+    is_stable: bool
+    stability_basis: str
 
 
 def _coerce_float(value: object) -> Optional[float]:
@@ -353,6 +355,15 @@ async def fetch_scorecard(
         mean_out_of_spec = _coerce_int(typed_row.get("mean_out_of_spec_flag")) == 1
         typed_row["capability_status"] = _scorecard_status(typed_row.get("ppk"), mean_out_of_spec=mean_out_of_spec)
         typed_row["ooc_rate"] = round(typed_row["ooc_rate"], 4) if typed_row["ooc_rate"] is not None else None
+
+        # Stability-before-capability guard. The metric view does not run full
+        # WECO/Nelson in SQL, so we use ooc_batches > 0 (i.e. at least one
+        # point beyond limits — WECO rule 1) as a conservative proxy for
+        # "not in statistical control". Per AIAG SPC §V, capability indices
+        # on an unstable process are unreliable; callers should render "—"
+        # rather than the numeric value when is_stable is false.
+        typed_row["is_stable"] = typed_row.get("ooc_batches", 0) == 0
+        typed_row["stability_basis"] = "ooc_batches_rule1_proxy"
 
     rows.sort(key=lambda row: (row.get("ppk") is None, row.get("ppk") or 0))
     return rows

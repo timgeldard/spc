@@ -11,6 +11,7 @@
 import { getConstants } from './spcConstants'
 import type {
   AutoCleanPhaseIResult,
+  AutocorrelationResult,
   CapabilityResult,
   CUSUMResult,
   ChartDataPoint,
@@ -31,6 +32,35 @@ import type {
   XbarSubgroup,
   XbarSubgroupStat,
 } from './types'
+
+export const AUTOCORRELATION_THRESHOLD = 0.5
+const AUTOCORRELATION_MIN_N = 10
+
+// Capability indices are only meaningful on a stable process (AIAG SPC Manual,
+// 4th Ed., §V). If the control chart shows any WECO/Nelson signal on either
+// the primary series or its dispersion chart, we flag the capability result as
+// unstable so downstream UI can suppress Cpk/Ppk rather than report a number
+// a QM engineer would justifiably distrust.
+function applyStability(
+  capability: CapabilityResult,
+  signals: SPCSignal[] | undefined,
+  mrSignals: SPCSignal[] | undefined,
+): CapabilityResult {
+  const primaryCount = signals?.length ?? 0
+  const dispersionCount = mrSignals?.length ?? 0
+  const isStable = primaryCount === 0 && dispersionCount === 0
+  if (isStable) {
+    return { ...capability, isStable: true, instabilityReason: null }
+  }
+  const parts: string[] = []
+  if (primaryCount > 0) parts.push(`${primaryCount} primary signal${primaryCount === 1 ? '' : 's'}`)
+  if (dispersionCount > 0) parts.push(`${dispersionCount} dispersion signal${dispersionCount === 1 ? '' : 's'}`)
+  return {
+    ...capability,
+    isStable: false,
+    instabilityReason: `Process not in statistical control: ${parts.join(' and ')}.`,
+  }
+}
 
 interface Limits {
   cl: number
@@ -105,6 +135,38 @@ export function stddevSample(values: number[] | null | undefined): number | null
   if (m === null || !values || values.length < 2) return null
   const variance = values.reduce((s, v) => s + (v - m) ** 2, 0) / (values.length - 1)
   return Math.sqrt(variance)
+}
+
+// Lag-1 autocorrelation of an ordered series.
+// Shewhart I-MR and Xbar charts assume the plotted series is independent;
+// |rho| > 0.5 suggests common-cause variation is dominated by drift or
+// process dynamics and that EWMA / time-series models may be more appropriate.
+// Returns null when the series is too short (<10) or has zero variance.
+export function computeLag1ACF(
+  values: number[] | null | undefined,
+  basis: AutocorrelationResult['basis'] = 'values',
+  threshold: number = AUTOCORRELATION_THRESHOLD,
+): AutocorrelationResult | null {
+  if (!values || values.length < AUTOCORRELATION_MIN_N) return null
+  const n = values.length
+  const m = values.reduce((s, v) => s + v, 0) / n
+  let num = 0
+  let den = 0
+  for (let i = 0; i < n; i++) {
+    den += (values[i] - m) ** 2
+  }
+  if (den === 0) return null
+  for (let i = 0; i < n - 1; i++) {
+    num += (values[i] - m) * (values[i + 1] - m)
+  }
+  const rho = num / den
+  return {
+    rho: round6(rho),
+    n,
+    suspected: Math.abs(rho) > threshold,
+    threshold,
+    basis,
+  }
 }
 
 // Mean Square Successive Difference sigma estimator.
@@ -1084,6 +1146,9 @@ export function computeAll(
     if (chartType === 'ewma') {
       const ewma = computeEWMA(sorted, imrBaseline.xBar, imrBaseline.sigmaWithin, options.ewmaLambda, options.ewmaL)
       if (!ewma) return computeAll(points, 'imr', ruleSet, options)
+      const ewmaSignals: SPCSignal[] = ewma.points
+        .filter((point) => point.ewma > point.ucl || point.ewma < point.lcl)
+        .map((point) => ({ rule: 1, indices: [point.index], description: 'EWMA point beyond dynamic control limit' }))
       return {
         chartType: 'ewma',
         ruleSet,
@@ -1095,10 +1160,8 @@ export function computeAll(
         ewma,
         cusum: null,
         subgroups: null,
-        capability,
-        signals: ewma.points
-          .filter((point) => point.ewma > point.ucl || point.ewma < point.lcl)
-          .map((point) => ({ rule: 1, indices: [point.index], description: 'EWMA point beyond dynamic control limit' })),
+        capability: applyStability(capability, ewmaSignals, []),
+        signals: ewmaSignals,
         mrSignals: [],
         nominal,
         tolerance,
@@ -1109,6 +1172,16 @@ export function computeAll(
 
     const cusum = computeCUSUM(sorted, imrBaseline.xBar, imrBaseline.sigmaWithin, options.cusumK, options.cusumH)
     if (!cusum) return computeAll(points, 'imr', ruleSet, options)
+    const cusumSignals: SPCSignal[] = cusum.points.flatMap((point) => {
+      const hits: SPCSignal[] = []
+      if (point.cPlus > cusum.decisionInterval) {
+        hits.push({ rule: 1, indices: [point.index], description: 'CUSUM positive decision interval exceeded' })
+      }
+      if (point.cMinus > cusum.decisionInterval) {
+        hits.push({ rule: 1, indices: [point.index], description: 'CUSUM negative decision interval exceeded' })
+      }
+      return hits
+    })
     return {
       chartType: 'cusum',
       ruleSet,
@@ -1120,18 +1193,8 @@ export function computeAll(
       ewma: null,
       cusum,
       subgroups: null,
-      capability,
-      signals: cusum.points
-        .flatMap((point) => {
-          const hits: SPCSignal[] = []
-          if (point.cPlus > cusum.decisionInterval) {
-            hits.push({ rule: 1, indices: [point.index], description: 'CUSUM positive decision interval exceeded' })
-          }
-          if (point.cMinus > cusum.decisionInterval) {
-            hits.push({ rule: 1, indices: [point.index], description: 'CUSUM negative decision interval exceeded' })
-          }
-          return hits
-        }),
+      capability: applyStability(capability, cusumSignals, []),
+      signals: cusumSignals,
       mrSignals: [],
       nominal,
       tolerance,
@@ -1169,6 +1232,8 @@ export function computeAll(
         sigma2: (xbarR.rBar * 2) / 3,
       }
 
+      const xbarRSignals = detectRules(xbarValues, xbarLimits, ruleSet)
+      const xbarRMrSignals = detectRules(xbarR.subgroupStats.map((s) => s.range), rLimits, ruleSet)
       return {
         chartType: 'xbar_r',
         ruleSet,
@@ -1180,13 +1245,14 @@ export function computeAll(
         ewma: null,
         cusum: null,
         subgroups,
-        capability,
-        signals: detectRules(xbarValues, xbarLimits, ruleSet),
-        mrSignals: detectRules(xbarR.subgroupStats.map((s) => s.range), rLimits, ruleSet),
+        capability: applyStability(capability, xbarRSignals, xbarRMrSignals),
+        signals: xbarRSignals,
+        mrSignals: xbarRMrSignals,
         nominal,
         tolerance,
         specConfig,
         normality: options.normality ?? null,
+        autocorrelation: computeLag1ACF(xbarValues, 'subgroup_means'),
       }
     }
 
@@ -1213,6 +1279,9 @@ export function computeAll(
       sigma2: (xbarS.sBar * 2) / 3,
     }
 
+    const xbarSValues = xbarS.subgroupStats.map((s) => s.xbar)
+    const xbarSSignals = detectRules(xbarSValues, xbarLimits, ruleSet)
+    const xbarSMrSignals = detectRules(xbarS.subgroupStats.map((s) => s.stddev ?? 0), sLimits, ruleSet)
     return {
       chartType: 'xbar_s',
       ruleSet,
@@ -1224,13 +1293,14 @@ export function computeAll(
       ewma: null,
       cusum: null,
       subgroups,
-      capability,
-      signals: detectRules(xbarS.subgroupStats.map((s) => s.xbar), xbarLimits, ruleSet),
-      mrSignals: detectRules(xbarS.subgroupStats.map((s) => s.stddev ?? 0), sLimits, ruleSet),
+      capability: applyStability(capability, xbarSSignals, xbarSMrSignals),
+      signals: xbarSSignals,
+      mrSignals: xbarSMrSignals,
       nominal,
       tolerance,
       specConfig,
       normality: options.normality ?? null,
+      autocorrelation: computeLag1ACF(xbarSValues, 'subgroup_means'),
     }
   }
 
@@ -1273,6 +1343,8 @@ export function computeAll(
     sigma2: (imr.mrBar * 2) / 3,
   }
 
+  const imrSignals = detectRules(values, xLimits, ruleSet)
+  const imrMrSignals = detectRules(imr.movingRanges, mrLimits, ruleSet)
   return {
     chartType: 'imr',
     ruleSet,
@@ -1284,13 +1356,14 @@ export function computeAll(
     ewma: null,
     cusum: null,
     subgroups: null,
-    capability,
-    signals: detectRules(values, xLimits, ruleSet),
-    mrSignals: detectRules(imr.movingRanges, mrLimits, ruleSet),
+    capability: applyStability(capability, imrSignals, imrMrSignals),
+    signals: imrSignals,
+    mrSignals: imrMrSignals,
     nominal,
     tolerance,
     specConfig,
     normality: options.normality ?? null,
+    autocorrelation: computeLag1ACF(values, 'values'),
   }
 }
 

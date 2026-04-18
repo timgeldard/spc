@@ -671,11 +671,18 @@ async def fetch_spec_drift_summary(
     sig_set = row.get("signature_set") or []
     if isinstance(sig_set, str):
         sig_set = [sig_set]
+    # Forward-compatible placeholder for upstream ECO references (Phase 2.3).
+    # The upstream gold view does not yet expose a `spec_change_reference`
+    # column tying a spec change to an engineering change order (ECO); when
+    # it does, fetch it via a separate COLLECT_SET query joined on
+    # spec_signature and populate `change_references` here. See
+    # docs/DATA_CONTRACT.md for the extension procedure.
     return {
         "detected": distinct > 1,
         "distinct_signatures": distinct,
         "total_batches": total,
         "signature_set": list(sig_set),
+        "change_references": None,
     }
 
 
@@ -897,3 +904,140 @@ async def delete_locked_limits(
     """
     await run_sql_async(token, query, params)
     return {"deleted": True}
+
+
+async def fetch_data_quality_summary(
+    token: str,
+    material_id: str,
+    mic_id: str,
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    operation_id: Optional[str] = None,
+) -> dict:
+    """Single-query data-quality summary for the selected MIC/material/plant.
+
+    Returns counts, missing-value rate, 3-sigma outlier count, and time-gap
+    statistics between consecutive batches' posting dates. Surfaced by
+    /api/spc/data-quality and rendered in the Data Quality panel on
+    ControlChartsView.
+
+    One aggregate query; window functions are used for outlier detection
+    (gate based on mean/stddev over the same filtered population) and
+    time-gap percentiles. No per-row fetch.
+    """
+    params = [
+        sql_param("material_id", material_id),
+        sql_param("mic_id", mic_id),
+    ]
+    conditions = [
+        "r.MATERIAL_ID = :material_id",
+        "r.MIC_ID = :mic_id",
+    ]
+    if operation_id:
+        conditions.append("r.OPERATION_ID = :operation_id")
+        params.append(sql_param("operation_id", operation_id))
+    if date_from:
+        conditions.append("mb.POSTING_DATE >= :date_from")
+        params.append(sql_param("date_from", date_from))
+    if date_to:
+        conditions.append("mb.POSTING_DATE <= :date_to")
+        params.append(sql_param("date_to", date_to))
+    if plant_id:
+        conditions.append("mb.PLANT_ID = :plant_id")
+        params.append(sql_param("plant_id", plant_id))
+
+    where_clause = " AND ".join(conditions)
+
+    query = f"""
+        WITH filtered AS (
+            SELECT
+                r.BATCH_ID                                     AS batch_id,
+                r.QUANTITATIVE_RESULT                          AS raw_value,
+                TRY_CAST(r.QUANTITATIVE_RESULT AS DOUBLE)      AS value,
+                mb.POSTING_DATE                                AS posting_date
+            FROM {tbl('gold_batch_quality_result_v')} r
+            JOIN (
+                SELECT BATCH_ID, MATERIAL_ID, MIN(POSTING_DATE) AS POSTING_DATE, MAX(PLANT_ID) AS PLANT_ID
+                FROM {tbl('gold_batch_mass_balance_v')}
+                WHERE MOVEMENT_CATEGORY = 'Production'
+                GROUP BY BATCH_ID, MATERIAL_ID
+            ) mb ON mb.BATCH_ID = r.BATCH_ID AND mb.MATERIAL_ID = r.MATERIAL_ID
+            WHERE {where_clause}
+        ),
+        stats AS (
+            SELECT
+                AVG(value)                                     AS mean_value,
+                STDDEV_SAMP(value)                             AS stddev_value
+            FROM filtered
+            WHERE value IS NOT NULL
+        ),
+        per_batch AS (
+            SELECT batch_id, MIN(posting_date) AS batch_date
+            FROM filtered
+            GROUP BY batch_id
+        ),
+        gaps AS (
+            SELECT
+                DATEDIFF(
+                    batch_date,
+                    LAG(batch_date) OVER (ORDER BY batch_date)
+                ) AS gap_days
+            FROM per_batch
+        )
+        SELECT
+            (SELECT COUNT(*) FROM filtered)                                                          AS n_samples,
+            (SELECT COUNT(DISTINCT batch_id) FROM filtered)                                          AS n_batches,
+            (SELECT COUNT(*) FROM filtered WHERE raw_value IS NULL OR raw_value = '')                AS n_missing_values,
+            (SELECT COUNT(*) FROM filtered WHERE value IS NULL AND raw_value IS NOT NULL AND raw_value != '') AS n_unparseable_values,
+            (SELECT mean_value FROM stats)                                                           AS mean_value,
+            (SELECT stddev_value FROM stats)                                                         AS stddev_value,
+            (
+                SELECT COUNT(*)
+                FROM filtered, stats
+                WHERE filtered.value IS NOT NULL
+                  AND stats.stddev_value IS NOT NULL
+                  AND stats.stddev_value > 0
+                  AND ABS(filtered.value - stats.mean_value) > 3 * stats.stddev_value
+            )                                                                                        AS n_outliers_3sigma,
+            (SELECT MIN(batch_date) FROM per_batch)                                                  AS first_batch_date,
+            (SELECT MAX(batch_date) FROM per_batch)                                                  AS last_batch_date,
+            (SELECT PERCENTILE(gap_days, 0.5) FROM gaps WHERE gap_days IS NOT NULL)                  AS median_gap_days,
+            (SELECT PERCENTILE(gap_days, 0.95) FROM gaps WHERE gap_days IS NOT NULL)                 AS p95_gap_days,
+            (SELECT MAX(gap_days) FROM gaps WHERE gap_days IS NOT NULL)                              AS max_gap_days
+    """
+    rows = await run_sql_async(token, query, params)
+    row = rows[0] if rows else {}
+
+    def _num(val, default=0):
+        if val is None:
+            return default
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _int(val, default=0):
+        try:
+            return int(_num(val, default))
+        except (TypeError, ValueError):
+            return default
+
+    n_samples = _int(row.get("n_samples"))
+    n_missing = _int(row.get("n_missing_values"))
+    denom = max(n_samples, 1)
+    return {
+        "n_samples": n_samples,
+        "n_batches": _int(row.get("n_batches")),
+        "n_missing_values": n_missing,
+        "n_unparseable_values": _int(row.get("n_unparseable_values")),
+        "pct_missing": round(n_missing / denom, 4),
+        "n_outliers_3sigma": _int(row.get("n_outliers_3sigma")),
+        "mean_value": None if row.get("mean_value") is None else round(_num(row.get("mean_value")), 6),
+        "stddev_value": None if row.get("stddev_value") is None else round(_num(row.get("stddev_value")), 6),
+        "first_batch_date": row.get("first_batch_date"),
+        "last_batch_date": row.get("last_batch_date"),
+        "median_gap_days": None if row.get("median_gap_days") is None else round(_num(row.get("median_gap_days")), 2),
+        "p95_gap_days": None if row.get("p95_gap_days") is None else round(_num(row.get("p95_gap_days")), 2),
+        "max_gap_days": None if row.get("max_gap_days") is None else round(_num(row.get("max_gap_days")), 2),
+    }

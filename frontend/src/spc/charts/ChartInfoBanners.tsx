@@ -1,5 +1,5 @@
 import { InlineNotification } from '~/lib/carbon-feedback'
-import type { ExclusionAuditSnapshot, SpecDriftWarning } from '../types'
+import type { AutocorrelationResult, ExclusionAuditSnapshot, SpecDriftWarning } from '../types'
 
 interface ChartInfoBannersProps {
   lockedLimitsError?: string | null
@@ -9,6 +9,12 @@ interface ChartInfoBannersProps {
   dataTruncated?: boolean
   exclusionAudit?: ExclusionAuditSnapshot | null
   specDrift?: SpecDriftWarning | null
+  autocorrelation?: AutocorrelationResult | null
+}
+
+function formatAutocorrelationSubtitle(ac: AutocorrelationResult): string {
+  const basisLabel = ac.basis === 'subgroup_means' ? 'subgroup means' : 'individual values'
+  return `Lag-1 autocorrelation on ${basisLabel} is ${ac.rho.toFixed(2)} (n=${ac.n}). Shewhart charts assume independence; consider EWMA, CUSUM, or a time-series model before acting on signals.`
 }
 
 export default function ChartInfoBanners({
@@ -19,14 +25,28 @@ export default function ChartInfoBanners({
   dataTruncated = false,
   exclusionAudit,
   specDrift,
+  autocorrelation,
 }: ChartInfoBannersProps) {
   return (
     <>
+      {autocorrelation?.suspected && (
+        <InlineNotification
+          kind="warning"
+          title="Autocorrelation suspected."
+          subtitle={formatAutocorrelationSubtitle(autocorrelation)}
+          hideCloseButton
+          lowContrast
+        />
+      )}
       {specDrift?.detected && (
         <InlineNotification
           kind="warning"
           title="Specification drift detected."
-          subtitle={specDrift.message}
+          subtitle={
+            specDrift.change_references && specDrift.change_references.length > 0
+              ? `${specDrift.message} Change orders: ${specDrift.change_references.join(', ')}.`
+              : specDrift.message
+          }
           hideCloseButton
           lowContrast
         />

@@ -6,7 +6,11 @@ const assetsDir = path.resolve(process.cwd(), 'dist/assets')
 const budgets = [
   { label: 'SPC shell entry', pattern: /^SPCPage-.*\.js$/, maxKb: 25, required: true },
   { label: 'Genie view wrapper', pattern: /^GenieView-.*\.js$/, maxKb: 10, required: true },
-  { label: 'Control charts view', pattern: /^ControlChartsView-.*\.js$/, maxKb: 80, required: true },
+  // ControlChartsView carries the Shewhart/WECO/Nelson/capability/EWMA/CUSUM math plus
+  // stability guard + autocorrelation + data-quality wiring. Budget was 80KB pre-Phase 1;
+  // raised to 95KB to accommodate the Phase 1/4.3 additions with headroom.
+  { label: 'Control charts view', pattern: /^ControlChartsView-.*\.js$/, maxKb: 95, required: true },
+  { label: 'Data quality panel', pattern: /^DataQualityPanel-.*\.js$/, maxKb: 10, required: false },
   { label: 'Carbon layout runtime', pattern: /^carbon-layout-react-.*\.js$/, maxKb: 30, required: true },
   { label: 'Carbon date runtime', pattern: /^carbon-date-.*\.js$/, maxKb: 250, required: true },
   { label: 'Carbon flow icons', pattern: /^carbon-icons-flow-.*\.js$/, maxKb: 80, required: false },

@@ -88,8 +88,16 @@ function fmt(value: number | null | undefined, digits: number): string {
 
 // ── Carbon Tag cell renderers ──────────────────────────────────────────────
 
-// Cpk / Ppk / Pp — threshold-coloured Tag with numeric label
-function CapabilityTag({ value }: { value: number | null | undefined }) {
+// Env flag mirrors the CapabilityPanel guard so ops can disable both at once.
+const STABILITY_GUARD_ENABLED = import.meta.env?.VITE_DISABLE_STABILITY_GUARD !== 'true'
+
+// Cpk / Ppk / Pp — threshold-coloured Tag with numeric label.
+// When stability guard fires (is_stable === false), the numeric value is
+// suppressed and replaced with an "Unstable" chip per AIAG SPC §V.
+function CapabilityTag({ value, unstable = false }: { value: number | null | undefined; unstable?: boolean }) {
+  if (unstable && STABILITY_GUARD_ENABLED) {
+    return <Tag type="warm-gray" size="sm" title="Process not in statistical control">Unstable</Tag>
+  }
   if (value == null) return <span aria-label="No data">—</span>
   const { type, title } = value >= 1.67
     ? { type: 'green'     as const, title: 'Excellent' }
@@ -120,7 +128,10 @@ const STATUS_TAG: Record<string, { type: 'green' | 'teal' | 'warm-gray' | 'red' 
   grey:             { type: 'gray',      label: 'No Data'   },
 }
 
-function StatusTag({ value }: { value: string | null | undefined }) {
+function StatusTag({ value, unstable = false }: { value: string | null | undefined; unstable?: boolean }) {
+  if (unstable && STABILITY_GUARD_ENABLED) {
+    return <Tag type="warm-gray" size="sm" title="Process not in statistical control">Unstable</Tag>
+  }
   const cfg = STATUS_TAG[value ?? 'grey'] ?? STATUS_TAG.grey
   return <Tag type={cfg.type} size="sm">{cfg.label}</Tag>
 }
@@ -247,11 +258,11 @@ export default function ScorecardTable({ rows }: ScorecardTableProps) {
       case 'cpk':
       case 'ppk':
       case 'pp':
-        return <CapabilityTag value={val as number | null} />
+        return <CapabilityTag value={val as number | null} unstable={original?.is_stable === false} />
       case 'ooc_rate':
         return <OOCTag value={val as number | null} />
       case 'capability_status':
-        return <StatusTag value={val as string | null} />
+        return <StatusTag value={val as string | null} unstable={original?.is_stable === false} />
       case 'mean_value':
       case 'stddev_overall':
       case 'nominal_target':

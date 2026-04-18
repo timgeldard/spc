@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -24,9 +26,21 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Enforce bundle budgets
+        working-directory: frontend
+        run: npm run bundle:check
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,8 +52,23 @@ jobs:
         working-directory: backend
         run: pip install -r requirements.txt
 
-      - name: Run backend tests
-        run: pytest backend/tests -v
+      - name: Run backend tests with coverage
+        env:
+          COVERAGE_FAIL_UNDER: ${{ vars.COVERAGE_FAIL_UNDER || '0' }}
+        run: |
+          pytest backend/tests -v \
+            --cov=backend \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under="${COVERAGE_FAIL_UNDER}"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
 
       - name: Detect Databricks migration prerequisites
         id: db-env

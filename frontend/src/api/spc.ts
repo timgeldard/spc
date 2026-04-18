@@ -51,6 +51,46 @@ export async function fetchCharacteristics(
   }
 }
 
+export interface DataQualitySummary {
+  n_samples: number
+  n_batches: number
+  n_missing_values: number
+  n_unparseable_values: number
+  pct_missing: number
+  n_outliers_3sigma: number
+  mean_value: number | null
+  stddev_value: number | null
+  first_batch_date: string | null
+  last_batch_date: string | null
+  median_gap_days: number | null
+  p95_gap_days: number | null
+  max_gap_days: number | null
+}
+
+export async function fetchDataQuality(
+  materialId: string,
+  micId: string,
+  plantId: string | null,
+  dateFrom: string | null,
+  dateTo: string | null,
+  operationId: string | null,
+  signal?: AbortSignal,
+): Promise<DataQualitySummary> {
+  return fetchJson<DataQualitySummary>('/api/spc/data-quality', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({
+      material_id: materialId,
+      mic_id: micId,
+      plant_id: plantId ?? null,
+      date_from: dateFrom ?? null,
+      date_to: dateTo ?? null,
+      operation_id: operationId ?? null,
+    }),
+  })
+}
+
 export async function fetchScorecard(
   materialId: string,
   dateFrom: string | null,

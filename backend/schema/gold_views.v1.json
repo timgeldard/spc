@@ -1,0 +1,43 @@
+{
+  "version": "1",
+  "generated_at": "2026-04-18",
+  "description": "Frozen schema contract for the gold views the SPC app depends on. Runtime assertion on /api/ready compares this to live information_schema and fails the readiness probe on any diff. See docs/DATA_CONTRACT.md for rationale and change procedure.",
+  "views": {
+    "gold_batch_quality_result_v": {
+      "description": "Per-sample inspection result from SAP QM, denormalized to the batch level. Primary series for all variable/attribute control charts.",
+      "required_columns": {
+        "MATERIAL_ID": { "type": "string", "nullable": false },
+        "MIC_ID": { "type": "string", "nullable": false },
+        "MIC_NAME": { "type": "string", "nullable": true },
+        "INSPECTION_METHOD": { "type": "string", "nullable": true },
+        "BATCH_ID": { "type": "string", "nullable": false },
+        "OPERATION_ID": { "type": "string", "nullable": true },
+        "INSPECTION_LOT_ID": { "type": "string", "nullable": true },
+        "SAMPLE_ID": { "type": "string", "nullable": true },
+        "QUANTITATIVE_RESULT": { "type": "string", "nullable": true, "note": "Cast to DOUBLE in DAL; NULL for attribute characteristics" },
+        "QUALITATIVE_RESULT": { "type": "string", "nullable": true, "note": "Present for attribute characteristics; may be empty string" },
+        "TARGET_VALUE": { "type": "string", "nullable": true, "note": "Cast to DOUBLE as nominal; varies by MIC" },
+        "TOLERANCE": { "type": "string", "nullable": true, "note": "Either symmetric ('±0.5') or asymmetric ('0.3...0.7') — parsed by LOCATE('...')" },
+        "INSPECTION_RESULT_VALUATION": { "type": "string", "nullable": true }
+      }
+    },
+    "gold_batch_mass_balance_v": {
+      "description": "Plant-level batch provenance. Used to filter quality results to a specific producing plant and to order chart points by posting date.",
+      "required_columns": {
+        "MATERIAL_ID": { "type": "string", "nullable": false },
+        "BATCH_ID": { "type": "string", "nullable": false },
+        "PLANT_ID": { "type": "string", "nullable": false },
+        "POSTING_DATE": { "type": "string", "nullable": false, "note": "Either DATE or TIMESTAMP — DAL tolerates both" },
+        "MOVEMENT_CATEGORY": { "type": "string", "nullable": false, "note": "DAL filters to 'Production'" }
+      }
+    },
+    "gold_material": {
+      "description": "Material master data. Used for display name only; not on any hot path.",
+      "required_columns": {
+        "MATERIAL_ID": { "type": "string", "nullable": false },
+        "MATERIAL_NAME": { "type": "string", "nullable": true },
+        "LANGUAGE_ID": { "type": "string", "nullable": true, "note": "DAL filters to 'E'" }
+      }
+    }
+  }
+}

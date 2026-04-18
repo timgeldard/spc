@@ -10,6 +10,7 @@ import {
   groupIntoSubgroups,
   computeCapability,
   computeAll,
+  computeLag1ACF,
   detectWECORules,
   detectNelsonRules,
 } from '../calculations'
@@ -691,5 +692,210 @@ describe('computeGRR_ANOVA', () => {
     expect(result.interactionSignificant).toBe(false)
     expect(result.model).toBe('reduced')
     expect(result.modelWarning).toMatch(/reduced additive model/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// computeLag1ACF
+// ---------------------------------------------------------------------------
+describe('computeLag1ACF', () => {
+  function generateAR1(n: number, phi: number, seed = 42): number[] {
+    // Deterministic pseudo-random (Mulberry32) so tests don't flake.
+    let state = seed
+    const rand = () => {
+      state = (state + 0x6D2B79F5) | 0
+      let t = state
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const values: number[] = []
+    let prev = 0
+    for (let i = 0; i < n; i++) {
+      const eps = (rand() - 0.5) * 2  // ~uniform(-1, 1)
+      const x = phi * prev + eps
+      values.push(x)
+      prev = x
+    }
+    return values
+  }
+
+  it('returns null for fewer than 10 samples', () => {
+    expect(computeLag1ACF([1, 2, 3, 4, 5, 6, 7, 8, 9])).toBeNull()
+  })
+
+  it('returns null for null or empty input', () => {
+    expect(computeLag1ACF(null)).toBeNull()
+    expect(computeLag1ACF(undefined)).toBeNull()
+    expect(computeLag1ACF([])).toBeNull()
+  })
+
+  it('returns null when variance is zero', () => {
+    expect(computeLag1ACF(new Array(20).fill(5))).toBeNull()
+  })
+
+  it('suspects autocorrelation on a strongly persistent AR(1) series (phi=0.8)', () => {
+    const ac = computeLag1ACF(generateAR1(200, 0.8), 'values')
+    expect(ac).not.toBeNull()
+    expect(ac!.rho).toBeGreaterThan(0.5)
+    expect(ac!.suspected).toBe(true)
+    expect(ac!.basis).toBe('values')
+    expect(ac!.threshold).toBe(0.5)
+    expect(ac!.n).toBe(200)
+  })
+
+  it('does not suspect autocorrelation on white noise', () => {
+    // Deterministic pseudo-random uniform series — independent by construction.
+    let state = 17
+    const rand = () => {
+      state = (state + 0x6D2B79F5) | 0
+      let t = state
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const whiteNoise = Array.from({ length: 500 }, () => rand() - 0.5)
+    const ac = computeLag1ACF(whiteNoise, 'values')
+    expect(ac).not.toBeNull()
+    expect(Math.abs(ac!.rho)).toBeLessThan(0.15)
+    expect(ac!.suspected).toBe(false)
+  })
+
+  it('reports the basis passed by caller', () => {
+    const ac = computeLag1ACF(generateAR1(50, 0.7), 'subgroup_means')
+    expect(ac?.basis).toBe('subgroup_means')
+  })
+
+  it('honors a custom threshold', () => {
+    const series = generateAR1(100, 0.3) // rho ~ 0.3
+    const lenient = computeLag1ACF(series, 'values', 0.5)
+    const strict = computeLag1ACF(series, 'values', 0.1)
+    expect(lenient?.suspected).toBe(false)
+    expect(strict?.suspected).toBe(true)
+  })
+})
+
+describe('computeAll autocorrelation wiring', () => {
+  it('surfaces autocorrelation.suspected on an AR(1) IMR series', () => {
+    let state = 99
+    const rand = () => {
+      state = (state + 0x6D2B79F5) | 0
+      let t = state
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    let prev = 0
+    const points = Array.from({ length: 80 }, (_, i) => {
+      const eps = (rand() - 0.5) * 2
+      prev = 0.85 * prev + eps
+      return {
+        batch_id: `B${i}`,
+        batch_seq: i,
+        sample_seq: 0,
+        batch_date: null,
+        value: 50 + prev,
+        usl: 60,
+        lsl: 40,
+        nominal: 50,
+        tolerance: 10,
+        plant_id: null,
+        stratify_value: null,
+        original_index: i,
+      }
+    })
+    const result = computeAll(points as any, 'imr', 'weco')
+    expect(result.autocorrelation).not.toBeNull()
+    expect(result.autocorrelation!.suspected).toBe(true)
+    expect(result.autocorrelation!.basis).toBe('values')
+  })
+
+  it('does not flag autocorrelation on a near-independent IMR series', () => {
+    let state = 123
+    const rand = () => {
+      state = (state + 0x6D2B79F5) | 0
+      let t = state
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const points = Array.from({ length: 80 }, (_, i) => ({
+      batch_id: `B${i}`,
+      batch_seq: i,
+      sample_seq: 0,
+      batch_date: null,
+      value: 50 + (rand() - 0.5) * 2,
+      usl: 60,
+      lsl: 40,
+      nominal: 50,
+      tolerance: 10,
+      plant_id: null,
+      stratify_value: null,
+      original_index: i,
+    }))
+    const result = computeAll(points as any, 'imr', 'weco')
+    expect(result.autocorrelation).not.toBeNull()
+    expect(result.autocorrelation!.suspected).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Stability-before-capability guard (wired via applyStability in computeAll)
+// ---------------------------------------------------------------------------
+describe('computeAll stability guard', () => {
+  function makePoint(i: number, value: number) {
+    return {
+      batch_id: `B${i}`,
+      batch_seq: i,
+      sample_seq: 0,
+      batch_date: null,
+      value,
+      usl: 60,
+      lsl: 40,
+      nominal: 50,
+      tolerance: 10,
+      plant_id: null,
+      stratify_value: null,
+      original_index: i,
+    }
+  }
+
+  it('marks capability stable when IMR series sits inside control limits', () => {
+    // Low-variance series centered on 50 — no WECO/Nelson rule should fire.
+    const points = Array.from({ length: 40 }, (_, i) =>
+      makePoint(i, 50 + (i % 2 === 0 ? 0.1 : -0.1)),
+    )
+    const result = computeAll(points as any, 'imr', 'weco')
+    expect(result.capability?.isStable).toBe(true)
+    expect(result.capability?.instabilityReason).toBeNull()
+    expect(result.signals?.length ?? 0).toBe(0)
+  })
+
+  it('marks capability unstable when a point is beyond control limits', () => {
+    const points = Array.from({ length: 40 }, (_, i) =>
+      makePoint(i, 50 + (i % 2 === 0 ? 0.1 : -0.1)),
+    )
+    // Inject a clear out-of-control point toward the end.
+    points[35].value = 80
+    const result = computeAll(points as any, 'imr', 'weco')
+    expect(result.capability?.isStable).toBe(false)
+    expect(result.capability?.instabilityReason).toMatch(/not in statistical control/i)
+    expect((result.signals?.length ?? 0) + (result.mrSignals?.length ?? 0)).toBeGreaterThan(0)
+  })
+
+  it('attributes instability to the right chart (primary vs dispersion)', () => {
+    // Stable mean, but alternating ±spikes create moving-range signals only.
+    const points = Array.from({ length: 40 }, (_, i) =>
+      makePoint(i, 50 + (i % 2 === 0 ? 0.1 : -0.1)),
+    )
+    points[20].value = 65
+    points[21].value = 50
+    const result = computeAll(points as any, 'imr', 'weco')
+    expect(result.capability?.isStable).toBe(false)
+    // At least one side should have fired
+    const primaryCount = result.signals?.length ?? 0
+    const dispersionCount = result.mrSignals?.length ?? 0
+    expect(primaryCount + dispersionCount).toBeGreaterThan(0)
+    expect(result.capability?.instabilityReason).toBeTruthy()
   })
 })

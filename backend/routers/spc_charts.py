@@ -10,6 +10,7 @@ from backend.dal.spc_charts_dal import (
     fetch_chart_data_page,
     fetch_chart_data_values,
     fetch_count_chart_data,
+    fetch_data_quality_summary,
     fetch_locked_limits,
     fetch_p_chart_data,
     fetch_spec_drift_summary,
@@ -20,6 +21,7 @@ from backend.routers.spc_common import handle_locked_limits_error, handle_sql_er
 from backend.schemas.spc_schemas import (
     ChartDataRequest,
     CountChartDataRequest,
+    DataQualityRequest,
     DeleteLockedLimitsRequest,
     GetLockedLimitsRequest,
     LockLimitsRequest,
@@ -105,6 +107,7 @@ async def spc_chart_data(
                     "distinct_signatures": n,
                     "total_batches": b,
                     "signature_set": drift_raw["signature_set"],
+                    "change_references": drift_raw.get("change_references"),
                     "message": (
                         f"Specification limits changed {n} time(s) across {b} batch(es) "
                         "in this date range. Control limits computed over the full range "
@@ -134,6 +137,37 @@ async def spc_chart_data(
             "normality": normality,
             "spec_drift": spec_drift,
         },
+        token,
+        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        request_path=request.url.path,
+    )
+
+
+@router.post("/data-quality")
+@limiter.limit("60/minute")
+async def spc_data_quality(
+    request: Request,
+    body: DataQualityRequest,
+    x_forwarded_access_token: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    token = resolve_token(x_forwarded_access_token, authorization)
+    check_warehouse_config()
+    try:
+        summary = await fetch_data_quality_summary(
+            token,
+            body.material_id,
+            body.mic_id,
+            body.plant_id,
+            body.date_from,
+            body.date_to,
+            operation_id=body.operation_id,
+        )
+    except Exception as exc:
+        handle_sql_error(exc)
+
+    return await attach_data_freshness(
+        summary,
         token,
         ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
         request_path=request.url.path,

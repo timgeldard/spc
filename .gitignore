@@ -9,6 +9,10 @@ venv/
 # Node
 frontend/node_modules/
 
+# Build artifacts — produced by `npm run build` at deploy time (Makefile: deploy → build).
+# Do NOT commit; run `git rm -r --cached frontend/dist/` once in a dedicated cleanup commit.
+frontend/dist/
+
 # Databricks / tooling state
 .databricks/
 .claude/

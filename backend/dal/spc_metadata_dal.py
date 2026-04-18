@@ -2,6 +2,54 @@ from typing import Optional
 
 from backend.utils.db import run_sql_async, sql_param, tbl
 
+# Valid chart types an override may pin a MIC to. Overrides outside this set
+# are ignored to keep a typo in the config table from crashing the chart.
+_VALID_CHART_TYPES = {"imr", "xbar_r", "xbar_s", "p_chart", "np_chart", "c_chart", "u_chart"}
+
+
+async def _fetch_mic_chart_overrides(
+    token: str,
+    material_id: str,
+    plant_id: Optional[str],
+) -> dict[str, str]:
+    """Return {mic_id: chart_type} for overrides that apply to this material/plant.
+
+    Precedence (most specific wins): (plant_id, material_id) > (NULL, material_id)
+    > (NULL, NULL). Selecting these three tiers in SQL and resolving in Python
+    keeps the query simple and auditable.
+    """
+    query = f"""
+        SELECT mic_id, chart_type, plant_id, material_id
+        FROM {tbl('spc_mic_chart_config')}
+        WHERE (material_id = :material_id OR material_id IS NULL)
+          AND (plant_id = :plant_id OR plant_id IS NULL)
+    """
+    params = [sql_param("material_id", material_id), sql_param("plant_id", plant_id)]
+    try:
+        rows = await run_sql_async(token, query, params)
+    except Exception:
+        # Config table not yet migrated — fall back to heuristic silently.
+        return {}
+
+    # Sort so more specific rows land last and overwrite less specific ones.
+    def specificity(row: dict) -> int:
+        score = 0
+        if row.get("material_id") is not None:
+            score += 2
+        if row.get("plant_id") is not None:
+            score += 1
+        return score
+
+    rows_sorted = sorted(rows, key=specificity)
+    overrides: dict[str, str] = {}
+    for row in rows_sorted:
+        mic_id = row.get("mic_id")
+        chart_type = row.get("chart_type")
+        if not mic_id or chart_type not in _VALID_CHART_TYPES:
+            continue
+        overrides[str(mic_id)] = str(chart_type)
+    return overrides
+
 
 async def fetch_plants(token: str, material_id: str) -> list[dict]:
     query = f"""
@@ -57,7 +105,8 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
     query = f"""
         SELECT
             MIC_ID                                                       AS mic_id,
-            OPERATION_ID                                                 AS operation_id,
+            CASE WHEN COUNT(DISTINCT OPERATION_ID) = 1
+                 THEN MAX(OPERATION_ID) END                              AS operation_id,
             MIC_NAME                                                     AS mic_name,
             MAX(UPPER(TRIM(MIC_NAME)))                                   AS mic_name_normalized,
             INSPECTION_METHOD                                            AS inspection_method,
@@ -80,11 +129,12 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
           AND (QUANTITATIVE_RESULT IS NOT NULL
                OR (QUALITATIVE_RESULT IS NOT NULL AND QUALITATIVE_RESULT != ''))
           {plant_filter}
-        GROUP BY MIC_ID, MIC_NAME, INSPECTION_METHOD, OPERATION_ID
+        GROUP BY MIC_ID, MIC_NAME, INSPECTION_METHOD
         HAVING COUNT(DISTINCT BATCH_ID) >= 3
         ORDER BY mic_name
     """
     rows = await run_sql_async(token, query, params)
+    overrides = await _fetch_mic_chart_overrides(token, material_id, plant_id)
     characteristics = []
     attr_characteristics = []
     for row in rows:
@@ -97,15 +147,24 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
         row["batch_count"] = int(float(row.get("batch_count") or 0))
         # A MIC with both result types has a routing conflict.
         row["routing_conflict"] = is_attr and has_quant
+        mic_id = row.get("mic_id")
+        override = overrides.get(str(mic_id)) if mic_id is not None else None
         if is_attr:
-            row["chart_type"] = "p_chart"
+            row["chart_type"] = override if override in {"p_chart", "np_chart", "c_chart", "u_chart"} else "p_chart"
+            row["chart_type_source"] = "override" if override == row["chart_type"] else "default"
             attr_characteristics.append(row)
         else:
             total_samples = float(row.get("total_samples") or 0)
             batch_count = row["batch_count"] or 1
             avg_spb = total_samples / batch_count
             row["avg_samples_per_batch"] = avg_spb
-            row["chart_type"] = "xbar_r" if avg_spb > 1.5 else "imr"
+            default_chart = "xbar_r" if avg_spb > 1.5 else "imr"
+            if override in {"imr", "xbar_r", "xbar_s"}:
+                row["chart_type"] = override
+                row["chart_type_source"] = "override"
+            else:
+                row["chart_type"] = default_chart
+                row["chart_type_source"] = "heuristic"
             characteristics.append(row)
     return characteristics, attr_characteristics
 

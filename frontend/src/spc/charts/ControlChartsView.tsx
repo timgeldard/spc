@@ -8,6 +8,7 @@ import { InlineLoading, InlineNotification, SkeletonPlaceholder } from '~/lib/ca
 import { Column, Grid, Stack, Tag, Tile } from '~/lib/carbon-layout'
 import { shallowEqual, useSPCDispatch, useSPCSelector } from '../SPCContext'
 import { useControlChartsController } from '../hooks/useControlChartsController'
+import { useDataQuality } from '../hooks/useDataQuality'
 import type { LockedLimits, SPCComputationResult } from '../types'
 import ModuleEmptyState from '../components/ModuleEmptyState'
 import ChartCard from './ChartCard'
@@ -29,16 +30,17 @@ const UChart                     = lazy(() => import('./UChart'))
 const NPChart                    = lazy(() => import('./NPChart'))
 const CapabilityPanel            = lazy(() => import('./CapabilityPanel'))
 const CapabilityTrendChart       = lazy(() => import('./CapabilityTrendChart'))
+const DataQualityPanel           = lazy(() => import('./DataQualityPanel'))
 const ExcludedPointsPanel        = lazy(() => import('./ExcludedPointsPanel'))
 const ExclusionJustificationModal = lazy(() => import('./ExclusionJustificationModal'))
 const SignalsPanel               = lazy(() => import('./SignalsPanel'))
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PanelId = 'primary' | 'capability' | 'signals' | 'trend' | 'exclusions' | 'stratification'
+type PanelId = 'primary' | 'capability' | 'dataQuality' | 'signals' | 'trend' | 'exclusions' | 'stratification'
 
 const DEFAULT_VISIBLE_PANELS: PanelId[] = [
-  'primary', 'capability', 'signals', 'trend', 'exclusions', 'stratification',
+  'primary', 'capability', 'dataQuality', 'signals', 'trend', 'exclusions', 'stratification',
 ]
 
 // ── Chart skeleton (replaces custom LoadingSkeleton for ECharts containers) -
@@ -255,6 +257,14 @@ export default function ControlChartsView() {
     excludedIndices, exclusionDialog, limitsMode,
   } = state
   const ctrl = useControlChartsController()
+  const dq = useDataQuality(
+    selectedMaterial?.material_id ?? null,
+    selectedMIC?.mic_id ?? null,
+    selectedPlant?.plant_id ?? null,
+    dateFrom ?? null,
+    dateTo ?? null,
+    selectedMIC?.operation_id ?? null,
+  )
   const excludedPanelRef = useRef<HTMLDivElement>(null)
   const [visiblePanels, setVisiblePanels] = useState<PanelId[]>(DEFAULT_VISIBLE_PANELS)
   const [actionNote, setActionNote] = useState<string | null>(null)
@@ -409,6 +419,7 @@ export default function ControlChartsView() {
         dataTruncated={ctrl.dataTruncated}
         exclusionAudit={state.exclusionAudit}
         specDrift={ctrl.specDrift}
+        autocorrelation={ctrl.spc?.autocorrelation ?? null}
       />
 
       {ctrl.analyticsError ? (
@@ -562,6 +573,21 @@ export default function ControlChartsView() {
                     </Column>
                   )}
                 </Grid>
+
+                {/* Data Quality — full-width row (sits between capability and signals) */}
+                {isVisible('dataQuality') && (
+                  <Grid condensed>
+                    <Column sm={4} md={8} lg={16}>
+                      <Suspense fallback={<ChartSkeleton height="140px" />}>
+                        <DataQualityPanel
+                          summary={dq.summary}
+                          loading={dq.loading}
+                          error={dq.error}
+                        />
+                      </Suspense>
+                    </Column>
+                  </Grid>
+                )}
 
                 {/* Signals + Capability Trend — two columns */}
                 <Grid condensed>

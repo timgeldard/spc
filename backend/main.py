@@ -33,6 +33,8 @@ from backend.utils.rate_limit import (
     limiter,
     rate_limit_handler,
 )
+from backend.utils.schema_contract import assert_gold_view_schema
+from backend.utils.security import SameOriginMiddleware
 
 ENABLE_DEBUG_ENDPOINTS: bool = os.environ.get("APP_ENV", "").strip().lower() == "development"
 STATIC_DIR: Path = Path(__file__).parent.parent / "frontend" / "dist"
@@ -42,6 +44,7 @@ app = FastAPI(title="TraceApp API", docs_url="/api/docs", redoc_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SameOriginMiddleware)
 
 app.include_router(trace_router, prefix="/api", tags=["Traceability"])
 app.include_router(spc_metadata_router, prefix="/api/spc", tags=["SPC"])
@@ -114,12 +117,33 @@ async def ready():
             },
         ) from exc
 
+    schema_result = await assert_gold_view_schema(
+        readiness_token,
+        TRACE_CATALOG,
+        TRACE_SCHEMA,
+    )
+    if not schema_result.ok:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "reason": "gold_view_schema_drift",
+                "message": (
+                    "Gold view schema has drifted from the frozen contract. "
+                    "Update backend/schema/gold_views.v1.json after reconciling with the upstream team."
+                ),
+                "schema_check": schema_result.as_dict(),
+            },
+        )
+
     return {
         "status": "ready",
         "checks": {
             "config": "ok",
             "sql_warehouse": "ok",
+            "gold_view_schema": "ok",
         },
+        "schema_contract_version": schema_result.version,
         "sample_result": rows[0] if rows else None,
     }
 
