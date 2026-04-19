@@ -5,6 +5,7 @@ import {
   Checkbox,
   DatePicker,
   DatePickerInput,
+  Search,
   Select,
   SelectItem,
   TextInput,
@@ -19,6 +20,9 @@ import { usePlants } from './hooks/usePlants'
 import { useCharacteristics } from './hooks/useCharacteristics'
 import { getRecentMaterials, addRecentMaterial } from './hooks/useRecentMaterials'
 import type { MaterialRef, MicRef, PlantRef, StratifyByKey } from './types'
+
+const FILTER_COMMIT_DEBOUNCE_MS = 300
+const MAX_VISIBLE_MIC_OPTIONS = 100
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +147,10 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   const [collapsed,   setCollapsed]   = useState(false)
   const [inputValue,  setInputValue]  = useState('')
   const [notFound,    setNotFound]    = useState(false)
+  const [pendingPlantId, setPendingPlantId] = useState(() => state.selectedPlant?.plant_id ?? '')
+  const [pendingDateFrom, setPendingDateFrom] = useState(() => state.dateFrom ?? '')
+  const [pendingDateTo, setPendingDateTo] = useState(() => state.dateTo ?? '')
+  const [micSearch, setMicSearch] = useState('')
   const [recents]                     = useState<MaterialRef[]>(() => getRecentMaterials())
   const prevMICRef                    = useRef<string | null>(null)
   const defaults                      = useMemo(() => defaultDateRange(), [])
@@ -167,6 +175,44 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   )
 
   const selectedMicValue = useMemo(() => serializeMicKey(state.selectedMIC), [state.selectedMIC])
+  const filteredCharacteristics = useMemo(() => {
+    const term = micSearch.trim().toLowerCase()
+    if (!term) return allCharacteristics
+    return allCharacteristics.filter(characteristic => {
+      const label = formatMicLabel(characteristic).toLowerCase()
+      const micId = String(characteristic.mic_id ?? '').toLowerCase()
+      return label.includes(term) || micId.includes(term)
+    })
+  }, [allCharacteristics, micSearch])
+  const visibleCharacteristics = useMemo(() => {
+    if (!state.selectedMIC) {
+      return filteredCharacteristics.slice(0, MAX_VISIBLE_MIC_OPTIONS)
+    }
+    const selectedKey = serializeMicKey(state.selectedMIC)
+    const selectedCharacteristic =
+      allCharacteristics.find(characteristic => serializeMicKey(characteristic) === selectedKey) ?? null
+    const withoutSelected = filteredCharacteristics.filter(
+      characteristic => serializeMicKey(characteristic) !== selectedKey,
+    )
+    const visible = withoutSelected.slice(0, Math.max(0, MAX_VISIBLE_MIC_OPTIONS - (selectedCharacteristic ? 1 : 0)))
+    return selectedCharacteristic ? [selectedCharacteristic, ...visible] : visible
+  }, [allCharacteristics, filteredCharacteristics, state.selectedMIC])
+
+  useEffect(() => {
+    setPendingPlantId(state.selectedPlant?.plant_id ?? '')
+  }, [state.selectedPlant?.plant_id])
+
+  useEffect(() => {
+    setPendingDateFrom(state.dateFrom ?? '')
+  }, [state.dateFrom])
+
+  useEffect(() => {
+    setPendingDateTo(state.dateTo ?? '')
+  }, [state.dateTo])
+
+  useEffect(() => {
+    setMicSearch('')
+  }, [state.selectedMaterial?.material_id, state.selectedPlant?.plant_id])
 
   // Auto-clear plant when it's no longer valid for the selected material
   useEffect(() => {
@@ -232,6 +278,19 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
     prevMICRef.current = micId
   }, [state.selectedMIC?.mic_id])
 
+  useEffect(() => {
+    if (pendingDateFrom === (state.dateFrom ?? '') && pendingDateTo === (state.dateTo ?? '')) return
+    const timeoutId = window.setTimeout(() => {
+      if (pendingDateFrom !== (state.dateFrom ?? '')) {
+        dispatch({ type: 'SET_DATE_FROM', payload: pendingDateFrom })
+      }
+      if (pendingDateTo !== (state.dateTo ?? '')) {
+        dispatch({ type: 'SET_DATE_TO', payload: pendingDateTo })
+      }
+    }, FILTER_COMMIT_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [dispatch, pendingDateFrom, pendingDateTo, state.dateFrom, state.dateTo])
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleValidate = async () => {
@@ -256,7 +315,9 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   }
 
   const handlePlantChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const plant = plants.find(p => p.plant_id === event.target.value) ?? null
+    const nextPlantId = event.target.value
+    setPendingPlantId(nextPlantId)
+    const plant = plants.find(candidate => candidate.plant_id === nextPlantId) ?? null
     dispatch({ type: 'SET_PLANT', payload: plant as PlantRef | null })
   }
 
@@ -289,7 +350,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
 
   const hasMaterialError = Boolean(validateError || notFound)
   const scopeReady       = Boolean(state.selectedMaterial)
-  const timeReady        = Boolean(state.dateFrom || state.dateTo)
+  const timeReady        = Boolean(pendingDateFrom || pendingDateTo)
   const canCollapse      = Boolean(state.selectedMaterial && state.selectedMIC)
 
   // ── Collapsed summary bar ──────────────────────────────────────────────────
@@ -429,7 +490,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
           <Select
             id="spc-plant"
             labelText="Plant"
-            value={state.selectedPlant?.plant_id ?? ''}
+            value={pendingPlantId}
             onChange={handlePlantChange}
             disabled={!scopeReady || plantsLoading}
             helperText={
@@ -461,37 +522,52 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
         {/* Characteristic (MIC) */}
         <Tile style={{ padding: '1rem' }}>
           <p style={sectionLabelStyle}>Characteristic</p>
-          <Select
-            id="spc-mic"
-            labelText="Characteristic (MIC)"
-            value={selectedMicValue}
-            onChange={handleMICChange}
-            disabled={!scopeReady || charsLoading}
-            helperText={
-              scopeReady && allCharacteristics.length === 0 && !charsLoading
-                ? 'No characteristics found — try a different plant.'
-                : state.selectedMIC?.inspection_method
-                  ? `Method: ${state.selectedMIC.inspection_method}`
-                  : 'Select a characteristic to load control chart and capability data.'
-            }
-          >
-            <SelectItem
-              value=""
-              text={
-                !scopeReady         ? '— Validate material first —'
-                : charsLoading      ? 'Loading…'
-                : allCharacteristics.length === 0 ? 'No characteristics found'
-                : '— Select a characteristic —'
-              }
+          <Stack gap={3}>
+            <Search
+              id="spc-mic-search"
+              labelText="Filter characteristics"
+              placeholder="Search MIC name or code"
+              value={micSearch}
+              onChange={event => setMicSearch(event.target.value)}
+              size="md"
             />
-            {allCharacteristics.map(c => (
+            <Select
+              id="spc-mic"
+              labelText="Characteristic (MIC)"
+              value={selectedMicValue}
+              onChange={handleMICChange}
+              disabled={!scopeReady || charsLoading}
+              helperText={
+                scopeReady && allCharacteristics.length === 0 && !charsLoading
+                  ? 'No characteristics found — try a different plant.'
+                  : micSearch.trim() && filteredCharacteristics.length === 0
+                    ? 'No characteristics match this search. Try a broader term or clear the filter.'
+                  : filteredCharacteristics.length > MAX_VISIBLE_MIC_OPTIONS
+                    ? `Showing first ${MAX_VISIBLE_MIC_OPTIONS} of ${filteredCharacteristics.length} matches. Refine the search to narrow the list.`
+                    : state.selectedMIC?.inspection_method
+                      ? `Method: ${state.selectedMIC.inspection_method}`
+                      : 'Select a characteristic to load control chart and capability data.'
+              }
+            >
               <SelectItem
-                key={`${c.operation_id ?? ''}|${c.mic_id}`}
-                value={serializeMicKey(c)}
-                text={formatMicLabel(c)}
+                value=""
+                text={
+                  !scopeReady         ? '— Validate material first —'
+                  : charsLoading      ? 'Loading…'
+                  : allCharacteristics.length === 0 ? 'No characteristics found'
+                  : micSearch.trim() && filteredCharacteristics.length === 0 ? 'No matching characteristics'
+                  : '— Select a characteristic —'
+                }
               />
-            ))}
-          </Select>
+              {visibleCharacteristics.map(c => (
+                <SelectItem
+                  key={`${c.operation_id ?? ''}|${c.mic_id}`}
+                  value={serializeMicKey(c)}
+                  text={formatMicLabel(c)}
+                />
+              ))}
+            </Select>
+          </Stack>
         </Tile>
 
         {/* Stratify By (conditional) */}
@@ -526,15 +602,15 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
               {DATE_PRESETS.map(preset => {
                 const range    = resolvePresetRange(preset)
-                const isActive = state.dateFrom === range.from && state.dateTo === range.to
+                const isActive = pendingDateFrom === range.from && pendingDateTo === range.to
                 return (
                   <Button
                     key={preset.label}
                     kind={isActive ? 'primary' : 'ghost'}
                     size="sm"
                     onClick={() => {
-                      dispatch({ type: 'SET_DATE_FROM', payload: range.from })
-                      dispatch({ type: 'SET_DATE_TO',   payload: range.to   })
+                      setPendingDateFrom(range.from)
+                      setPendingDateTo(range.to)
                     }}
                     aria-pressed={isActive}
                   >
@@ -548,11 +624,9 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
             <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr 1fr' }}>
               <DatePicker
                 datePickerType="single"
-                value={state.dateFrom || undefined}
+                value={pendingDateFrom || undefined}
                 dateFormat="Y-m-d"
-                onChange={(dates: Date[]) =>
-                  dispatch({ type: 'SET_DATE_FROM', payload: dates[0] ? toLocalDateString(dates[0]) : '' })
-                }
+                onChange={(dates: Date[]) => setPendingDateFrom(dates[0] ? toLocalDateString(dates[0]) : '')}
               >
                 <DatePickerInput
                   id="spc-date-from"
@@ -564,11 +638,9 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
 
               <DatePicker
                 datePickerType="single"
-                value={state.dateTo || undefined}
+                value={pendingDateTo || undefined}
                 dateFormat="Y-m-d"
-                onChange={(dates: Date[]) =>
-                  dispatch({ type: 'SET_DATE_TO', payload: dates[0] ? toLocalDateString(dates[0]) : '' })
-                }
+                onChange={(dates: Date[]) => setPendingDateTo(dates[0] ? toLocalDateString(dates[0]) : '')}
               >
                 <DatePickerInput
                   id="spc-date-to"

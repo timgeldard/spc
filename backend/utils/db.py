@@ -67,14 +67,40 @@ _SQL_POLL_INITIAL_DELAY_S = max(1, int(os.environ.get("SPC_SQL_POLL_INITIAL_DELA
 _SQL_POLL_MAX_DELAY_S = max(_SQL_POLL_INITIAL_DELAY_S, int(os.environ.get("SPC_SQL_POLL_MAX_DELAY_S", "30")))
 
 _sql_executor = ThreadPoolExecutor(max_workers=_SQL_MAX_WORKERS, thread_name_prefix="sql")
-_sql_cache = TTLCache(maxsize=100, ttl=300)
-_sql_cache_lock = threading.Lock()
+_metadata_cache = TTLCache(maxsize=500, ttl=900)
+_metadata_cache_lock = threading.Lock()
+_scorecard_cache = TTLCache(maxsize=200, ttl=300)
+_scorecard_cache_lock = threading.Lock()
+_chart_cache = TTLCache(maxsize=300, ttl=180)
+_chart_cache_lock = threading.Lock()
 _freshness_cache: TTLCache = TTLCache(maxsize=50, ttl=300)
 _freshness_cache_lock = threading.Lock()
 _SQL_CACHE_ROW_LIMIT = 1000
 _WRITE_SQL_PREFIXES = ("INSERT", "MERGE", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP", "TRUNCATE", "OPTIMIZE", "VACUUM")
 _READ_SQL_PREFIXES = ("SELECT", "WITH", "SHOW", "DESCRIBE")
 _SQL_CONNECTOR_PARAM_RE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
+_METADATA_CACHE_PATTERNS = (
+    "information_schema.tables",
+    "spc_characteristic_dim_mv",
+    "spc_attribute_quality_metrics",
+    "gold_material",
+    "gold_plant",
+)
+_SCORECARD_CACHE_PATTERNS = (
+    "spc_quality_metrics",
+)
+_CHART_CACHE_PATTERNS = (
+    "spc_batch_dim_mv",
+    "gold_batch_quality_result_v",
+    "spc_attribute_metric_source_v",
+    "spc_attribute_subgroup_mv",
+    "spc_spec_drift_summary_v",
+    "spc_quality_metric_subgroup_v",
+    "spc_lineage_graph_mv",
+    "spc_process_flow_source_mv",
+    "gold_batch_lineage",
+)
+_QUERY_AUDIT_TABLE_NAME = "spc_query_audit"
 
 logger = logging.getLogger(__name__)
 _VIEW_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -213,6 +239,18 @@ def _warehouse_id() -> str:
 
 def _params_to_mapping(params: Optional[list[dict]]) -> dict[str, object | None]:
     return {str(param["name"]): param.get("value") for param in (params or [])}
+
+
+def _first_param_value(
+    params: Optional[list[dict]],
+    *names: str,
+) -> Optional[str]:
+    mapping = _params_to_mapping(params)
+    for name in names:
+        value = mapping.get(name)
+        if value is not None and value != "":
+            return str(value)
+    return None
 
 
 def _normalize_statement_for_connector(
@@ -435,39 +473,106 @@ def _is_write_statement(statement: str) -> bool:
     return _statement_prefix(statement) in _WRITE_SQL_PREFIXES
 
 
+def _is_query_audit_statement(statement: str) -> bool:
+    lowered = statement.lower()
+    return _QUERY_AUDIT_TABLE_NAME in lowered
+
+
+def _clear_ttl_cache(cache: TTLCache) -> None:
+    cache.clear()
+    expires = getattr(cache, "_expires", None)
+    if isinstance(expires, dict):
+        expires.clear()
+
+
+def _sql_cache_tier(statement: str) -> str:
+    lowered = statement.lower()
+    if any(pattern in lowered for pattern in _METADATA_CACHE_PATTERNS):
+        return "metadata"
+    if any(pattern in lowered for pattern in _CHART_CACHE_PATTERNS):
+        return "chart"
+    if any(pattern in lowered for pattern in _SCORECARD_CACHE_PATTERNS):
+        return "scorecard"
+    return "chart"
+
+
+def _sql_cache_bucket(statement: str) -> tuple[TTLCache, threading.Lock]:
+    tier = _sql_cache_tier(statement)
+    if tier == "metadata":
+        return _metadata_cache, _metadata_cache_lock
+    if tier == "scorecard":
+        return _scorecard_cache, _scorecard_cache_lock
+    return _chart_cache, _chart_cache_lock
+
+
 def _clear_sql_cache() -> None:
-    with _sql_cache_lock:
-        _sql_cache.clear()
-        expires = getattr(_sql_cache, "_expires", None)
-        if isinstance(expires, dict):
-            expires.clear()
+    with _metadata_cache_lock:
+        _clear_ttl_cache(_metadata_cache)
+    with _scorecard_cache_lock:
+        _clear_ttl_cache(_scorecard_cache)
+    with _chart_cache_lock:
+        _clear_ttl_cache(_chart_cache)
 
 
 async def run_sql_async(
     token: str,
     statement: str,
     params: Optional[list[dict]] = None,
+    *,
+    endpoint_hint: str = "unknown",
+    audit: bool = True,
 ) -> list[dict]:
     """Non-blocking wrapper — runs run_sql in a thread pool so the async event
     loop is never blocked waiting for Databricks SQL responses."""
+    loop = asyncio.get_running_loop()
+
+    async def _audit_query(rows: list[dict], duration_ms: int) -> None:
+        if not audit or _is_query_audit_statement(statement):
+            return
+        try:
+            await insert_spc_query_audit(
+                token,
+                endpoint=endpoint_hint,
+                params=params,
+                row_count=len(rows),
+                duration_ms=duration_ms,
+            )
+        except Exception:
+            logger.warning(
+                "sql.query_audit_insert_failed endpoint=%s warehouse_id=%s",
+                endpoint_hint,
+                _warehouse_id(),
+                exc_info=True,
+            )
+
+    def _schedule_query_audit(rows: list[dict], duration_ms: int) -> None:
+        if not audit or _is_query_audit_statement(statement):
+            return
+        loop.create_task(_audit_query(rows, duration_ms))
+
     if not _is_read_only_statement(statement):
-        loop = asyncio.get_running_loop()
+        started_at = time.monotonic()
         rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
-        if _is_write_statement(statement):
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        if _is_write_statement(statement) and not _is_query_audit_statement(statement):
             _clear_sql_cache()
+        _schedule_query_audit(rows, duration_ms)
         return rows
 
+    cache, cache_lock = _sql_cache_bucket(statement)
     cache_key = _sql_cache_key(token, statement, params)
-    with _sql_cache_lock:
-        cached_rows = _sql_cache.get(cache_key)
+    with cache_lock:
+        cached_rows = cache.get(cache_key)
     if cached_rows is not None:
         return deepcopy(cached_rows)
 
-    loop = asyncio.get_running_loop()
+    started_at = time.monotonic()
     rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
+    duration_ms = int((time.monotonic() - started_at) * 1000)
     if _should_cache_rows(rows):
-        with _sql_cache_lock:
-            _sql_cache[cache_key] = deepcopy(rows)
+        with cache_lock:
+            cache[cache_key] = deepcopy(rows)
+    _schedule_query_audit(rows, duration_ms)
     return rows
 
 
@@ -537,37 +642,89 @@ async def insert_spc_audit_event(
     error_id: Optional[str] = None,
     request_path: Optional[str] = None,
 ) -> None:
-    """Persist an app audit event for operational/compliance investigations."""
+    """Persist an app audit marker using the shared query audit table shape."""
     params = [
-        sql_param("audit_id", str(uuid.uuid4())),
-        sql_param("event_type", event_type),
-        sql_param("sql_hash", sql_hash),
-        sql_param("error_id", error_id),
-        sql_param("request_path", request_path),
-        sql_param("detail_json", json.dumps(detail, separators=(",", ":"))),
+        sql_param("query_id", error_id or str(uuid.uuid4())),
+        sql_param("endpoint", request_path or f"audit:{event_type}"),
+        sql_param("material_id", detail.get("material_id")),
+        sql_param("mic_id", detail.get("mic_id")),
+        sql_param("plant_id", detail.get("plant_id")),
+        sql_param("row_count", 0),
+        sql_param("duration_ms", 0),
+        sql_param("warehouse_id", _warehouse_id()),
     ]
     statement = f"""
         INSERT INTO {tbl('spc_query_audit')} (
-            audit_id,
-            event_type,
-            sql_hash,
-            error_id,
-            request_path,
-            detail_json,
-            user_id,
-            created_at
+            query_id,
+            endpoint,
+            material_id,
+            mic_id,
+            plant_id,
+            row_count,
+            duration_ms,
+            warehouse_id,
+            user_identity,
+            executed_at
         )
         SELECT
-            :audit_id,
-            :event_type,
-            :sql_hash,
-            :error_id,
-            :request_path,
-            :detail_json,
+            :query_id,
+            :endpoint,
+            :material_id,
+            :mic_id,
+            :plant_id,
+            CAST(:row_count AS INT),
+            CAST(:duration_ms AS BIGINT),
+            :warehouse_id,
             CURRENT_USER(),
             CURRENT_TIMESTAMP()
     """
-    await run_sql_async(token, statement, params)
+    await run_sql_async(token, statement, params, endpoint_hint="spc.audit-event", audit=False)
+
+
+async def insert_spc_query_audit(
+    token: str,
+    *,
+    endpoint: str,
+    params: Optional[list[dict]],
+    row_count: int,
+    duration_ms: int,
+) -> None:
+    insert_params = [
+        sql_param("query_id", str(uuid.uuid4())),
+        sql_param("endpoint", endpoint),
+        sql_param("material_id", _first_param_value(params, "material_id")),
+        sql_param("mic_id", _first_param_value(params, "mic_id", "mic_a_id", "mic_b_id")),
+        sql_param("plant_id", _first_param_value(params, "plant_id")),
+        sql_param("row_count", row_count),
+        sql_param("duration_ms", duration_ms),
+        sql_param("warehouse_id", _warehouse_id()),
+    ]
+    statement = f"""
+        INSERT INTO {tbl('spc_query_audit')} (
+            query_id,
+            endpoint,
+            material_id,
+            mic_id,
+            plant_id,
+            row_count,
+            duration_ms,
+            warehouse_id,
+            user_identity,
+            executed_at
+        )
+        SELECT
+            :query_id,
+            :endpoint,
+            :material_id,
+            :mic_id,
+            :plant_id,
+            CAST(:row_count AS INT),
+            CAST(:duration_ms AS BIGINT),
+            :warehouse_id,
+            CURRENT_USER(),
+            CURRENT_TIMESTAMP()
+    """
+    await run_sql_async(token, statement, insert_params, endpoint_hint="spc.query-audit", audit=False)
 
 
 async def attach_data_freshness(
@@ -717,4 +874,4 @@ async def insert_spc_exclusion_snapshot(
             CURRENT_USER(),
             CURRENT_TIMESTAMP()
     """
-    await run_sql_async(token, insert_sql, params)
+    await run_sql_async(token, insert_sql, params, endpoint_hint="spc.exclusions.insert", audit=False)

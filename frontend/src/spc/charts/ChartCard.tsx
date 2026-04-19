@@ -87,7 +87,7 @@ export default function ChartCard({
               <DefinitionTooltip
                 definition="Cpk ≥ 1.33 is generally healthy, 1.00–1.32 needs attention, below 1.00 is high risk."
                 openOnHover
-                align="bottom-right"
+                align="bottom-end"
               >
                 <span
                   style={{

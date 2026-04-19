@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { shallowEqual, useSPCSelector } from '../SPCContext'
 import { toExcludedPoints } from '../exclusions'
 import { useLockedLimits } from './useLockedLimits'
+import { useGovernedControlLimits } from './useGovernedControlLimits'
 import { useExport } from './useExport'
 import { useChartSettings } from './useChartSettings'
 import { useChartData } from './useChartData'
@@ -12,6 +13,7 @@ import type {
   ChartDataPoint,
   ExcludedPoint,
   ExclusionAuditSnapshot,
+  GovernedControlLimits,
   LockedLimits,
   NormalityResult,
   RollingCapabilityPoint,
@@ -93,6 +95,8 @@ export interface ControlChartsController {
   lockedLimitsError: string | null
   lockedLimitsWarning: string | null
   externalLimits: LockedLimits | null
+  governedLimits: GovernedControlLimits | null
+  governedLimitsError: string | null
   canLockLimits: boolean
 
   // Display values
@@ -101,6 +105,9 @@ export interface ControlChartsController {
   chartFamilyLabel: string
   capabilityHeadline: { label: 'Cpk' | 'Ppk'; value: number } | null
   stratifyLabel: string | null
+  limitsSourceLabel: string
+  limitsSourceDetail: string | null
+  limitsSourceTone: 'info' | 'warning' | null
 
   // Rolling capability
   rollingWindowSize: number
@@ -188,7 +195,39 @@ export function useControlChartsController(): ControlChartsController {
     selectedMIC?.operation_id,
   )
 
-  // ── SPC computation ─────────────────────────────────────────────────────
+  // ── Derived values ──────────────────────────────────────────────────────
+  const currentExcludedPoints = useMemo(
+    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
+    [isQuantitative, quantPoints, excludedIndices],
+  )
+  const liveSpecSignature = useMemo(
+    () => (isQuantitative ? buildSpecSignature(quantPoints) : null),
+    [isQuantitative, quantPoints],
+  )
+  const useDerivedLimitsMode = (
+    !isQuantitative ||
+    limitsMode === 'locked' ||
+    effectiveChartType === 'ewma' ||
+    effectiveChartType === 'cusum' ||
+    excludedIndices.size > 0 ||
+    excludeOutliers
+  )
+  const shouldFetchGovernedLimits = isQuantitative && limitsMode === 'live' && !useDerivedLimitsMode
+  const {
+    controlLimits: governedLimits,
+    loading: governedLimitsLoading,
+    error: governedLimitsError,
+    isComplete: governedLimitsComplete,
+  } = useGovernedControlLimits(
+    isQuantitative ? selectedMaterial?.material_id : null,
+    isQuantitative ? selectedMIC?.mic_id : null,
+    isQuantitative ? selectedPlant?.plant_id : null,
+    dateFrom ?? null,
+    dateTo ?? null,
+    isQuantitative ? selectedMIC?.operation_id : null,
+    shouldFetchGovernedLimits,
+  )
+  const shouldApplyGovernedLimits = isQuantitative && limitsMode === 'live' && !useDerivedLimitsMode && governedLimitsComplete
   const {
     spc,
     trendData,
@@ -208,8 +247,29 @@ export function useControlChartsController(): ControlChartsController {
     ewmaL,
     cusumK,
     cusumH,
+    governedLimits: shouldApplyGovernedLimits ? governedLimits : null,
+    useGovernedLimits: shouldApplyGovernedLimits,
   })
+  const effectiveSpc = spc
+  const effectiveTrendData = trendData
+  const effectiveStratumSections = stratumSections
+  const effectiveAnalyticsLoading = analyticsLoading || (shouldFetchGovernedLimits && governedLimitsLoading)
+  const effectiveAnalyticsError = analyticsError
 
+  const { lockedLimits, error: lockedLimitsError, saveLimits, deleteLimits } = useLockedLimits(
+    isQuantitative ? selectedMaterial?.material_id : null,
+    isQuantitative ? selectedMIC?.mic_id : null,
+    isQuantitative ? selectedPlant?.plant_id : null,
+    effectiveChartType,
+    isQuantitative ? selectedMIC?.operation_id : null,
+    isQuantitative ? selectedMIC?.unified_mic_key : null,
+    liveSpecSignature,
+  )
+
+  const lockedLimitsWarning = lockedLimits?.stale_spec
+    ? 'Locked limits were saved against a different live specification signature. Review the lock before using locked mode.'
+    : null
+  const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
   // ── Exclusion workflow ──────────────────────────────────────────────────
   const {
     exclusionsSnapshot, exclusionsLoading, exclusionsSaving, exclusionsError,
@@ -229,35 +289,10 @@ export function useControlChartsController(): ControlChartsController {
     stratifyBy,
     dateFrom,
     dateTo,
-    spc,
+    spc: effectiveSpc,
     setAutoCleanLog,
   })
-
-  // ── Derived values ──────────────────────────────────────────────────────
-  const currentExcludedPoints = useMemo(
-    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
-    [isQuantitative, quantPoints, excludedIndices],
-  )
-  const liveSpecSignature = useMemo(
-    () => (isQuantitative ? buildSpecSignature(quantPoints) : null),
-    [isQuantitative, quantPoints],
-  )
-
-  const { lockedLimits, error: lockedLimitsError, saveLimits, deleteLimits } = useLockedLimits(
-    isQuantitative ? selectedMaterial?.material_id : null,
-    isQuantitative ? selectedMIC?.mic_id : null,
-    isQuantitative ? selectedPlant?.plant_id : null,
-    effectiveChartType,
-    isQuantitative ? selectedMIC?.operation_id : null,
-    isQuantitative ? selectedMIC?.unified_mic_key : null,
-    liveSpecSignature,
-  )
-
-  const lockedLimitsWarning = lockedLimits?.stale_spec
-    ? 'Locked limits were saved against a different live specification signature. Review the lock before using locked mode.'
-    : null
-  const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
-  const totalSignals = (spc?.signals?.length ?? 0) + (spc?.mrSignals?.length ?? 0)
+  const totalSignals = (effectiveSpc?.signals?.length ?? 0) + (effectiveSpc?.mrSignals?.length ?? 0)
   const exclusionCount = excludedIndices.size
   const chartFamilyLabel = isAttributeChart
     ? `${attrChartType.toUpperCase()} attribute chart`
@@ -270,17 +305,47 @@ export function useControlChartsController(): ControlChartsController {
           : spc?.chartType === 'cusum'
             ? `CUSUM variable chart (k=${cusumK.toFixed(2)}, h=${cusumH.toFixed(1)})`
       : 'I-MR variable chart'
-  const capabilityHeadline = getCapabilityHeadline(spc)
+  const capabilityHeadline = getCapabilityHeadline(effectiveSpc)
   const stratifyLabel = stratifyBy ? stratifyBy.replace(/_/g, ' ') : null
+  const hasActiveLockedLimits = limitsMode === 'locked' && Boolean(lockedLimits)
+  const limitsSourceLabel = hasActiveLockedLimits
+    ? 'Locked'
+    : shouldApplyGovernedLimits
+      ? 'Governed'
+      : 'Derived'
+  const limitsSourceTone: 'info' | 'warning' | null = hasActiveLockedLimits
+    ? 'info'
+    : (!useDerivedLimitsMode && shouldFetchGovernedLimits && !governedLimitsComplete && !governedLimitsLoading)
+      ? 'warning'
+      : useDerivedLimitsMode && isQuantitative
+        ? 'info'
+        : null
+  const limitsSourceDetail = hasActiveLockedLimits
+    ? 'Using the persisted locked baseline for this chart scope.'
+    : shouldApplyGovernedLimits
+      ? 'Live control limits and default capability values are sourced from governed Databricks metrics.'
+      : isQuantitative
+        ? (
+            (governedLimitsError && !useDerivedLimitsMode)
+              ? 'Governed control limits were unavailable, so this chart is using limits derived from the current point set.'
+              : (effectiveChartType === 'ewma' || effectiveChartType === 'cusum')
+                ? 'EWMA and CUSUM remain locally derived because they depend on ordered point-by-point recalculation.'
+                : exclusionCount > 0 || excludeOutliers
+                  ? 'Active exclusions or outlier filtering require locally derived control limits for what-if analysis.'
+                  : (shouldFetchGovernedLimits && !governedLimitsComplete && !governedLimitsLoading)
+                    ? 'Governed control limits were incomplete, so this chart fell back to locally derived limits.'
+                    : null
+          )
+        : null
 
   const canLockLimits = Boolean(
-    spc &&
+    effectiveSpc &&
     !specDrift?.detected &&
     liveSpecSignature &&
     limitsMode === 'live' &&
-    (((spc.chartType === 'imr' && spc.imr?.xBar != null && spc.imr?.ucl_x != null && spc.imr?.lcl_x != null) ||
-      (spc.chartType === 'xbar_r' && spc.xbarR?.grandMean != null && spc.xbarR?.ucl_x != null && spc.xbarR?.lcl_x != null) ||
-      (spc.chartType === 'xbar_s' && spc.xbarS?.grandMean != null && spc.xbarS?.ucl_x != null && spc.xbarS?.lcl_x != null))),
+    (((effectiveSpc.chartType === 'imr' && effectiveSpc.imr?.xBar != null && effectiveSpc.imr?.ucl_x != null && effectiveSpc.imr?.lcl_x != null) ||
+      (effectiveSpc.chartType === 'xbar_r' && effectiveSpc.xbarR?.grandMean != null && effectiveSpc.xbarR?.ucl_x != null && effectiveSpc.xbarR?.lcl_x != null) ||
+      (effectiveSpc.chartType === 'xbar_s' && effectiveSpc.xbarS?.grandMean != null && effectiveSpc.xbarS?.ucl_x != null && effectiveSpc.xbarS?.lcl_x != null))),
   )
 
   // ── Locked limits handlers ──────────────────────────────────────────────
@@ -289,32 +354,32 @@ export function useControlChartsController(): ControlChartsController {
   }, [deleteLimits])
 
   const handleLockLimits = useCallback(() => {
-    if (!spc) return
-    const limits: LockedLimits = spc.chartType === 'imr'
+    if (!effectiveSpc) return
+    const limits: LockedLimits = effectiveSpc.chartType === 'imr'
       ? {
-          cl: spc.imr?.xBar,
-          ucl: spc.imr?.ucl_x,
-          lcl: spc.imr?.lcl_x,
-          ucl_r: spc.imr?.ucl_mr,
-          lcl_r: spc.imr?.lcl_mr,
-          sigma_within: spc.imr?.sigmaWithin,
+          cl: effectiveSpc.imr?.xBar,
+          ucl: effectiveSpc.imr?.ucl_x,
+          lcl: effectiveSpc.imr?.lcl_x,
+          ucl_r: effectiveSpc.imr?.ucl_mr,
+          lcl_r: effectiveSpc.imr?.lcl_mr,
+          sigma_within: effectiveSpc.imr?.sigmaWithin,
         }
-      : spc.chartType === 'xbar_s'
+      : effectiveSpc.chartType === 'xbar_s'
         ? {
-            cl: spc.xbarS?.grandMean,
-            ucl: spc.xbarS?.ucl_x,
-            lcl: spc.xbarS?.lcl_x,
-            ucl_r: spc.xbarS?.ucl_s,
-            lcl_r: spc.xbarS?.lcl_s,
-            sigma_within: spc.xbarS?.sigmaWithin,
+            cl: effectiveSpc.xbarS?.grandMean,
+            ucl: effectiveSpc.xbarS?.ucl_x,
+            lcl: effectiveSpc.xbarS?.lcl_x,
+            ucl_r: effectiveSpc.xbarS?.ucl_s,
+            lcl_r: effectiveSpc.xbarS?.lcl_s,
+            sigma_within: effectiveSpc.xbarS?.sigmaWithin,
           }
         : {
-            cl: spc.xbarR?.grandMean,
-            ucl: spc.xbarR?.ucl_x,
-            lcl: spc.xbarR?.lcl_x,
-            ucl_r: spc.xbarR?.ucl_r,
-            lcl_r: spc.xbarR?.lcl_r,
-            sigma_within: spc.xbarR?.sigmaWithin,
+            cl: effectiveSpc.xbarR?.grandMean,
+            ucl: effectiveSpc.xbarR?.ucl_x,
+            lcl: effectiveSpc.xbarR?.lcl_x,
+            ucl_r: effectiveSpc.xbarR?.ucl_r,
+            lcl_r: effectiveSpc.xbarR?.lcl_r,
+            sigma_within: effectiveSpc.xbarR?.sigmaWithin,
           }
     if (limits.cl == null || limits.ucl == null || limits.lcl == null) return
     void saveLimits({
@@ -322,7 +387,7 @@ export function useControlChartsController(): ControlChartsController {
       unified_mic_key: selectedMIC?.unified_mic_key ?? null,
       spec_signature: liveSpecSignature,
     })
-  }, [liveSpecSignature, saveLimits, selectedMIC?.unified_mic_key, spc])
+  }, [effectiveSpc, liveSpecSignature, saveLimits, selectedMIC?.unified_mic_key])
 
   // ── superseded by exclusionAudit from context ───────────────────────────
   void exclusionAudit // referenced via context; used by consumers via state
@@ -337,15 +402,15 @@ export function useControlChartsController(): ControlChartsController {
     cusumH, setCusumH,
     // Raw data
     quantPoints, quantNormality, specDrift, dataTruncated, hydrating,
-    attrPoints, countPoints, points, loading, analyticsLoading, analyticsError, error,
+    attrPoints, countPoints, points, loading, analyticsLoading: effectiveAnalyticsLoading, analyticsError: effectiveAnalyticsError, error,
     // SPC computation
-    spc, trendData, stratumSections, currentExcludedPoints,
+    spc: effectiveSpc, trendData: effectiveTrendData, stratumSections: effectiveStratumSections, currentExcludedPoints,
     // Exclusions
     exclusionsSnapshot, exclusionsLoading, exclusionsSaving, exclusionsError,
     // Locked limits
-    lockedLimits, lockedLimitsError, lockedLimitsWarning, externalLimits, canLockLimits,
+    lockedLimits, lockedLimitsError, lockedLimitsWarning, externalLimits, governedLimits, governedLimitsError, canLockLimits,
     // Display values
-    totalSignals, exclusionCount, chartFamilyLabel, capabilityHeadline, stratifyLabel,
+    totalSignals, exclusionCount, chartFamilyLabel, capabilityHeadline, stratifyLabel, limitsSourceLabel, limitsSourceDetail, limitsSourceTone,
     // Rolling capability
     rollingWindowSize, setRollingWindowSize,
     // Auto-clean log

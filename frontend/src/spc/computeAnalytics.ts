@@ -1,6 +1,7 @@
 import { computeAll, computeRollingCapability } from './calculations'
 import type {
   ChartDataPoint,
+  GovernedControlLimits,
   NormalityResult,
   QuantChartType,
   RollingCapabilityPoint,
@@ -23,6 +24,8 @@ export interface ComputeAnalyticsInput {
   ewmaL: number
   cusumK: number
   cusumH: number
+  governedLimits?: GovernedControlLimits | null
+  useGovernedLimits?: boolean
 }
 
 export interface ComputeAnalyticsOutput {
@@ -44,6 +47,8 @@ export function computeAnalytics({
   ewmaL,
   cusumK,
   cusumH,
+  governedLimits = null,
+  useGovernedLimits = false,
 }: ComputeAnalyticsInput): ComputeAnalyticsOutput {
   const effectiveExclusions = new Set<number>(excludedIndices)
   if (excludeOutliers) {
@@ -63,6 +68,7 @@ export function computeAnalytics({
     ewmaL,
     cusumK,
     cusumH,
+    governedLimits: useGovernedLimits ? governedLimits : null,
   })
   spc.filteredPointCount = activePoints.length
   spc.excludedPointCount = effectiveExclusions.size
@@ -91,7 +97,14 @@ export function computeAnalytics({
         label,
         pointCount: groupedPoints.length,
         spc: groupedPoints.length > 0
-          ? computeAll(groupedPoints, chartType, ruleSet, { normality, ewmaLambda, ewmaL, cusumK, cusumH })
+          ? computeAll(groupedPoints, chartType, ruleSet, {
+              normality,
+              ewmaLambda,
+              ewmaL,
+              cusumK,
+              cusumH,
+              governedLimits: useGovernedLimits ? governedLimits : null,
+            })
           : null,
       }))
       .filter(section => (section.spc?.values?.length ?? 0) > 0)

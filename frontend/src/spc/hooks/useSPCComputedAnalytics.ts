@@ -2,6 +2,7 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState
 import { computeAnalytics } from '../computeAnalytics'
 import type {
   ChartDataPoint,
+  GovernedControlLimits,
   NormalityResult,
   QuantChartType,
   RollingCapabilityPoint,
@@ -32,6 +33,8 @@ interface UseSPCComputedAnalyticsArgs {
   ewmaL: number
   cusumK: number
   cusumH: number
+  governedLimits?: GovernedControlLimits | null
+  useGovernedLimits?: boolean
 }
 
 interface ComputeResponse {
@@ -55,6 +58,8 @@ export function useSPCComputedAnalytics({
   ewmaL,
   cusumK,
   cusumH,
+  governedLimits = null,
+  useGovernedLimits = false,
 }: UseSPCComputedAnalyticsArgs): AnalyticsState {
   const workerRef = useRef<Worker | null>(null)
   const requestIdRef = useRef(0)
@@ -116,6 +121,8 @@ export function useSPCComputedAnalytics({
       ewmaL,
       cusumK,
       cusumH,
+      governedLimits,
+      useGovernedLimits,
     }
 
     startTransition(() => {
@@ -202,6 +209,8 @@ export function useSPCComputedAnalytics({
     ewmaL,
     cusumK,
     cusumH,
+    governedLimits,
+    useGovernedLimits,
   ])
 
   return state

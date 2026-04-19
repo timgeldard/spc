@@ -85,39 +85,31 @@ async def fetch_process_flow(
         WITH RECURSIVE
         upstream AS (
             SELECT DISTINCT
-                PARENT_MATERIAL_ID AS material_id,
+                source AS material_id,
                 0 AS depth
-            FROM {tbl('gold_batch_lineage')}
-            WHERE CHILD_MATERIAL_ID = :material_id
-              AND LINK_TYPE = 'PRODUCTION'
-              AND PARENT_MATERIAL_ID IS NOT NULL
+            FROM {tbl('spc_lineage_graph_mv')}
+            WHERE target = :material_id
             UNION ALL
             SELECT DISTINCT
-                bl.PARENT_MATERIAL_ID,
+                bl.source,
                 u.depth + 1
-            FROM {tbl('gold_batch_lineage')} bl
-            JOIN upstream u ON bl.CHILD_MATERIAL_ID = u.material_id
-            WHERE bl.LINK_TYPE = 'PRODUCTION'
-              AND bl.PARENT_MATERIAL_ID IS NOT NULL
-              AND u.depth < :upstream_depth
+            FROM {tbl('spc_lineage_graph_mv')} bl
+            JOIN upstream u ON bl.target = u.material_id
+            WHERE u.depth < :upstream_depth
         ),
         downstream AS (
             SELECT DISTINCT
-                CHILD_MATERIAL_ID AS material_id,
+                target AS material_id,
                 0 AS depth
-            FROM {tbl('gold_batch_lineage')}
-            WHERE PARENT_MATERIAL_ID = :material_id
-              AND LINK_TYPE = 'PRODUCTION'
-              AND CHILD_MATERIAL_ID IS NOT NULL
+            FROM {tbl('spc_lineage_graph_mv')}
+            WHERE source = :material_id
             UNION ALL
             SELECT DISTINCT
-                bl.CHILD_MATERIAL_ID,
+                bl.target,
                 d.depth + 1
-            FROM {tbl('gold_batch_lineage')} bl
-            JOIN downstream d ON bl.PARENT_MATERIAL_ID = d.material_id
-            WHERE bl.LINK_TYPE = 'PRODUCTION'
-              AND bl.CHILD_MATERIAL_ID IS NOT NULL
-              AND d.depth < :downstream_depth
+            FROM {tbl('spc_lineage_graph_mv')} bl
+            JOIN downstream d ON bl.source = d.material_id
+            WHERE d.depth < :downstream_depth
         ),
         all_materials AS (
             SELECT material_id FROM upstream
@@ -127,14 +119,11 @@ async def fetch_process_flow(
             SELECT :material_id AS material_id
         )
         SELECT DISTINCT
-            bl.PARENT_MATERIAL_ID AS source,
-            bl.CHILD_MATERIAL_ID  AS target
-        FROM {tbl('gold_batch_lineage')} bl
-        WHERE bl.LINK_TYPE = 'PRODUCTION'
-          AND bl.PARENT_MATERIAL_ID IN (SELECT material_id FROM all_materials)
-          AND bl.CHILD_MATERIAL_ID  IN (SELECT material_id FROM all_materials)
-          AND bl.PARENT_MATERIAL_ID IS NOT NULL
-          AND bl.CHILD_MATERIAL_ID  IS NOT NULL
+            bl.source AS source,
+            bl.target AS target
+        FROM {tbl('spc_lineage_graph_mv')} bl
+        WHERE bl.source IN (SELECT material_id FROM all_materials)
+          AND bl.target IN (SELECT material_id FROM all_materials)
     """
     edge_rows = await run_sql_async(
         token,
@@ -144,6 +133,7 @@ async def fetch_process_flow(
             sql_param("upstream_depth", upstream_depth),
             sql_param("downstream_depth", downstream_depth),
         ],
+        endpoint_hint="spc.analysis.process-flow",
     )
 
     material_ids = {material_id}
@@ -189,7 +179,9 @@ async def fetch_process_flow(
           {date_filter}
         GROUP BY material_id
     """
-    health_rows = await run_sql_async(token, health_query, mat_params + date_params)
+    health_rows = await run_sql_async(
+        token, health_query, mat_params + date_params, endpoint_hint="spc.analysis.process-flow"
+    )
 
     health_by_mat: dict[str, _HealthRow] = {}
     for row in health_rows:
@@ -303,7 +295,7 @@ async def fetch_scorecard(
         HAVING MEASURE(batch_count) >= 3
         ORDER BY mic_name
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.analysis.scorecard")
 
     for row in rows:
         typed_row: _ScorecardRow = row
@@ -430,8 +422,8 @@ async def fetch_compare_scorecard(
     """
 
     scorecard_rows, name_rows = await asyncio.gather(
-        run_sql_async(token, scorecard_query, params),
-        run_sql_async(token, names_query, mat_params),
+        run_sql_async(token, scorecard_query, params, endpoint_hint="spc.analysis.compare-scorecard"),
+        run_sql_async(token, names_query, mat_params, endpoint_hint="spc.analysis.compare-scorecard"),
     )
 
     material_names: dict[str, str] = {
@@ -519,7 +511,7 @@ async def save_msa_session(
             :repeatability, :reproducibility, :ndc
         )
     """
-    await run_sql_async(token, query, params)
+    await run_sql_async(token, query, params, endpoint_hint="spc.analysis.msa-save")
     return {"saved": True, "session_id": session_id}
 
 
@@ -589,7 +581,7 @@ async def fetch_correlation(
         ORDER BY ABS(pearson_r) DESC
         LIMIT 500
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.analysis.correlation")
 
     mic_map: dict[str, str] = {}
     for row in rows:
@@ -659,7 +651,7 @@ async def fetch_correlation_scatter(
         GROUP BY a.batch_id, a.avg_val, b.avg_val, a.mic_name, b.mic_name
         ORDER BY MIN(f.batch_date), a.batch_id
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.analysis.correlation-scatter")
 
     mic_a_name = rows[0].get("mic_a_name", mic_a_id) if rows else mic_a_id
     mic_b_name = rows[0].get("mic_b_name", mic_b_id) if rows else mic_b_id
@@ -746,7 +738,9 @@ async def fetch_multivariate(
         ORDER BY batch_date, batch_id, mic_name
         LIMIT {_MULTIVARIATE_MAX_SOURCE_ROWS + 1}
     """
-    rows = await run_sql_async(token, query, params + mic_params)
+    rows = await run_sql_async(
+        token, query, params + mic_params, endpoint_hint="spc.analysis.multivariate"
+    )
     if len(rows) > _MULTIVARIATE_MAX_SOURCE_ROWS:
         raise ValueError(
             "Selected multivariate scope is too large for interactive analysis. "

@@ -110,6 +110,19 @@ class DataQualityRequest(_DateRangeMixin, _MicIdMixin):
         return v
 
 
+class ControlLimitsRequest(_DateRangeMixin, _MicIdMixin):
+    material_id: str
+    mic_name: Optional[str] = None
+    plant_id: Optional[str] = None
+
+    @field_validator("material_id")
+    @classmethod
+    def check_material_id(cls, v: str) -> str:
+        if len(v) > _MATERIAL_ID_MAX_LEN:
+            raise ValueError(f"material_id must be at most {_MATERIAL_ID_MAX_LEN} characters")
+        return v
+
+
 class ProcessFlowRequest(_DateRangeMixin):
     material_id: str
     upstream_depth: int = _DEFAULT_UPSTREAM_DEPTH

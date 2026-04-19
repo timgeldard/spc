@@ -5,21 +5,22 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import ValidationError
 
 from backend.dal.spc_charts_dal import (
+    fetch_control_limits,
     decode_chart_cursor,
     delete_locked_limits,
     fetch_chart_data_page,
-    fetch_chart_data_values,
     fetch_count_chart_data,
     fetch_data_quality_summary,
     fetch_locked_limits,
+    fetch_normality_summary,
     fetch_p_chart_data,
     fetch_spec_drift_summary,
     save_locked_limits,
 )
-from backend.dal.spc_shared import compute_normality_result
 from backend.routers.spc_common import handle_locked_limits_error, handle_sql_error
 from backend.schemas.spc_schemas import (
     ChartDataRequest,
+    ControlLimitsRequest,
     CountChartDataRequest,
     DataQualityRequest,
     DeleteLockedLimitsRequest,
@@ -31,7 +32,6 @@ from backend.utils.db import attach_data_freshness, check_warehouse_config, reso
 from backend.utils.rate_limit import limiter
 
 router = APIRouter()
-_NORMALITY_MAX_POINTS = 5000
 logger = logging.getLogger(__name__)
 
 
@@ -73,19 +73,14 @@ async def spc_chart_data(
     spec_drift = None
     if include_summary and cursor is None:
         try:
-            normality = compute_normality_result(
-                await fetch_chart_data_values(
-                    token,
-                    body.material_id,
-                    body.mic_id,
-                    body.mic_name,
-                    body.plant_id,
-                    body.date_from,
-                    body.date_to,
-                    body.stratify_by,
-                    max_points=_NORMALITY_MAX_POINTS,
-                    operation_id=body.operation_id,
-                )
+            normality = await fetch_normality_summary(
+                token,
+                body.material_id,
+                body.mic_id,
+                body.plant_id,
+                body.date_from,
+                body.date_to,
+                operation_id=body.operation_id,
             )
         except Exception as exc:
             handle_sql_error(exc)
@@ -138,7 +133,7 @@ async def spc_chart_data(
             "spec_drift": spec_drift,
         },
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["gold_batch_quality_result_v", "spc_batch_dim_mv"],
         request_path=request.url.path,
     )
 
@@ -174,6 +169,37 @@ async def spc_data_quality(
     )
 
 
+@router.post("/control-limits")
+@limiter.limit("60/minute")
+async def spc_control_limits(
+    request: Request,
+    body: ControlLimitsRequest,
+    x_forwarded_access_token: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    token = resolve_token(x_forwarded_access_token, authorization)
+    check_warehouse_config()
+    try:
+        limits = await fetch_control_limits(
+            token,
+            body.material_id,
+            body.mic_id,
+            body.plant_id,
+            body.date_from,
+            body.date_to,
+            operation_id=body.operation_id,
+        )
+    except Exception as exc:
+        handle_sql_error(exc)
+
+    return await attach_data_freshness(
+        {"control_limits": limits},
+        token,
+        ["spc_quality_metrics"],
+        request_path=request.url.path,
+    )
+
+
 @router.post("/p-chart-data")
 @limiter.limit("60/minute")
 async def spc_p_chart_data(
@@ -201,7 +227,7 @@ async def spc_p_chart_data(
     return await attach_data_freshness(
         {"points": rows, "count": len(rows)},
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["spc_attribute_subgroup_mv"],
         request_path=request.url.path,
     )
 
@@ -234,7 +260,7 @@ async def spc_count_chart_data(
     return await attach_data_freshness(
         {"points": rows, "count": len(rows), "chart_subtype": body.chart_subtype},
         token,
-        ["gold_batch_quality_result_v", "gold_batch_mass_balance_v"],
+        ["spc_attribute_subgroup_mv"],
         request_path=request.url.path,
     )
 

@@ -17,7 +17,7 @@ export function useAttributeCharacteristics(
     queryKey: spcQueryKeys.attributeCharacteristics(materialId, plantId),
     queryFn: ({ signal }) => fetchAttributeCharacteristics(materialId as string, plantId ?? null, signal),
     enabled: Boolean(materialId),
-    staleTime: 5 * 60_000,
+    staleTime: 15 * 60_000,
   })
 
   return {

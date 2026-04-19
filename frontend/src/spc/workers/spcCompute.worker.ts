@@ -1,6 +1,7 @@
 import { computeAnalytics } from '../computeAnalytics'
 import type {
   ChartDataPoint,
+  GovernedControlLimits,
   NormalityResult,
   QuantChartType,
   RollingCapabilityPoint,
@@ -24,6 +25,8 @@ interface ComputeRequest {
   ewmaL: number
   cusumK: number
   cusumH: number
+  governedLimits?: GovernedControlLimits | null
+  useGovernedLimits?: boolean
 }
 
 interface ComputeResponse {

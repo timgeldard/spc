@@ -67,4 +67,49 @@ describe('computeAnalytics', () => {
     expect(result.stratumSections[0].label).toBe('A')
     expect(result.stratumSections[1].label).toBe('Z')
   })
+
+  it('applies governed limits and capability values for standard live charts', () => {
+    const points: ChartDataPoint[] = [
+      { batch_id: 'B1', batch_date: '2026-01-01', batch_seq: 1, sample_seq: 1, value: 10, nominal: 10, tolerance: 2 },
+      { batch_id: 'B2', batch_date: '2026-01-02', batch_seq: 2, sample_seq: 1, value: 11, nominal: 10, tolerance: 2 },
+      { batch_id: 'B3', batch_date: '2026-01-03', batch_seq: 3, sample_seq: 1, value: 9, nominal: 10, tolerance: 2 },
+      { batch_id: 'B4', batch_date: '2026-01-04', batch_seq: 4, sample_seq: 1, value: 10.5, nominal: 10, tolerance: 2 },
+    ]
+
+    const result = computeAnalytics({
+      ...defaultInput,
+      points,
+      chartType: 'imr',
+      governedLimits: { cl: 10.2, ucl: 11.4, lcl: 9.0, sigma_within: 0.4, cpk: 1.8, ppk: 1.6 },
+      useGovernedLimits: true,
+    })
+
+    expect(result.spc?.imr?.xBar).toBe(10.2)
+    expect(result.spc?.imr?.ucl_x).toBe(11.4)
+    expect(result.spc?.imr?.lcl_x).toBe(9.0)
+    expect(result.spc?.capability?.cpk).toBe(1.8)
+    expect(result.spc?.capability?.ppk).toBe(1.6)
+    expect(result.spc?.capability?.sigma_within).toBe(0.4)
+  })
+
+  it('keeps locally derived limits when governed mode is disabled for what-if analysis', () => {
+    const points: ChartDataPoint[] = [
+      { batch_id: 'B1', batch_date: '2026-01-01', batch_seq: 1, sample_seq: 1, value: 10, nominal: 10, tolerance: 2 },
+      { batch_id: 'B2', batch_date: '2026-01-02', batch_seq: 2, sample_seq: 1, value: 11, nominal: 10, tolerance: 2 },
+      { batch_id: 'B3', batch_date: '2026-01-03', batch_seq: 3, sample_seq: 1, value: 9, nominal: 10, tolerance: 2 },
+      { batch_id: 'B4', batch_date: '2026-01-04', batch_seq: 4, sample_seq: 1, value: 10.5, nominal: 10, tolerance: 2 },
+    ]
+
+    const result = computeAnalytics({
+      ...defaultInput,
+      points,
+      chartType: 'imr',
+      excludedIndices: [1],
+      governedLimits: { cl: 10.2, ucl: 11.4, lcl: 9.0, sigma_within: 0.4, cpk: 1.8, ppk: 1.6 },
+      useGovernedLimits: false,
+    })
+
+    expect(result.spc?.imr?.xBar).not.toBeCloseTo(10.2)
+    expect(result.spc?.capability?.cpk).not.toBeCloseTo(1.8)
+  })
 })

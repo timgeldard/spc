@@ -4,6 +4,8 @@ import type { AutocorrelationResult, ExclusionAuditSnapshot, SpecDriftWarning } 
 interface ChartInfoBannersProps {
   lockedLimitsError?: string | null
   lockedLimitsWarning?: string | null
+  limitsSourceDetail?: string | null
+  limitsSourceTone?: 'info' | 'warning' | null
   exclusionsError?: string | null
   exclusionsLoading?: boolean
   dataTruncated?: boolean
@@ -20,6 +22,8 @@ function formatAutocorrelationSubtitle(ac: AutocorrelationResult): string {
 export default function ChartInfoBanners({
   lockedLimitsError,
   lockedLimitsWarning,
+  limitsSourceDetail,
+  limitsSourceTone = null,
   exclusionsError,
   exclusionsLoading = false,
   dataTruncated = false,
@@ -65,6 +69,15 @@ export default function ChartInfoBanners({
           kind="warning"
           title="Locked limits warning:"
           subtitle={lockedLimitsWarning}
+          hideCloseButton
+          lowContrast
+        />
+      )}
+      {limitsSourceDetail && limitsSourceTone && (
+        <InlineNotification
+          kind={limitsSourceTone}
+          title={limitsSourceTone === 'warning' ? 'Using derived limits.' : 'Limits source'}
+          subtitle={limitsSourceDetail}
           hideCloseButton
           lowContrast
         />

@@ -66,6 +66,7 @@ interface ChartSummaryBarProps {
   actionRail?: ReactNode
   lockedLimits?: { locked_at?: string | null; locked_by?: string | null } | null
   limitsMode?: 'live' | 'locked'
+  limitsSourceLabel?: string | null
   onExclusionClick?: () => void
 }
 
@@ -84,6 +85,7 @@ export default function ChartSummaryBar({
   actionRail,
   lockedLimits,
   limitsMode,
+  limitsSourceLabel,
   onExclusionClick,
 }: ChartSummaryBarProps) {
   return (
@@ -128,6 +130,11 @@ export default function ChartSummaryBar({
               {limitsMode === 'locked' && lockedLimits && (
                 <StatusChip tone="blue">
                   Limits locked{lockedLimits.locked_at ? ` · ${lockedLimits.locked_at.substring(0, 10)}` : ''}
+                </StatusChip>
+              )}
+              {limitsSourceLabel && !(limitsMode === 'locked' && limitsSourceLabel === 'Locked') && (
+                <StatusChip tone={limitsSourceLabel === 'Governed' ? 'green' : limitsSourceLabel === 'Locked' ? 'blue' : 'amber'}>
+                  Limits: {limitsSourceLabel}
                 </StatusChip>
               )}
               {quantNormality?.is_normal === false && <StatusChip tone="amber">Non-normal capability override</StatusChip>}

@@ -136,18 +136,85 @@ class TestSqlCacheBehavior:
         assert db_module._is_write_statement("INSERT INTO t VALUES (1)")
         assert not db_module._is_read_only_statement("INSERT INTO t VALUES (1)")
 
+    def test_sql_cache_tier_classifies_known_hot_paths(self):
+        assert db_module._sql_cache_tier("SELECT * FROM connected_plant_uat.gold.spc_characteristic_dim_mv") == "metadata"
+        assert db_module._sql_cache_tier("SELECT * FROM connected_plant_uat.gold.spc_quality_metrics") == "scorecard"
+        assert db_module._sql_cache_tier("SELECT * FROM connected_plant_uat.gold.spc_batch_dim_mv") == "chart"
+
     def test_run_sql_async_clears_cache_after_write(self):
         db_module._clear_sql_cache()
         cache_key = db_module._sql_cache_key("token", "SELECT 1", None)
-        with db_module._sql_cache_lock:
-            db_module._sql_cache[cache_key] = [{"cached": True}]
+        with db_module._metadata_cache_lock:
+            db_module._metadata_cache[cache_key] = [{"cached": "metadata"}]
+        with db_module._scorecard_cache_lock:
+            db_module._scorecard_cache[cache_key] = [{"cached": "scorecard"}]
+        with db_module._chart_cache_lock:
+            db_module._chart_cache[cache_key] = [{"cached": "chart"}]
 
         with patch("backend.utils.db.run_sql", return_value=[]) as mocked_run_sql:
-            asyncio.run(db_module.run_sql_async("token", "INSERT INTO t VALUES (1)"))
+            asyncio.run(db_module.run_sql_async("token", "INSERT INTO t VALUES (1)", audit=False))
 
         mocked_run_sql.assert_called_once()
-        with db_module._sql_cache_lock:
-            assert db_module._sql_cache.get(cache_key) is None
+        with db_module._metadata_cache_lock:
+            assert db_module._metadata_cache.get(cache_key) is None
+        with db_module._scorecard_cache_lock:
+            assert db_module._scorecard_cache.get(cache_key) is None
+        with db_module._chart_cache_lock:
+            assert db_module._chart_cache.get(cache_key) is None
+
+    def test_run_sql_async_emits_query_audit_for_uncached_read(self):
+        captured = []
+
+        async def fake_insert_query_audit(token, *, endpoint, params, row_count, duration_ms):
+            captured.append({
+                "token": token,
+                "endpoint": endpoint,
+                "params": params,
+                "row_count": row_count,
+                "duration_ms": duration_ms,
+            })
+
+        async def exercise():
+            db_module._clear_sql_cache()
+            with patch("backend.utils.db.run_sql", return_value=[{"ok": 1}]), patch(
+                "backend.utils.db.insert_spc_query_audit",
+                fake_insert_query_audit,
+            ):
+                rows = await db_module.run_sql_async(
+                    "token",
+                    "SELECT * FROM test_catalog.test_schema.spc_batch_dim_mv WHERE material_id = :material_id",
+                    [db_module.sql_param("material_id", "MAT-1")],
+                    endpoint_hint="spc.charts.chart-data",
+                )
+                await asyncio.sleep(0)
+                return rows
+
+        rows = asyncio.run(exercise())
+
+        assert rows == [{"ok": 1}]
+        assert captured
+        assert captured[0]["endpoint"] == "spc.charts.chart-data"
+        assert captured[0]["row_count"] == 1
+
+    def test_run_sql_async_skips_query_audit_for_query_audit_table(self):
+        captured = []
+
+        async def fake_insert_query_audit(*_args, **_kwargs):
+            captured.append("called")
+
+        async def exercise():
+            with patch("backend.utils.db.run_sql", return_value=[]), patch(
+                "backend.utils.db.insert_spc_query_audit",
+                fake_insert_query_audit,
+            ):
+                await db_module.run_sql_async(
+                    "token",
+                    f"INSERT INTO {db_module.tbl('spc_query_audit')} (query_id) VALUES ('1')",
+                )
+                await asyncio.sleep(0)
+
+        asyncio.run(exercise())
+        assert captured == []
 
 
 class TestSqlRuntimeTuning:
