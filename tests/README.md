@@ -1,34 +1,40 @@
 # SPC Testing Infrastructure
 
-This repository contains a professional, enforceable test suite for the Statistical Process Control (SPC) application, covering both the Python backend and React frontend.
+This repository contains a professional, enforceable test suite for the Statistical Process Control (SPC) application.
 
 ## Backend Tests (Python)
 
-See [backend/tests/README.md](../backend/tests/README.md) for detailed instructions.
+See [backend/tests/README.md](../backend/tests/README.md) for details.
 
-- **Tools**: `pytest`, `hypothesis`, `pytest-cov`, `requests-mock`
-- **Coverage Goal**: ≥75% (Enforced in CI)
-- **Philosophy**: Statistical fidelity first, fully mocked database calls.
-- **Run**: `make test`
+### Setup
+```bash
+uv pip install -r requirements.txt -r requirements-dev.txt
+```
+
+### Running Tests
+- `make test`: Run all unit tests (Enforces ≥75% coverage).
+- `make test-stat`: Run statistical logic tests.
+- `make test-dal`: Run SQL generation tests.
 
 ## Frontend Tests (React)
 
-Located in the `frontend/` directory.
+Located in `frontend/`.
 
-- **Tools**: `vitest`, `React Testing Library`, `@testing-library/jest-dom`
-- **Coverage Goal**: ≥60% on critical paths.
-- **Philosophy**: Component behavioral testing and hook logic validation.
-- **Run**: `cd frontend && npm test`
-- **CI Run**: `cd frontend && npm run test:ci` (includes coverage)
+### Setup
+```bash
+cd frontend && npm install
+```
+
+### Running Tests
+- `npm test`: Run Vitest in watch mode.
+- `npm run test:ci`: Run Vitest with coverage.
 
 ## Integration Tests
 
-Located in `backend/tests/integration/`.
+Located in `backend/tests/integration/`. These tests validate full SPC analysis and exclusion flows.
 
-- **Philosophy**: End-to-end validation of the application stack against a test Databricks workspace.
-- **Run**: `make test-integration` (Requires valid Databricks configuration/secrets)
-- **CI**: Runs on the `main` branch or scheduled builds.
+- `make test-integration`: Run integration suite (Requires Databricks configuration).
 
 ## Statistical Fidelity
 
-Both backend and frontend calculations are anchored to [docs/STATISTICAL_METHODS.md](../docs/STATISTICAL_METHODS.md) and validated against "golden datasets" in `backend/tests/fixtures/`.
+All calculations are anchored to [docs/STATISTICAL_METHODS.md](../docs/STATISTICAL_METHODS.md) and validated against "golden datasets" in `backend/tests/fixtures/`.

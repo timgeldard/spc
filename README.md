@@ -153,6 +153,33 @@ See [`docs/STATISTICAL_METHODS.md`](docs/STATISTICAL_METHODS.md) for full mathem
 
 **Process flow health colouring** is based on batch rejection rate (`INSPECTION_RESULT_VALUATION = 'R'`), not Cpk. Thresholds: < 2% rejection → green, < 10% → amber, ≥ 10% → red.
 
+---
+
+## Testing
+
+The application includes a professional, enforceable test suite covering both the backend and frontend.
+
+### Backend Tests (Python)
+The suite uses `pytest` with `hypothesis` for property-based testing and enforces a coverage floor.
+```bash
+# Run all unit tests (Enforces >=75% coverage)
+make test
+
+# Run statistical logic tests
+make test-stat
+```
+
+### Frontend Tests (React)
+The suite uses `vitest` and `React Testing Library`.
+```bash
+cd frontend
+npm test
+```
+
+For more details, see [tests/README.md](tests/README.md).
+
+---
+
 ## Deployment
 
 Use the bundled make target rather than raw bundle deploys:

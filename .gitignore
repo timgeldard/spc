@@ -8,6 +8,7 @@ venv/
 
 # Node
 frontend/node_modules/
+frontend/coverage/
 
 # NOTE: frontend/dist/ is intentionally tracked in git today because the
 # Databricks CLI's bundle deploy uses .gitignore to decide what to upload,
