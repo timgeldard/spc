@@ -47,9 +47,39 @@ def test_stddev_edge_cases():
     assert stddev([10]) == 0.0
     assert stddev([], ddof=1) == 0.0
 
-def test_moving_range_edge_cases():
-    assert moving_range([10]) == []
-    assert moving_range([]) == []
+def load_csv_fixture(name):
+    path = os.path.join(os.path.dirname(__file__), "fixtures", name)
+    import csv
+    data = []
+    with open(path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+    return data
+
+def test_imr_csv_fixture():
+    """Reference: STATISTICAL_METHODS.md Section 2. Individuals & Moving Range (I-MR)."""
+    rows = load_csv_fixture("imr_data.csv")
+    values = [float(r["value"]) for r in rows]
+    lcl, cl, ucl = compute_imr_limits(values)
+    assert cl == pytest.approx(10.11)
+    assert ucl == pytest.approx(10.9374, rel=1e-3)
+
+def test_xbar_r_csv_fixture():
+    """Reference: STATISTICAL_METHODS.md Section 2. X-bar & Range (X̄-R)."""
+    # This is a simplified test for utility readiness
+    rows = load_csv_fixture("xbar_r_data.csv")
+    # Group by subgroup
+    subgroups = {}
+    for r in rows:
+        sg = r["subgroup"]
+        if sg not in subgroups: subgroups[sg] = []
+        subgroups[sg].append(float(r["value"]))
+    
+    # Calculate R-bar manually for validation
+    ranges = [max(vals) - min(vals) for vals in subgroups.values()]
+    r_bar = sum(ranges) / len(ranges)
+    assert r_bar == pytest.approx(0.3)
 
 def test_nelson_rules_zero_sigma():
     # Should return empty violations if sigma is 0

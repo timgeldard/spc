@@ -150,14 +150,14 @@ test:
 	uv run pytest backend/tests -q --cov=backend --cov-report=term-missing
 
 test-stat:
-	uv run pytest backend/tests/test_spc_normality.py backend/tests/test_logic_comprehensive.py backend/tests/test_multivariate.py -v
+	uv run pytest backend/tests/test_spc_normality.py backend/tests/test_logic_comprehensive.py backend/tests/test_multivariate.py -v --tb=short
 
 test-dal:
-	uv run pytest backend/tests/*dal*.py -v
+	uv run pytest backend/tests/*dal*.py -v --tb=short
 
 test-quick:
 	uv run pytest backend/tests -q --tb=no
 
 coverage:
-	uv run pytest --cov=backend --cov-report=html
-	open htmlcov/index.html
+	uv run pytest backend/tests --cov=backend --cov-report=html
+	@echo "Coverage report generated in htmlcov/"
