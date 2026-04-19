@@ -279,15 +279,6 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   }, [state.selectedMIC?.mic_id])
 
   useEffect(() => {
-    if (pendingPlantId === (state.selectedPlant?.plant_id ?? '')) return
-    const timeoutId = window.setTimeout(() => {
-      const plant = plants.find(candidate => candidate.plant_id === pendingPlantId) ?? null
-      dispatch({ type: 'SET_PLANT', payload: plant as PlantRef | null })
-    }, FILTER_COMMIT_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeoutId)
-  }, [dispatch, pendingPlantId, plants, state.selectedPlant?.plant_id])
-
-  useEffect(() => {
     if (pendingDateFrom === (state.dateFrom ?? '') && pendingDateTo === (state.dateTo ?? '')) return
     const timeoutId = window.setTimeout(() => {
       if (pendingDateFrom !== (state.dateFrom ?? '')) {
@@ -324,7 +315,10 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
   }
 
   const handlePlantChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setPendingPlantId(event.target.value)
+    const nextPlantId = event.target.value
+    setPendingPlantId(nextPlantId)
+    const plant = plants.find(candidate => candidate.plant_id === nextPlantId) ?? null
+    dispatch({ type: 'SET_PLANT', payload: plant as PlantRef | null })
   }
 
   const handleMICChange = (event: ChangeEvent<HTMLSelectElement>) => {

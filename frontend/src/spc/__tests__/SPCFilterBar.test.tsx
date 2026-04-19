@@ -263,35 +263,27 @@ describe('SPCFilterBar', () => {
     vi.useRealTimers()
   })
 
-  it('debounces plant selection changes before dispatching', () => {
+  it('commits plant selection immediately', () => {
     render(<SPCFilterBar embedded />)
     dispatch.mockClear()
 
     fireEvent.change(screen.getByLabelText('Plant'), { target: { value: 'PLANT-2' } })
 
-    expect(dispatch).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(299)
-    expect(dispatch).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
     expect(dispatch).toHaveBeenCalledWith({
       type: 'SET_PLANT',
       payload: { plant_id: 'PLANT-2', plant_name: 'Plant 2' },
     })
   })
 
-  it('keeps only the last debounced plant selection', () => {
+  it('keeps only the last selected plant in immediate commit mode', () => {
     render(<SPCFilterBar embedded />)
     dispatch.mockClear()
 
     const plantSelect = screen.getByLabelText('Plant')
     fireEvent.change(plantSelect, { target: { value: 'PLANT-2' } })
     fireEvent.change(plantSelect, { target: { value: 'PLANT-3' } })
-
-    vi.advanceTimersByTime(300)
-
-    expect(dispatch).toHaveBeenCalledTimes(1)
+ 
+    expect(dispatch).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenLastCalledWith({
       type: 'SET_PLANT',
       payload: { plant_id: 'PLANT-3', plant_name: 'Plant 3' },

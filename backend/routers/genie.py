@@ -14,6 +14,7 @@ API flow:
 import asyncio
 import logging
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -27,8 +28,9 @@ logger = logging.getLogger(__name__)
 
 _GENIE_SPACE_ID: str = os.environ.get("GENIE_SPACE_ID", "")
 _POLL_INTERVAL_S: float = 1.5
-_POLL_MAX_ATTEMPTS: int = 40  # ~60 s maximum wait
+_POLL_MAX_ATTEMPTS: int = 40  # Poll-loop budget; total request time is bounded below.
 _API_TIMEOUT_S: float = 30.0
+_MAX_TOTAL_WAIT_S: float = _API_TIMEOUT_S + (_POLL_INTERVAL_S * _POLL_MAX_ATTEMPTS)
 
 
 class GenieRequest(BaseModel):
@@ -41,12 +43,20 @@ class GenieResponse(BaseModel):
     conversation_id: str
 
 
-async def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
+async def _api(
+    token: str,
+    method: str,
+    path: str,
+    body: Optional[dict] = None,
+    *,
+    timeout_s: Optional[float] = None,
+) -> dict:
     host = hostname()
     url = f"https://{host}{path}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(_API_TIMEOUT_S)) as client:
+        timeout = _API_TIMEOUT_S if timeout_s is None else timeout_s
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
             resp = await client.request(method, url, headers=headers, json=body)
             resp.raise_for_status()
             if not resp.content:
@@ -110,12 +120,20 @@ async def genie_message(
 
     token = resolve_token(x_forwarded_access_token, authorization)
     space_id = _GENIE_SPACE_ID
+    deadline = time.monotonic() + _MAX_TOTAL_WAIT_S
+
+    def _remaining_timeout() -> float:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise HTTPException(status_code=504, detail="Genie response timed out.")
+        return min(_API_TIMEOUT_S, remaining)
 
     if req.conversation_id:
         data = await _api(
             token, "POST",
             f"/api/2.0/genie/spaces/{space_id}/conversations/{req.conversation_id}/messages",
             {"content": req.message},
+            timeout_s=_remaining_timeout(),
         )
         conversation_id = req.conversation_id
         message_id = data.get("id")
@@ -124,6 +142,7 @@ async def genie_message(
             token, "POST",
             f"/api/2.0/genie/spaces/{space_id}/start-conversation",
             {"content": req.message},
+            timeout_s=_remaining_timeout(),
         )
         conversation_id = data.get("conversation_id")
         message_id = data.get("message_id")
@@ -141,7 +160,7 @@ async def genie_message(
     )
 
     for _ in range(_POLL_MAX_ATTEMPTS):
-        msg = await _api(token, "GET", poll_path)
+        msg = await _api(token, "GET", poll_path, timeout_s=_remaining_timeout())
         status = msg.get("status", "")
         if status == "COMPLETED":
             return GenieResponse(answer=_extract_text(msg), conversation_id=conversation_id)
@@ -154,6 +173,9 @@ async def genie_message(
                 status_code=500,
                 detail=f"Genie could not produce a response (status: {status.lower()}).",
             )
-        await asyncio.sleep(_POLL_INTERVAL_S)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(_POLL_INTERVAL_S, remaining))
 
     raise HTTPException(status_code=504, detail="Genie response timed out.")

@@ -1,3 +1,4 @@
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Optional
@@ -6,6 +7,8 @@ from urllib.parse import quote, unquote
 from backend.dal.spc_shared import infer_spec_type
 from backend.utils.db import TRACE_CATALOG, TRACE_SCHEMA, run_sql_async, sql_param, tbl
 from backend.utils.schema_contract import detect_optional_columns
+
+logger = logging.getLogger(__name__)
 
 _NORMALITY_MAX_POINTS = 5000
 _FULL_CHART_MAX_ROWS = 10000
@@ -491,7 +494,7 @@ async def fetch_normality_summary(
             MAX(normality_method)   AS normality_method
         FROM {tbl('spc_quality_metrics')}
         {where_sql}
-        GROUP BY mic_id
+        GROUP BY mic_id, operation_id
     """
     rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.normality")
     if not rows:
@@ -501,6 +504,21 @@ async def fetch_normality_summary(
             "alpha": 0.05,
             "is_normal": None,
             "warning": "Normality metadata unavailable for this characteristic.",
+        }
+    if len(rows) > 1:
+        logger.warning(
+            "spc.normality.ambiguous_operation material_id=%s mic_id=%s plant_id=%s operations=%d",
+            material_id,
+            mic_id,
+            plant_id,
+            len(rows),
+        )
+        return {
+            "method": "governed_profile",
+            "p_value": None,
+            "alpha": 0.05,
+            "is_normal": None,
+            "warning": "Normality metadata spans multiple operations. Select a routing step to use the governed profile.",
         }
 
     row = rows[0]
@@ -567,14 +585,30 @@ async def fetch_control_limits(
             MEASURE(ppk)           AS ppk
         FROM {tbl('spc_quality_metrics')}
         {where_sql}
-        GROUP BY mic_id
+        GROUP BY mic_id, operation_id
     """
     rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.control-limits")
+    if len(rows) > 1:
+        logger.warning(
+            "spc.control_limits.ambiguous_operation material_id=%s mic_id=%s plant_id=%s operations=%d",
+            material_id,
+            mic_id,
+            plant_id,
+            len(rows),
+        )
+        return {
+            "cl": None,
+            "ucl": None,
+            "lcl": None,
+            "sigma_within": None,
+            "cpk": None,
+            "ppk": None,
+        }
     row = rows[0] if rows else {}
     result: dict[str, Optional[float]] = {}
-    for field in ("cl", "ucl", "lcl", "sigma_within", "cpk", "ppk"):
-        value = row.get(field)
-        result[field] = float(value) if value is not None else None
+    for key in ("cl", "ucl", "lcl", "sigma_within", "cpk", "ppk"):
+        value = row.get(key)
+        result[key] = float(value) if value is not None else None
     return result
 
 

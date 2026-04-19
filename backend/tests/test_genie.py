@@ -37,7 +37,7 @@ def test_genie_new_conversation_returns_answer(monkeypatch):
 
     calls = []
 
-    async def fake_api(_token, method, path, body=None):
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
         calls.append((method, path, body))
         if path.endswith("/start-conversation"):
             return {"conversation_id": "conv-1", "message_id": "msg-1"}
@@ -61,7 +61,7 @@ def test_genie_existing_conversation_uses_correct_path(monkeypatch):
 
     calls = []
 
-    async def fake_api(_token, method, path, body=None):
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
         calls.append((method, path, body))
         if method == "POST":
             return {"id": "msg-2"}
@@ -101,7 +101,7 @@ def test_genie_does_not_leak_api_error_body(monkeypatch):
 def test_genie_does_not_leak_failed_error_field(monkeypatch):
     monkeypatch.setattr(genie, "_GENIE_SPACE_ID", "space-1")
 
-    async def fake_api(_token, method, path, body=None):
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
         if method == "POST":
             return {"conversation_id": "conv-1", "message_id": "msg-1"}
         return {"status": "FAILED", "error": "internal secret detail"}
@@ -123,12 +123,46 @@ def test_genie_timeout_returns_504(monkeypatch):
     monkeypatch.setattr(genie, "_POLL_MAX_ATTEMPTS", 1)
     monkeypatch.setattr(genie, "_POLL_INTERVAL_S", 0)
 
-    async def fake_api(_token, method, path, body=None):
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
         if method == "POST":
             return {"conversation_id": "conv-1", "message_id": "msg-1"}
         return {"status": "RUNNING"}
 
     monkeypatch.setattr(genie, "_api", fake_api)
+
+    response = client.post(
+        "/api/spc/genie/message",
+        headers={"x-forwarded-access-token": "token"},
+        json={"message": "hello"},
+    )
+
+    assert response.status_code == 504
+
+
+def test_genie_applies_absolute_deadline(monkeypatch):
+    monkeypatch.setattr(genie, "_GENIE_SPACE_ID", "space-1")
+    monkeypatch.setattr(genie, "_POLL_MAX_ATTEMPTS", 2)
+    monkeypatch.setattr(genie, "_POLL_INTERVAL_S", 1.5)
+    monkeypatch.setattr(genie, "_MAX_TOTAL_WAIT_S", 3.0)
+
+    clock = {"now": 100.0}
+
+    def fake_monotonic():
+        return clock["now"]
+
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
+        if method == "POST":
+            clock["now"] += 2.5
+            return {"conversation_id": "conv-1", "message_id": "msg-1"}
+        clock["now"] += 0.6
+        return {"status": "RUNNING"}
+
+    async def fake_sleep(seconds):
+        clock["now"] += seconds
+
+    monkeypatch.setattr(genie.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(genie, "_api", fake_api)
+    monkeypatch.setattr(genie.asyncio, "sleep", fake_sleep)
 
     response = client.post(
         "/api/spc/genie/message",
@@ -246,7 +280,7 @@ def test_api_maps_upstream_5xx_to_gateway_errors(monkeypatch):
 def test_genie_rejects_malformed_start_conversation_payload(monkeypatch):
     monkeypatch.setattr(genie, "_GENIE_SPACE_ID", "space-1")
 
-    async def fake_api(_token, method, path, body=None):
+    async def fake_api(_token, method, path, body=None, *, timeout_s=None):
         if method == "POST":
             return {"conversation_id": "conv-1"}
         return {"status": "COMPLETED", "attachments": [{"text": {"content": "ok"}}]}

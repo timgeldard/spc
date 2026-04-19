@@ -188,6 +188,60 @@ def test_fetch_control_limits_queries_governed_metrics(monkeypatch):
     assert any(param["name"] == "operation_id" and param["value"] == "OP-10" for param in captured["params"])
 
 
+def test_fetch_control_limits_returns_nulls_when_multiple_operations_match(monkeypatch):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
+        return [
+            {"cl": "10.5", "ucl": "12.1", "lcl": "8.9", "sigma_within": "0.4", "cpk": "1.33", "ppk": "1.21"},
+            {"cl": "11.0", "ucl": "12.4", "lcl": "9.6", "sigma_within": "0.5", "cpk": "1.1", "ppk": "1.0"},
+        ]
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    result = asyncio.run(
+        spc_charts_dal.fetch_control_limits(
+            "token",
+            "MAT-1",
+            "MIC-1",
+            "PLANT-1",
+            "2026-01-01",
+            "2026-01-31",
+        )
+    )
+
+    assert result == {
+        "cl": None,
+        "ucl": None,
+        "lcl": None,
+        "sigma_within": None,
+        "cpk": None,
+        "ppk": None,
+    }
+
+
+def test_fetch_normality_summary_warns_when_multiple_operations_match(monkeypatch):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
+        return [
+            {"normality_safe": 1, "normality_type": "normal", "normality_method": "governed_profile"},
+            {"normality_safe": 1, "normality_type": "non_normal", "normality_method": "governed_profile"},
+        ]
+
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    result = asyncio.run(
+        spc_charts_dal.fetch_normality_summary(
+            "token",
+            "MAT-1",
+            "MIC-1",
+            "PLANT-1",
+            "2026-01-01",
+            "2026-01-31",
+        )
+    )
+
+    assert result["is_normal"] is None
+    assert "multiple operations" in (result["warning"] or "")
+
+
 def test_fetch_p_chart_data_uses_attribute_subgroup_mv(monkeypatch):
     captured = {}
 
