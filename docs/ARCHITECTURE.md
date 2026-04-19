@@ -60,10 +60,14 @@ backend/
 ├── dal/                Data Access Layer (SQL isolation)
 │   ├── spc_charts_dal.py Pypika-based dynamic queries
 │   └── spc_shared.py   Shared SQL fragments and table resolution
-├── schemas/            Pydantic Models
-│   └── spc_schemas.py  Request/Response type safety
+├── schemas/            Pydantic Models (Type safety for request/response)
+│   ├── spc_schemas.py
+│   └── trace_schemas.py
+├── schema/             Frozen Data Contracts (JSON definitions)
+│   └── gold_views.v1.json
 └── utils/
     ├── db.py           SQL statement execution adapter, caching, and token resolution
+    ├── schema_contract.py Gold view schema assertion logic
     └── rate_limit.py   API protection
 ```
 
@@ -92,14 +96,14 @@ params = [sql_param("id", val)]
 rows = await run_sql_async(token, query.get_sql(), params)
 ```
 
-Named `:name` placeholders remain the only DAL contract. The default REST executor passes them straight through to the Statement Execution API, while the optional connector executor normalizes them to positional parameters before dispatch. No user input is ever string-interpolated into the SQL text.
+Named `:name` placeholders remain the only DAL contract. The optional connector executor normalizes them to positional parameters before dispatch, while the REST executor passes them straight through to the Statement Execution API. No user input is ever string-interpolated into the SQL text.
 
 ### SQL Execution Adapter
 
 `backend/utils/db.py` now exposes a small executor boundary under the existing `run_sql()` / `run_sql_async()` wrappers.
 
-*   **Default**: `SPC_SQL_EXECUTOR=rest` uses the Databricks Statement Execution REST API for behavioral parity with the existing app.
-*   **Optional**: `SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector` path using the same DAL call sites.
+*   **Default**: `SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector` path using the same DAL call sites.
+*   **Fallback**: `SPC_SQL_EXECUTOR=rest` uses the Databricks Statement Execution REST API for behavioral parity.
 *   **Parity strategy**: the adapter boundary lets the app compare executors against the same DAL tests and live validation harness before removing the REST fallback.
 
 ---
@@ -108,11 +112,11 @@ Named `:name` placeholders remain the only DAL contract. The default REST execut
 
 ### TypeScript Foundation
 
-The frontend is fully migrated to **TypeScript** to ensure mathematical correctness in the SPC engine.
+The frontend is built on **TypeScript**, with the core SPC module fully migrated to ensure mathematical correctness in the statistical engine.
 
 *   **`calculations.runtime.ts`**: Pure TS implementation of AIAG/Six Sigma math.
 *   **`types.ts`**: Centralized interfaces for Chart Data, Capability results, and signals.
-*   **`uiClasses.ts`**: Manages Tailwind utility composites to ensure consistent aesthetics across the SPC module.
+*   **Entry Points**: `App.jsx` and `main.jsx` serve as the root boundaries, while the entire analysis domain is strictly typed.
 
 ### State Management (`SPCContext.tsx`)
 

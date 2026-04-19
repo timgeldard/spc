@@ -62,7 +62,7 @@ The FastAPI backend is built with a layered architecture:
 *   **Schemas** define Pydantic models for request/response contracts.
 *   **Data Access Layer (DAL)** manages programmatic SQL generation via **PyPika**, ensuring injection safety and deterministic data formatting.
 
-SQL is executed through a swappable adapter in `backend/utils/db.py`. The default path remains the Databricks Statement Execution REST API for parity, and `SPC_SQL_EXECUTOR=connector` enables the official `databricks-sql-connector` path against the same DAL call sites.
+SQL is executed through a swappable adapter in `backend/utils/db.py`. The official `databricks-sql-connector` is now the default path (`SPC_SQL_EXECUTOR=connector`), and `SPC_SQL_EXECUTOR=rest` remains available as a fallback using the Databricks Statement Execution REST API.
 
 ---
 
@@ -122,9 +122,9 @@ Every query runs as the signed-in user. The app performs no app-level filtering;
 | Endpoint | Purpose |
 |---|---|
 | `/api/health` | Process liveness only — confirms the FastAPI app is running |
-| `/api/ready` | SQL warehouse readiness — requires `DATABRICKS_READINESS_TOKEN` to run a real `SELECT 1` probe |
+| `/api/ready` | Connectivity & Schema check — performs a SQL warehouse probe and validates gold-view schema against the frozen contract |
 
-Because the app normally relies on per-user token passthrough, readiness needs its own non-user workspace token to verify warehouse connectivity before traffic is considered safe.
+Because the app normally relies on per-user token passthrough, readiness needs its own non-user workspace token to verify warehouse connectivity and schema integrity before traffic is considered safe.
 
 ---
 
@@ -168,7 +168,7 @@ Important deployment notes:
 - deployment is fully declarative; no post-deploy scope patching script is required
 - `/api/ready` requires `DATABRICKS_READINESS_TOKEN` in the target environment for a real warehouse probe
 - the in-process SQL cache is per app instance, so multi-instance deployments should treat it as a latency optimisation rather than a shared consistency layer
-- the backend supports `SPC_SQL_EXECUTOR=rest|connector`; keep `rest` as the baseline until connector parity is verified in your workspace
+- the backend supports `SPC_SQL_EXECUTOR=connector|rest`; use `connector` as the baseline.
 
 Live Release 1 warehouse validation:
 
