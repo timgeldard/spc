@@ -195,7 +195,39 @@ export function useControlChartsController(): ControlChartsController {
     selectedMIC?.operation_id,
   )
 
-  // ── SPC computation ─────────────────────────────────────────────────────
+  // ── Derived values ──────────────────────────────────────────────────────
+  const currentExcludedPoints = useMemo(
+    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
+    [isQuantitative, quantPoints, excludedIndices],
+  )
+  const liveSpecSignature = useMemo(
+    () => (isQuantitative ? buildSpecSignature(quantPoints) : null),
+    [isQuantitative, quantPoints],
+  )
+  const useDerivedLimitsMode = (
+    !isQuantitative ||
+    limitsMode === 'locked' ||
+    effectiveChartType === 'ewma' ||
+    effectiveChartType === 'cusum' ||
+    excludedIndices.size > 0 ||
+    excludeOutliers
+  )
+  const shouldFetchGovernedLimits = isQuantitative && limitsMode === 'live' && !useDerivedLimitsMode
+  const {
+    controlLimits: governedLimits,
+    loading: governedLimitsLoading,
+    error: governedLimitsError,
+    isComplete: governedLimitsComplete,
+  } = useGovernedControlLimits(
+    isQuantitative ? selectedMaterial?.material_id : null,
+    isQuantitative ? selectedMIC?.mic_id : null,
+    isQuantitative ? selectedPlant?.plant_id : null,
+    dateFrom ?? null,
+    dateTo ?? null,
+    isQuantitative ? selectedMIC?.operation_id : null,
+    shouldFetchGovernedLimits,
+  )
+  const shouldApplyGovernedLimits = isQuantitative && limitsMode === 'live' && !useDerivedLimitsMode && governedLimitsComplete
   const {
     spc,
     trendData,
@@ -215,10 +247,29 @@ export function useControlChartsController(): ControlChartsController {
     ewmaL,
     cusumK,
     cusumH,
-    governedLimits: null,
-    useGovernedLimits: false,
+    governedLimits: shouldApplyGovernedLimits ? governedLimits : null,
+    useGovernedLimits: shouldApplyGovernedLimits,
   })
+  const effectiveSpc = spc
+  const effectiveTrendData = trendData
+  const effectiveStratumSections = stratumSections
+  const effectiveAnalyticsLoading = analyticsLoading || (shouldFetchGovernedLimits && governedLimitsLoading)
+  const effectiveAnalyticsError = analyticsError
 
+  const { lockedLimits, error: lockedLimitsError, saveLimits, deleteLimits } = useLockedLimits(
+    isQuantitative ? selectedMaterial?.material_id : null,
+    isQuantitative ? selectedMIC?.mic_id : null,
+    isQuantitative ? selectedPlant?.plant_id : null,
+    effectiveChartType,
+    isQuantitative ? selectedMIC?.operation_id : null,
+    isQuantitative ? selectedMIC?.unified_mic_key : null,
+    liveSpecSignature,
+  )
+
+  const lockedLimitsWarning = lockedLimits?.stale_spec
+    ? 'Locked limits were saved against a different live specification signature. Review the lock before using locked mode.'
+    : null
+  const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
   // ── Exclusion workflow ──────────────────────────────────────────────────
   const {
     exclusionsSnapshot, exclusionsLoading, exclusionsSaving, exclusionsError,
@@ -238,85 +289,9 @@ export function useControlChartsController(): ControlChartsController {
     stratifyBy,
     dateFrom,
     dateTo,
-    spc,
+    spc: effectiveSpc,
     setAutoCleanLog,
   })
-
-  // ── Derived values ──────────────────────────────────────────────────────
-  const currentExcludedPoints = useMemo(
-    () => (isQuantitative ? (toExcludedPoints(quantPoints, excludedIndices) as ExcludedPoint[]) : []),
-    [isQuantitative, quantPoints, excludedIndices],
-  )
-  const liveSpecSignature = useMemo(
-    () => (isQuantitative ? buildSpecSignature(quantPoints) : null),
-    [isQuantitative, quantPoints],
-  )
-  const useDerivedLimitsMode = (
-    !isQuantitative ||
-    limitsMode === 'locked' ||
-    effectiveChartType === 'ewma' ||
-    effectiveChartType === 'cusum' ||
-    excludedIndices.size > 0 ||
-    excludeOutliers
-  )
-  const shouldFetchGovernedLimits = isQuantitative && limitsMode === 'live'
-  const {
-    controlLimits: governedLimits,
-    loading: governedLimitsLoading,
-    error: governedLimitsError,
-    isComplete: governedLimitsComplete,
-  } = useGovernedControlLimits(
-    isQuantitative ? selectedMaterial?.material_id : null,
-    isQuantitative ? selectedMIC?.mic_id : null,
-    isQuantitative ? selectedPlant?.plant_id : null,
-    dateFrom ?? null,
-    dateTo ?? null,
-    isQuantitative ? selectedMIC?.operation_id : null,
-    shouldFetchGovernedLimits,
-  )
-  const shouldApplyGovernedLimits = isQuantitative && limitsMode === 'live' && !useDerivedLimitsMode && governedLimitsComplete
-  const {
-    spc: governedSpc,
-    trendData: governedTrendData,
-    stratumSections: governedStratumSections,
-    analyticsLoading: governedAnalyticsLoading,
-    analyticsError: governedAnalyticsError,
-  } = useSPCComputedAnalytics({
-    points: isQuantitative ? quantPoints : [],
-    chartType: isQuantitative ? (effectiveChartType ?? 'imr') : null,
-    excludedIndices,
-    ruleSet,
-    excludeOutliers,
-    normality: quantNormality,
-    stratifyBy,
-    rollingWindowSize,
-    ewmaLambda,
-    ewmaL,
-    cusumK,
-    cusumH,
-    governedLimits,
-    useGovernedLimits: shouldApplyGovernedLimits,
-  })
-  const effectiveSpc = shouldApplyGovernedLimits ? governedSpc : spc
-  const effectiveTrendData = shouldApplyGovernedLimits ? governedTrendData : trendData
-  const effectiveStratumSections = shouldApplyGovernedLimits ? governedStratumSections : stratumSections
-  const effectiveAnalyticsLoading = governedLimitsLoading || (shouldApplyGovernedLimits ? governedAnalyticsLoading : analyticsLoading)
-  const effectiveAnalyticsError = shouldApplyGovernedLimits ? governedAnalyticsError : analyticsError
-
-  const { lockedLimits, error: lockedLimitsError, saveLimits, deleteLimits } = useLockedLimits(
-    isQuantitative ? selectedMaterial?.material_id : null,
-    isQuantitative ? selectedMIC?.mic_id : null,
-    isQuantitative ? selectedPlant?.plant_id : null,
-    effectiveChartType,
-    isQuantitative ? selectedMIC?.operation_id : null,
-    isQuantitative ? selectedMIC?.unified_mic_key : null,
-    liveSpecSignature,
-  )
-
-  const lockedLimitsWarning = lockedLimits?.stale_spec
-    ? 'Locked limits were saved against a different live specification signature. Review the lock before using locked mode.'
-    : null
-  const externalLimits = limitsMode === 'locked' && lockedLimits ? lockedLimits : null
   const totalSignals = (effectiveSpc?.signals?.length ?? 0) + (effectiveSpc?.mrSignals?.length ?? 0)
   const exclusionCount = excludedIndices.size
   const chartFamilyLabel = isAttributeChart

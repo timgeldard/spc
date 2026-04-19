@@ -186,6 +186,7 @@ def test_api_uses_async_httpx_client(monkeypatch):
     result = asyncio.run(genie._api("token-1", "POST", "/api/demo", {"hello": "world"}))
 
     assert result == {"ok": True}
+    assert isinstance(captured["timeout"], httpx.Timeout)
     assert captured["method"] == "POST"
     assert captured["url"] == "https://workspace.example.com/api/demo"
     assert captured["headers"]["Authorization"] == "Bearer token-1"
@@ -215,3 +216,48 @@ def test_api_sanitizes_http_status_failures(monkeypatch):
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Genie API request failed."
+
+
+def test_api_maps_upstream_5xx_to_gateway_errors(monkeypatch):
+    class FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            return httpx.Response(
+                503,
+                request=httpx.Request(method, url, headers=headers, json=json),
+                text="upstream unavailable",
+            )
+
+    monkeypatch.setattr(genie, "hostname", lambda: "workspace.example.com")
+    monkeypatch.setattr(genie.httpx, "AsyncClient", lambda *args, **kwargs: FakeAsyncClient())
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(genie._api("token-1", "GET", "/api/demo"))
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Genie API request failed."
+
+
+def test_genie_rejects_malformed_start_conversation_payload(monkeypatch):
+    monkeypatch.setattr(genie, "_GENIE_SPACE_ID", "space-1")
+
+    async def fake_api(_token, method, path, body=None):
+        if method == "POST":
+            return {"conversation_id": "conv-1"}
+        return {"status": "COMPLETED", "attachments": [{"text": {"content": "ok"}}]}
+
+    monkeypatch.setattr(genie, "_api", fake_api)
+
+    response = client.post(
+        "/api/spc/genie/message",
+        headers={"x-forwarded-access-token": "token"},
+        json={"message": "hello"},
+    )
+
+    assert response.status_code == 502
+    assert "unexpected empty or malformed response" in response.text

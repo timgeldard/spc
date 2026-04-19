@@ -229,7 +229,7 @@ async def get_exclusions(
         sql_param("date_to", query.date_to),
     ]
 
-    query = f"""
+    sql = f"""
         SELECT
             event_id,
             material_id,
@@ -273,7 +273,7 @@ async def get_exclusions(
     """
 
     try:
-        rows = await run_sql_async(token, query, params, endpoint_hint="spc.exclusions.get")
+        rows = await run_sql_async(token, sql, params, endpoint_hint="spc.exclusions.get")
     except RuntimeError as exc:
         _handle_sql_error(exc)
 

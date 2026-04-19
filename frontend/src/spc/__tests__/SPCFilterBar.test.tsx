@@ -40,6 +40,7 @@ vi.mock('../hooks/usePlants', () => ({
     plants: [
       { plant_id: 'PLANT-1', plant_name: 'Plant 1' },
       { plant_id: 'PLANT-2', plant_name: 'Plant 2' },
+      { plant_id: 'PLANT-3', plant_name: 'Plant 3' },
     ],
     loading: false,
   }),
@@ -149,13 +150,13 @@ vi.mock('~/lib/carbon-forms', () => {
     labelText,
     value,
     onChange,
-    placeHolderText,
+    placeholder,
   }: {
     id: string
     labelText: string
     value?: string
     onChange?: React.ChangeEventHandler<HTMLInputElement>
-    placeHolderText?: string
+    placeholder?: string
   }) => (
     <label htmlFor={id}>
       {labelText}
@@ -164,7 +165,7 @@ vi.mock('~/lib/carbon-forms', () => {
         aria-label={labelText}
         value={value ?? ''}
         onChange={onChange}
-        placeholder={placeHolderText}
+        placeholder={placeholder}
       />
     </label>
   )
@@ -277,6 +278,23 @@ describe('SPCFilterBar', () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: 'SET_PLANT',
       payload: { plant_id: 'PLANT-2', plant_name: 'Plant 2' },
+    })
+  })
+
+  it('keeps only the last debounced plant selection', () => {
+    render(<SPCFilterBar embedded />)
+    dispatch.mockClear()
+
+    const plantSelect = screen.getByLabelText('Plant')
+    fireEvent.change(plantSelect, { target: { value: 'PLANT-2' } })
+    fireEvent.change(plantSelect, { target: { value: 'PLANT-3' } })
+
+    vi.advanceTimersByTime(300)
+
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'SET_PLANT',
+      payload: { plant_id: 'PLANT-3', plant_name: 'Plant 3' },
     })
   })
 

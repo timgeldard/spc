@@ -548,14 +548,13 @@ async def run_sql_async(
     def _schedule_query_audit(rows: list[dict], duration_ms: int) -> None:
         if not audit or _is_query_audit_statement(statement):
             return
-        task = loop.create_task(_audit_query(rows, duration_ms))
-        task.add_done_callback(lambda completed: completed.exception())
+        loop.create_task(_audit_query(rows, duration_ms))
 
     if not _is_read_only_statement(statement):
         started_at = time.monotonic()
         rows = await loop.run_in_executor(_sql_executor, lambda: run_sql(token, statement, params))
         duration_ms = int((time.monotonic() - started_at) * 1000)
-        if _is_write_statement(statement):
+        if _is_write_statement(statement) and not _is_query_audit_statement(statement):
             _clear_sql_cache()
         _schedule_query_audit(rows, duration_ms)
         return rows
@@ -875,4 +874,4 @@ async def insert_spc_exclusion_snapshot(
             CURRENT_USER(),
             CURRENT_TIMESTAMP()
     """
-    await run_sql_async(token, insert_sql, params)
+    await run_sql_async(token, insert_sql, params, endpoint_hint="spc.exclusions.insert", audit=False)

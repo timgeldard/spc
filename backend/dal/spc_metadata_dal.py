@@ -144,15 +144,24 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
     rows = await _fetch_quantitative_characteristics(token, material_id, plant_id)
     attr_rows = await fetch_attribute_characteristics(token, material_id, plant_id)
     overrides = await _fetch_mic_chart_overrides(token, material_id, plant_id)
+    attribute_keys = {
+        (str(row.get("mic_id") or ""), str(row.get("operation_id") or ""))
+        for row in attr_rows
+    }
     characteristics = []
     for row in rows:
         value = row.get("inspection_method")
         row["inspection_method"] = str(value) if value is not None else None
         row["batch_count"] = int(float(row.get("batch_count") or 0))
-        row["routing_conflict"] = False
+        row["routing_conflict"] = (
+            str(row.get("mic_id") or ""),
+            str(row.get("operation_id") or ""),
+        ) in attribute_keys
         normalized_name = _normalize_mic_name(row.get("mic_name_normalized") or row.get("mic_name"))
         row["mic_name_normalized"] = normalized_name
-        row["unified_mic_key"] = row.get("unified_mic_key") or f"{plant_id or 'NO_PLANT'}||{normalized_name}||NO_UNIT"
+        row["unified_mic_key"] = row.get("unified_mic_key") or (
+            f"{plant_id}||{normalized_name}||NO_UNIT" if plant_id else None
+        )
         mic_id = row.get("mic_id")
         override = overrides.get(str(mic_id)) if mic_id is not None else None
         total_samples = float(row.get("total_samples") or 0)
@@ -169,8 +178,15 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
         characteristics.append(row)
 
     attr_characteristics = []
+    quantitative_keys = {
+        (str(row.get("mic_id") or ""), str(row.get("operation_id") or ""))
+        for row in characteristics
+    }
     for row in attr_rows:
-        row["routing_conflict"] = False
+        row["routing_conflict"] = (
+            str(row.get("mic_id") or ""),
+            str(row.get("operation_id") or ""),
+        ) in quantitative_keys
         mic_id = row.get("mic_id")
         override = overrides.get(str(mic_id)) if mic_id is not None else None
         row["chart_type"] = override if override in {"p_chart", "np_chart", "c_chart", "u_chart"} else "p_chart"

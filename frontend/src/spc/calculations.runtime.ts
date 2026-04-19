@@ -1247,7 +1247,7 @@ export function computeAll(
       const xbarR = computeXbarR(subgroups)
       if (!xbarR) return computeAll(points, 'imr', ruleSet, options)
       const xbarValues = xbarR.subgroupStats.map((s) => s.xbar)
-      const effectiveXbarR = options.governedLimits
+      const effectiveXbarRBase = options.governedLimits
         ? {
             ...xbarR,
             grandMean: options.governedLimits.cl ?? xbarR.grandMean,
@@ -1256,19 +1256,23 @@ export function computeAll(
             lcl_x: options.governedLimits.lcl ?? xbarR.lcl_x,
           }
         : xbarR
+      const xbarLimits: Limits = buildPrimaryLimits(
+        effectiveXbarRBase.grandMean,
+        effectiveXbarRBase.ucl_x,
+        effectiveXbarRBase.lcl_x,
+        effectiveXbarRBase.sigmaWithin,
+        effectiveXbarRBase.sigmaWithin * 2,
+      )
+      const effectiveXbarR = {
+        ...effectiveXbarRBase,
+        sigma1: xbarLimits.sigma1,
+        sigma2: xbarLimits.sigma2,
+      }
       const capability: CapabilityResult = applyGovernedCapability({
-        ...computeCapability(values, specConfig, xbarR.sigmaWithin, { normality: options.normality ?? null }),
+        ...computeCapability(values, specConfig, effectiveXbarR.sigmaWithin, { normality: options.normality ?? null }),
         hasMixedSpec,
         specWarning: specConfig.specWarning,
       }, options.governedLimits)
-
-      const xbarLimits: Limits = buildPrimaryLimits(
-        effectiveXbarR.grandMean,
-        effectiveXbarR.ucl_x,
-        effectiveXbarR.lcl_x,
-        xbarR.sigma1,
-        xbarR.sigma2,
-      )
       const rLimits: Limits = {
         cl: xbarR.rBar,
         ucl: xbarR.ucl_r,
@@ -1303,7 +1307,7 @@ export function computeAll(
 
     const xbarS = computeXbarS(subgroups)
     if (!xbarS) return computeAll(points, 'imr', ruleSet, options)
-    const effectiveXbarS = options.governedLimits
+    const effectiveXbarSBase = options.governedLimits
       ? {
           ...xbarS,
           grandMean: options.governedLimits.cl ?? xbarS.grandMean,
@@ -1312,19 +1316,23 @@ export function computeAll(
           lcl_x: options.governedLimits.lcl ?? xbarS.lcl_x,
         }
       : xbarS
+    const xbarLimits: Limits = buildPrimaryLimits(
+      effectiveXbarSBase.grandMean,
+      effectiveXbarSBase.ucl_x,
+      effectiveXbarSBase.lcl_x,
+      effectiveXbarSBase.sigmaWithin,
+      effectiveXbarSBase.sigmaWithin * 2,
+    )
+    const effectiveXbarS = {
+      ...effectiveXbarSBase,
+      sigma1: xbarLimits.sigma1,
+      sigma2: xbarLimits.sigma2,
+    }
     const capability: CapabilityResult = applyGovernedCapability({
-      ...computeCapability(values, specConfig, xbarS.sigmaWithin, { normality: options.normality ?? null }),
+      ...computeCapability(values, specConfig, effectiveXbarS.sigmaWithin, { normality: options.normality ?? null }),
       hasMixedSpec,
       specWarning: specConfig.specWarning,
     }, options.governedLimits)
-
-    const xbarLimits: Limits = buildPrimaryLimits(
-      effectiveXbarS.grandMean,
-      effectiveXbarS.ucl_x,
-      effectiveXbarS.lcl_x,
-      xbarS.sigma1,
-      xbarS.sigma2,
-    )
     const sLimits: Limits = {
       cl: xbarS.sBar,
       ucl: xbarS.ucl_s,
@@ -1377,7 +1385,7 @@ export function computeAll(
     }
   }
 
-  const effectiveImr = options.governedLimits
+  const effectiveImrBase = options.governedLimits
     ? {
         ...imr,
         xBar: options.governedLimits.cl ?? imr.xBar,
@@ -1386,18 +1394,23 @@ export function computeAll(
         lcl_x: options.governedLimits.lcl ?? imr.lcl_x,
       }
     : imr
+  const xLimits: Limits = buildPrimaryLimits(
+    effectiveImrBase.xBar,
+    effectiveImrBase.ucl_x,
+    effectiveImrBase.lcl_x,
+    effectiveImrBase.sigmaWithin,
+    effectiveImrBase.sigmaWithin * 2,
+  )
+  const effectiveImr = {
+    ...effectiveImrBase,
+    sigma1: xLimits.sigma1,
+    sigma2: xLimits.sigma2,
+  }
   const capability: CapabilityResult = applyGovernedCapability({
-    ...computeCapability(values, specConfig, imr.sigmaWithin, { normality: options.normality ?? null }),
+    ...computeCapability(values, specConfig, effectiveImr.sigmaWithin, { normality: options.normality ?? null }),
     hasMixedSpec,
     specWarning: specConfig.specWarning,
   }, options.governedLimits)
-  const xLimits: Limits = buildPrimaryLimits(
-    effectiveImr.xBar,
-    effectiveImr.ucl_x,
-    effectiveImr.lcl_x,
-    imr.sigma1,
-    imr.sigma2,
-  )
   const mrLimits: Limits = {
     cl: imr.mrBar,
     ucl: imr.ucl_mr,

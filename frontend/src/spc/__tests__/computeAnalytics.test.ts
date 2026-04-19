@@ -109,7 +109,7 @@ describe('computeAnalytics', () => {
       useGovernedLimits: false,
     })
 
-    expect(result.spc?.imr?.xBar).not.toBe(10.2)
-    expect(result.spc?.capability?.cpk).not.toBe(1.8)
+    expect(result.spc?.imr?.xBar).not.toBeCloseTo(10.2)
+    expect(result.spc?.capability?.cpk).not.toBeCloseTo(1.8)
   })
 })

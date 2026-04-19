@@ -112,7 +112,7 @@ async def detect_optional_columns(
           AND UPPER(column_name) IN ({in_clause})
     """
     try:
-        rows = await run_sql_async(token, query)
+        rows = await run_sql_async(token, query, endpoint_hint="schema.gold-contract")
     except Exception:
         _optional_cache[cache_key] = (now, set())
         return set()
@@ -163,7 +163,7 @@ async def assert_gold_view_schema(
     """
 
     try:
-        rows = await run_sql_async(token, query)
+        rows = await run_sql_async(token, query, endpoint_hint="schema.gold-contract")
     except Exception as exc:  # pragma: no cover - defensive
         result = SchemaCheckResult(
             ok=False,

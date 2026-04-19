@@ -97,7 +97,14 @@ export function computeAnalytics({
         label,
         pointCount: groupedPoints.length,
         spc: groupedPoints.length > 0
-          ? computeAll(groupedPoints, chartType, ruleSet, { normality, ewmaLambda, ewmaL, cusumK, cusumH })
+          ? computeAll(groupedPoints, chartType, ruleSet, {
+              normality,
+              ewmaLambda,
+              ewmaL,
+              cusumK,
+              cusumH,
+              governedLimits: useGovernedLimits ? governedLimits : null,
+            })
           : null,
       }))
       .filter(section => (section.spc?.values?.length ?? 0) > 0)

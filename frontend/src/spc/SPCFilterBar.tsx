@@ -532,7 +532,7 @@ export default function SPCFilterBar({ embedded = false }: SPCFilterBarProps) {
             <Search
               id="spc-mic-search"
               labelText="Filter characteristics"
-              placeHolderText="Search MIC name or code"
+              placeholder="Search MIC name or code"
               value={micSearch}
               onChange={event => setMicSearch(event.target.value)}
               size="md"

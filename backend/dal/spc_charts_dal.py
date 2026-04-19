@@ -239,7 +239,7 @@ def _build_quality_data_cte_sql(filters: ChartFilterSpec) -> str:
                 r.OPERATION_ID,
                 r.SAMPLE_ID,
                 r.attribute AS attribut,
-                CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value,
+                TRY_CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value,
                 TRY_CAST(r.TARGET_VALUE AS DOUBLE) AS nominal,
                 TRY_CAST(
                     CASE

@@ -132,7 +132,7 @@ export default function ChartSummaryBar({
                   Limits locked{lockedLimits.locked_at ? ` · ${lockedLimits.locked_at.substring(0, 10)}` : ''}
                 </StatusChip>
               )}
-              {limitsSourceLabel && (
+              {limitsSourceLabel && !(limitsMode === 'locked' && limitsSourceLabel === 'Locked') && (
                 <StatusChip tone={limitsSourceLabel === 'Governed' ? 'green' : limitsSourceLabel === 'Locked' ? 'blue' : 'amber'}>
                   Limits: {limitsSourceLabel}
                 </StatusChip>

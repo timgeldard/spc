@@ -88,14 +88,17 @@ async def latency_middleware(request: StarletteRequest, call_next):
             duration_ms,
         )
         if duration_ms > budget_ms:
-            send_operational_alert(
-                subject="Latency budget exceeded",
-                body=(
-                    f"Request to {request_path} completed in {duration_ms} ms "
-                    f"(budget {budget_ms} ms, status {status_code})."
-                ),
-                request_path=request_path,
-            )
+            try:
+                send_operational_alert(
+                    subject="Latency budget exceeded",
+                    body=(
+                        f"Request to {request_path} completed in {duration_ms} ms "
+                        f"(budget {budget_ms} ms, status {status_code})."
+                    ),
+                    request_path=request_path,
+                )
+            except Exception:
+                logger.exception("latency_alert.failed path=%s", request_path)
 
 
 @app.exception_handler(Exception)
@@ -149,7 +152,7 @@ async def ready():
         )
 
     try:
-        rows = await run_sql_async(readiness_token, "SELECT 1 AS ok")
+        rows = await run_sql_async(readiness_token, "SELECT 1 AS ok", endpoint_hint="system.readiness")
     except Exception as exc:
         raise HTTPException(
             status_code=503,

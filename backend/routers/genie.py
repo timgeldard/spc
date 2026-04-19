@@ -54,12 +54,18 @@ async def _api(token: str, method: str, path: str, body: Optional[dict] = None) 
             return resp.json()
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:500]
+        upstream_status = exc.response.status_code
+        mapped_status = (
+            504 if upstream_status == 504
+            else 502 if upstream_status >= 500
+            else upstream_status
+        )
         logger.warning(
             "genie.api_error method=%s path=%s status=%d body=%s",
-            method, path, exc.response.status_code, detail,
+            method, path, upstream_status, detail,
         )
         raise HTTPException(
-            status_code=exc.response.status_code,
+            status_code=mapped_status,
             detail="Genie API request failed.",
         ) from exc
     except (httpx.HTTPError, ValueError) as exc:
@@ -112,15 +118,22 @@ async def genie_message(
             {"content": req.message},
         )
         conversation_id = req.conversation_id
-        message_id = data["id"]
+        message_id = data.get("id")
     else:
         data = await _api(
             token, "POST",
             f"/api/2.0/genie/spaces/{space_id}/start-conversation",
             {"content": req.message},
         )
-        conversation_id = data["conversation_id"]
-        message_id = data["message_id"]
+        conversation_id = data.get("conversation_id")
+        message_id = data.get("message_id")
+
+    if not conversation_id or not message_id:
+        logger.warning("genie.unexpected_response keys=%s", sorted(data.keys()))
+        raise HTTPException(
+            status_code=502,
+            detail="Genie returned unexpected empty or malformed response",
+        )
 
     poll_path = (
         f"/api/2.0/genie/spaces/{space_id}"
