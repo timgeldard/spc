@@ -161,3 +161,9 @@ test-quick:
 coverage:
 	uv run pytest backend/tests --cov=backend --cov-report=html
 	@echo "Coverage report generated in htmlcov/"
+
+test-frontend:
+	cd frontend && npm test
+
+test-integration:
+	uv run pytest backend/tests/integration/ -v --no-header
