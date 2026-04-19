@@ -45,7 +45,7 @@ def test_compute_hotelling_t2_flags_injected_multivariate_anomaly():
 
 
 def test_fetch_multivariate_rejects_oversized_source_payload(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **kwargs):
         return [{"batch_id": f"B-{i}", "batch_date": "2026-01-01", "mic_id": "TEMP", "mic_name": "Temperature", "avg_result": 1.0} for i in range(spc_analysis_dal._MULTIVARIATE_MAX_SOURCE_ROWS + 1)]
 
     monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)

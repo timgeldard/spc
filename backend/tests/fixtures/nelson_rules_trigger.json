@@ -1,0 +1,58 @@
+{
+  "rule1": {
+    "description": "One point > 3 sigma",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [10.0, 10.1, 10.0, 14.1, 10.0],
+    "expected_violations": [3]
+  },
+  "rule2": {
+    "description": "9 consecutive points on same side of centerline",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 9.0],
+    "expected_violations": [8]
+  },
+  "rule3": {
+    "description": "6 consecutive points steadily increasing or decreasing",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 5.0],
+    "expected_violations": [5]
+  },
+  "rule4": {
+    "description": "14 consecutive points alternating up and down",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11],
+    "expected_violations": [13]
+  },
+  "rule5": {
+    "description": "2 of 3 consecutive points > 2 sigma from centerline (same side)",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [12.1, 10.0, 12.1, 10.0],
+    "expected_violations": [2]
+  },
+  "rule6": {
+    "description": "4 of 5 consecutive points > 1 sigma from centerline (same side)",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [11.1, 11.1, 10.0, 11.1, 11.1, 10.0],
+    "expected_violations": [4]
+  },
+  "rule7": {
+    "description": "15 consecutive points within 1 sigma of centerline",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1],
+    "expected_violations": [14]
+  },
+  "rule8": {
+    "description": "8 consecutive points > 1 sigma from centerline (either side)",
+    "centerline": 10.0,
+    "sigma": 1.0,
+    "data": [11.1, 8.9, 11.1, 8.9, 11.1, 8.9, 11.1, 8.9],
+    "expected_violations": [7]
+  }
+}

@@ -1,15 +1,25 @@
 # Statistical Methods Reference
 
-This document provides the formal mathematical definitions and rationales for the statistical calculations used in the SPC Application.
+This document provides the formal mathematical definitions, rationales, and implementation details for the statistical calculations used in the SPC Application.
 
 ---
 
-## 1. Process Stability (Control Charts)
+## 1. Strategy: "Push Statistics to SQL"
 
-Control limits are calculated to distinguish between "common cause" and "special cause" variation.
+The application follows a "Push Statistics to SQL" philosophy. Computationally heavy or recurring statistical logic is moved from the application layer into **Databricks Materialized Views (MVs)** and **Lakeflow Pipelines**.
+
+*   **Performance**: Eliminates real-time window functions and NumPy pivots in the API.
+*   **Consistency**: Ensures AI/BI tools (Genie, SQL Editor) use the same governed calculations as the UI.
+*   **Observability**: Unity Catalog tracks the lineage of statistical outputs.
+
+---
+
+## 2. Process Stability (Control Charts)
+
+Control limits distinguish between "common cause" and "special cause" variation.
 
 ### Individuals & Moving Range (I-MR)
-Used when data is collected as individual observations ($n=1$).
+Used for individual observations ($n=1$).
 *   **CL (Center Line)**: $\bar{X} = \text{mean of all observations}$
 *   **MR (Moving Range)**: $|X_i - X_{i-1}|$
 *   **$\overline{MR}$**: Mean of moving ranges
@@ -17,173 +27,109 @@ Used when data is collected as individual observations ($n=1$).
 *   **UCL / LCL**: $\bar{X} \pm 3\sigma_{within}$
 
 ### X-bar & Range (X̄-R)
-Used when data is collected in subgroups ($n > 1$).
+Used for subgrouped data ($n > 1$).
 *   **$\bar{\bar{X}}$ (Grand Mean)**: Mean of subgroup means
 *   **$\bar{R}$**: Mean of subgroup ranges
 *   **$\sigma_{within}$**: $\bar{R} / d_2$ (using $d_2$ for the subgroup size $n$)
 *   **UCL / LCL (X-bar)**: $\bar{\bar{X}} \pm A_2\bar{R}$
-*   **UCL / LCL (Range)**: $D_4\bar{R}$ and $D_3\bar{R}$
 
-### X-bar & Sigma (X̄-S)
-Used when data is collected in subgroups ($n > 1$) and the subgroup standard deviation is the preferred companion chart.
-*   **$\bar{\bar{X}}$ (Grand Mean)**: Mean of subgroup means
-*   **$\bar{S}$**: Mean of subgroup sample standard deviations
-*   **$\sigma_{within}$**: $\bar{S} / c_4$ (using $c_4$ for the subgroup size $n$)
-*   **UCL / LCL (X-bar)**: $\bar{\bar{X}} \pm A_3\bar{S}$
-*   **UCL / LCL (Sigma)**: $B_4\bar{S}$ and $B_3\bar{S}$
+### Nelson & WECO Rule Sets
+Out-of-control signals are detected using Western Electric (WECO) and Nelson rules. These are pre-computed in `spc_nelson_rule_flags_mv` using SQL window functions for high-performance scorecard rendering.
 
-### Attribute Count Charts
-Used for discrete nonconformance counts rather than measured values.
-*   **P chart**: proportion nonconforming, with subgroup-specific $\sigma_p = \sqrt{\bar{p}(1-\bar{p})/n_i}$
-*   **nP chart**: count nonconforming for approximately constant subgroup size
-*   **C chart**: count of defects per unit, with limits $\bar{c} \pm 3\sqrt{\bar{c}}$
-*   **U chart**: defects per unit for varying area of opportunity, with limits $\bar{u} \pm 3\sqrt{\bar{u}/n_i}$
-
-### EWMA
-Used for smaller sustained shifts that may not trip traditional Shewhart limits quickly.
-*   **EWMA statistic**: $Z_t = \lambda X_t + (1-\lambda)Z_{t-1}$
-*   **Target**: process mean estimate carried from the baseline series
-*   **Dynamic EWMA sigma**:
-    $$\sigma_{Z_t} = \sigma_{within}\sqrt{\frac{\lambda}{2-\lambda}\left(1-(1-\lambda)^{2t}\right)}$$
-*   **UCL / LCL**: target $\pm L\sigma_{Z_t}$
-
-### CUSUM
-Used for cumulative small drift detection relative to a target mean.
-*   **Reference value**: $k\sigma_{within}$
-*   **Decision interval**: $h\sigma_{within}$
-*   **Positive CUSUM**:
-    $$C_t^+ = \max(0, C_{t-1}^+ + X_t - \mu_0 - k\sigma_{within})$$
-*   **Negative CUSUM**:
-    $$C_t^- = \max(0, C_{t-1}^- + \mu_0 - X_t - k\sigma_{within})$$
-*   A signal is raised when $C_t^+$ or $C_t^-$ exceeds the decision interval.
-
----
-
-## 2. Process Capability
-
-Capability measures the ability of a process to meet customer specifications (USL/LSL).
-
-### Long-term Performance ($P_p / P_{pk}$)
-Measures "what the customer actually receives" over time.
-*   **$\sigma_{overall}$**: Sample standard deviation ($s = \sqrt{\frac{\sum(X_i - \bar{X})^2}{N-1}}$)
-*   **$P_p$**: $\frac{USL - LSL}{6\sigma_{overall}}$
-*   **$P_{pk}$**: $\min\left(\frac{USL - \bar{X}}{3\sigma_{overall}}, \frac{\bar{X} - LSL}{3\sigma_{overall}}\right)$
-
-### Short-term Capability ($C_p / C_{pk}$)
-Measures the "potential" of the process if all special causes were removed.
-*   **$\sigma_{within}$**: Derived from $\overline{MR}/d_2$ or $\bar{R}/d_2$
-*   **$C_p$**: $\frac{USL - LSL}{6\sigma_{within}}$
-*   **$C_{pk}$**: $\min\left(\frac{USL - \bar{X}}{3\sigma_{within}}, \frac{\bar{X} - LSL}{3\sigma_{within}}\right)$
-
-### Capability Confidence Intervals
-The application now shows approximate 95% confidence intervals for `Cp`, `Cpk`, `Pp`, and `Ppk`.
-*   **$SE(C_p)$ / $SE(P_p)$**:
-    $$C_p\sqrt{\frac{1}{2(n-1)}}$$
-*   **$SE(C_{pk})$ / $SE(P_{pk})$**:
-    $$\sqrt{\frac{1}{9n} + \frac{C_{pk}^2}{2(n-1)}}$$
-*   **95% interval**: estimate $\pm 1.96 \times SE$
-
-These are approximate normal intervals intended to show capability uncertainty, not a substitute for a full tolerance-interval study.
-
----
-
-## 3. Handling Non-Gaussian Distributions
-
-When data is non-normal, the assumption that $99.73\%$ of data falls within $\mu \pm 3\sigma$ is false.
-
-### Normality Trigger
-The application executes a **Shapiro-Wilk** test on the dataset ($N \le 5000$).
-*   If $p < 0.05$, the dataset is flagged as **Non-Normal**.
-*   The UI displays a stability warning.
-
-### Non-Parametric Capability Override
-For non-normal data, the engine falls back to the **ISO 22514-2** (Percentile Method):
-*   **Bounds**: Replace $\pm 3\sigma$ with the empirical $0.135\%$ and $99.865\%$ percentiles ($P_{0.135}, P_{99.865}$).
-*   **Median**: Replace mean with the median ($P_{50}$).
-*   **Non-Parametric $P_{pk}$**:
-    $$\min\left(\frac{USL - P_{50}}{P_{99.865} - P_{50}}, \frac{P_{50} - LSL}{P_{50} - P_{0.135}}\right)$$
-
-### Governed Metric-View Rule
-The semantic layer must not silently assume Gaussian long-term performance when normality is unknown, mixed, or explicitly non-normal.
-
-For Databricks metric views and Genie:
-*   **`pp_gaussian` / `ppk_gaussian`** remain available as explicit parametric measures.
-*   **`pp_non_parametric` / `ppk_non_parametric`** are computed from empirical percentiles on the raw sample distribution.
-*   **`pp` / `ppk`** are the governed measures and switch using source-level `normality_type`.
-*   If normality is mixed or not yet profiled, the governed measure returns `NULL` rather than defaulting to a Gaussian answer.
-
-This keeps AI/BI consumers aligned with the application's safety model instead of returning a mathematically convenient but misleading Gaussian performance value.
-
----
-
-## 4. Nelson & WECO Rule Sets
-
-The application detects out-of-control signals using standard rule sets.
-
-| Rule | Description | Pattern Type |
+| Rule | Description | SQL Implementation (Window) |
 |---|---|---|
-| **Rule 1** | 1 point > 3$\sigma$ from center | Extreme outlier |
-| **Rule 2** | 9 consecutive points on same side of center | Mean shift |
-| **Rule 3** | 6 consecutive points increasing or decreasing | Trend |
-| **Rule 4** | 14 consecutive points alternating up and down | Systematic variation |
-| **Rule 5** | 2 of 3 consecutive points > 2$\sigma$ (Zone A) | Early shift warning |
-| **Rule 6** | 4 of 5 consecutive points > 1$\sigma$ (Zone B) | Moderate shift warning |
-| **Rule 7** | 15 consecutive points within 1$\sigma$ (Zone C) | Stratification / low variation |
-| **Rule 8** | 8 consecutive points > 1$\sigma$ both sides | Mixture pattern |
+| **Rule 1** | 1 point > 3$\sigma$ from center | `ABS(z_score) > 3` |
+| **Rule 2** | 9 consecutive points on same side of center | `COUNT(sign) OVER (ROWS 8 PRECEDING)` |
+| **Rule 3** | 6 consecutive points increasing or decreasing | `LAG` comparison over 5 rows |
+| **Rule 4** | 14 consecutive points alternating up and down | `LAG` parity check over 13 rows |
+| **Rule 5** | 2 of 3 consecutive points > 2$\sigma$ (Zone A) | `SUM(in_zone_a) OVER (ROWS 2 PRECEDING)` |
+| **Rule 6** | 4 of 5 consecutive points > 1$\sigma$ (Zone B) | `SUM(in_zone_b) OVER (ROWS 4 PRECEDING)` |
+| **Rule 7** | 15 consecutive points within 1$\sigma$ (Zone C) | `COUNT(in_zone_c) OVER (ROWS 14 PRECEDING)` |
+| **Rule 8** | 8 consecutive points > 1$\sigma$ both sides | `COUNT(out_zone_c) OVER (ROWS 7 PRECEDING)` |
 
 ---
 
-## 5. Histogram Binning
+## 3. Process Capability
 
-Histogram binning is based on the **Freedman-Diaconis rule**, not Sturges' formula.
+Capability measures the ability of a process to meet specifications (USL/LSL/Target).
 
-* **Bin Width**: $2 \cdot IQR \cdot n^{-1/3}$
-* **Why**: Freedman-Diaconis is more robust for skewed and heavy-tailed manufacturing data, especially when the app is also detecting non-normal distributions.
+### Indices (Cp, Cpk, Pp, Ppk)
+*   **$C_p / P_p$**: Potential/Overall capability. $\frac{USL - LSL}{6\sigma}$
+*   **$C_{pk} / P_{pk}$**: Actual capability. $\min\left(\frac{USL - \mu}{3\sigma}, \frac{\mu - LSL}{3\sigma}\right)$
+*   **$\sigma$ Choice**: $C_p$ uses $\sigma_{within}$ (short-term); $P_p$ uses $\sigma_{overall}$ (long-term sample standard deviation).
+
+### Taguchi Capability ($C_{pm}$)
+Accounts for the "loss to society" when a process is off-target ($T$), even if stable.
+$$C_{pm} = \frac{C_p}{\sqrt{1 + \left(\frac{\mu - T}{\sigma}\right)^2}}$$
+
+### Capability Confidence Intervals (Montgomery)
+95% confidence intervals are pre-computed in the gold layer (`spc_capability_detail_mv`) using the chi-squared distribution:
+*   **Lower Bound**: $C_{pk} \cdot \sqrt{\frac{\chi^2_{\alpha/2, n-1}}{n-1}}$
+*   **Upper Bound**: $C_{pk} \cdot \sqrt{\frac{\chi^2_{1-\alpha/2, n-1}}{n-1}}$
 
 ---
 
-## 6. Multivariate SPC (Hotelling's T²)
+## 4. Measurement Systems Analysis (MSA / Gage R&R)
 
-Univariate charts can miss coupled process drift when each characteristic stays individually "reasonable" but the joint state of the process moves away from its historical center. The multivariate explorer uses **Hotelling's T²** on shared-batch characteristic vectors to surface that coordinated movement.
+The MSA module (implemented in `backend/utils/msa.py`) evaluates the measurement system itself.
 
-### Data Shape
-For a selected material, plant, date window, and set of quantitative characteristics:
-* The source view is filtered to the requested MICs.
-* Data is pivoted to one row per shared batch.
-* Only complete rows are retained; batches missing any selected variable are excluded from the T² population.
+### Components of Variation
+*   **Repeatability (EV)**: Equipment variation within one appraiser.
+*   **Reproducibility (AV)**: Variation between different appraisers.
+*   **GRR**: Combined R&R variation. $GRR = \sqrt{EV^2 + AV^2}$
+*   **Part-to-Part (PV)**: Actual product variation.
+*   **Total Variation (TV)**: $\sqrt{GRR^2 + PV^2}$
+
+### Acceptance Criteria
+*   **%GRR < 10%**: Excellent.
+*   **%GRR > 30%**: Unacceptable.
+*   **NDC (Number of Distinct Categories)**: $1.41 \cdot \frac{PV}{GRR}$. Must be $\ge 5$.
+
+---
+
+## 5. Multivariate SPC (Hotelling's T²)
+
+Surfaces coordinated process drift across multiple MICs using **Hotelling's T²** (implemented in `backend/utils/multivariate.py`).
 
 ### Statistic
 Given an observation vector $x_i \in \mathbb{R}^p$:
-* **Mean vector**: $\mu = \frac{1}{n}\sum_{i=1}^{n}x_i$
-* **Sample covariance**: $S$
-* **Hotelling's T²**:
-  $$T_i^2 = (x_i - \mu)^T S^{-1} (x_i - \mu)$$
-
-The implementation uses the Moore-Penrose pseudo-inverse $S^{+}$ for numerical stability when variables are strongly correlated.
-
-### Phase II Control Limit
-The explorer uses the common F-distribution approximation for a Phase II-style upper control limit:
-$$UCL = \frac{n p}{n - p} \cdot F_{1-\alpha}(p, n-p)$$
-
-where:
-* $n$ = number of complete shared-batch observations
-* $p$ = number of selected variables
-* $\alpha = 0.0027$ by default (roughly analogous to a 3σ false-alarm rate)
+$$T_i^2 = (x_i - \mu)^T S^{-1} (x_i - \mu)$$
+The implementation uses the **Moore-Penrose pseudo-inverse** for stability with correlated variables.
 
 ### Contribution Decomposition
-To help with root-cause triage, each point's T² signal is decomposed into variable-level signed contributions:
+Outliers are decomposed into variable-level signed contributions:
 $$c_i = (x_i - \mu) \odot \left(S^{-1}(x_i - \mu)\right)$$
 
-This produces:
-* a signed contribution for each selected variable
-* an absolute-share percentage for ranking top contributors
+---
 
-The UI uses these values to show:
-* a contribution bar chart for the selected batch
-* a root-cause suggestion summary listing the strongest positive/negative contributors
+## 6. Handling Non-Gaussian Distributions
 
-### Correlation Heatmap
-The same complete shared-batch matrix is reused to compute pairwise Pearson correlation:
-$$r_{ab} = \text{corr}(X_a, X_b)$$
+If data is non-normal, the engine falls back to the **ISO 22514-2** (Percentile Method).
 
-This ensures the heatmap and T² chart are grounded in the same retained population, so the analyst can relate multivariate anomalies to the underlying variable coupling structure.
+### Normality Trigger
+A **Shapiro-Wilk** test is executed ($N \le 5000$). If $p < 0.05$, the dataset is flagged.
+
+### Non-Parametric Capability
+*   **Bounds**: Replace $\pm 3\sigma$ with $P_{0.135}$ and $P_{99.865}$ percentiles.
+*   **Median**: Replace mean with the median ($P_{50}$).
+*   **$P_{pk}$ (Non-Parametric)**:
+    $$\min\left(\frac{USL - P_{50}}{P_{99.865} - P_{50}}, \frac{P_{50} - LSL}{P_{50} - P_{0.135}}\right)$$
+
+### Governed Metric-View Rule
+The semantic layer (`spc_quality_metrics`) enforces safety for AI/BI consumers:
+*   **`pp_gaussian` / `ppk_gaussian`**: Explicit parametric measures.
+*   **`pp` / `ppk`**: Governed measures that switch based on `normality_type`.
+*   If normality is unknown or mixed, the governed measure returns `NULL` to prevent misleading Gaussian results in Genie/GenAI responses.
+
+---
+
+## 7. Implementation Details
+
+### Histogram Binning
+Based on the **Freedman-Diaconis rule** ($2 \cdot IQR \cdot n^{-1/3}$) for robustness against skewed manufacturing data and heavy tails.
+
+### Specification Drift
+Monitors changes in `USL`, `LSL`, or `TARGET` across batches via `spc_spec_drift_v`. Alerts users if specs have changed within the chart's date window.
+
+### Control Limit History
+Visualizes the evolution of process limits by joining `spc_locked_limits` with calculated limits in `spc_control_limit_history_v`.

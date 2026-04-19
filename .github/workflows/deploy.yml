@@ -32,7 +32,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npm test
+        run: npm run test:ci
 
       - name: Build frontend
         working-directory: frontend
@@ -49,18 +49,13 @@ jobs:
           cache: pip
 
       - name: Install backend deps
-        working-directory: backend
-        run: pip install -r requirements.txt
+        working-directory: .
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Run backend tests with coverage
-        env:
-          COVERAGE_FAIL_UNDER: ${{ vars.COVERAGE_FAIL_UNDER || '0' }}
-        run: |
-          pytest backend/tests -v \
-            --cov=backend \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under="${COVERAGE_FAIL_UNDER}"
+        run: make test
 
       - name: Upload coverage report
         if: always()

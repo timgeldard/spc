@@ -1,0 +1,14 @@
+{
+  "description": "Standard P-chart example. Varying subgroup sizes.",
+  "data": [
+    {"n_inspected": 100, "n_nonconforming": 5},
+    {"n_inspected": 100, "n_nonconforming": 2},
+    {"n_inspected": 100, "n_nonconforming": 8},
+    {"n_inspected": 100, "n_nonconforming": 1},
+    {"n_inspected": 100, "n_nonconforming": 4}
+  ],
+  "expected": {
+    "p_bar": 0.04,
+    "avg_sigma": 0.0196
+  }
+}

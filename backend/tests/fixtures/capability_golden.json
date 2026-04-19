@@ -1,0 +1,12 @@
+{
+  "description": "Standard capability example with bilateral spec.",
+  "data": [9.5, 10.0, 10.5, 10.1, 9.9, 10.2, 9.8, 10.0, 10.1, 10.0],
+  "usl": 11.0,
+  "lsl": 9.0,
+  "expected": {
+    "cp": 1.2533,
+    "cpk": 1.2408,
+    "pp": 1.2815,
+    "ppk": 1.2687
+  }
+}

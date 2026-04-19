@@ -145,3 +145,24 @@ setup-metric-views: check-metric-view-support
 	@$(MAKE) apply-migration NAME=spc_correlation_source_mv FILE=$(CORRELATION_SOURCE_MV_MIGRATION) PROFILE=$(PROFILE)
 	@$(MAKE) apply-migration NAME=spc_material_dim_mv FILE=$(MATERIAL_DIM_MV_MIGRATION) PROFILE=$(PROFILE)
 	@$(MAKE) apply-migration NAME=spc_plant_material_dim_mv FILE=$(PLANT_MATERIAL_DIM_MV_MIGRATION) PROFILE=$(PROFILE)
+
+test:
+	uv run pytest backend/tests -q --cov=backend --cov-report=term-missing
+
+test-stat:
+	uv run pytest backend/tests/test_spc_normality.py backend/tests/test_logic_comprehensive.py backend/tests/test_multivariate.py -v
+
+test-dal:
+	uv run pytest backend/tests/*dal*.py -v
+
+test-quick:
+	uv run pytest backend/tests -q --tb=no
+
+coverage:
+	uv run pytest --cov=backend --cov-report=html
+
+test-frontend:
+	cd frontend && npm test
+
+test-integration:
+	uv run pytest backend/tests/integration/ -v --no-header

@@ -1,0 +1,11 @@
+{
+  "description": "Standard I-MR stable process example.",
+  "data": [10.0, 10.2, 9.8, 10.1, 10.5, 9.9, 10.3, 10.0, 10.1, 10.2],
+  "expected": {
+    "mean": 10.11,
+    "mr_bar": 0.3111,
+    "sigma_within": 0.2758,
+    "ucl": 10.9374,
+    "lcl": 9.2826
+  }
+}

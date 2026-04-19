@@ -334,3 +334,18 @@ def test_fetch_locked_limits_prefers_unified_mic_key(monkeypatch):
     assert "AND (unified_mic_key = :unified_mic_key OR mic_id = :mic_id)" in captured["query"]
     assert "ORDER BY CASE WHEN unified_mic_key = :unified_mic_key THEN 0 ELSE 1 END, locked_at DESC" in captured["query"]
     assert any(param["name"] == "mic_id" and param["value"] == "MIC-1" for param in captured["params"])
+
+def test_fetch_chart_data_page_stratification(monkeypatch):
+    calls = []
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
+        calls.append(query)
+        return []
+    monkeypatch.setattr(spc_charts_dal, "run_sql_async", fake_run_sql_async)
+
+    # Test Lot stratification
+    asyncio.run(spc_charts_dal.fetch_chart_data_page("t", "M", "MI", "N", "P", None, None, stratify_by="inspection_lot_id"))
+    assert "CAST(r.INSPECTION_LOT_ID AS STRING) AS stratify_value" in calls[0]
+
+    # Test Operation stratification
+    asyncio.run(spc_charts_dal.fetch_chart_data_page("t", "M", "MI", "N", "P", None, None, stratify_by="operation_id"))
+    assert "CAST(r.OPERATION_ID AS STRING) AS stratify_value" in calls[1]

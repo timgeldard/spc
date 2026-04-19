@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+addopts = "-q --cov=backend --cov-report=term-missing --cov-fail-under=75"
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["backend/tests/*", "backend/__init__.py"]

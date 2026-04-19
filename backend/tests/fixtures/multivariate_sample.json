@@ -1,0 +1,10 @@
+[
+  {"batch_id": "B1", "batch_date": "2026-04-01", "mic_id": "M1", "avg_result": 10.0},
+  {"batch_id": "B1", "batch_date": "2026-04-01", "mic_id": "M2", "avg_result": 100.0},
+  {"batch_id": "B2", "batch_date": "2026-04-02", "mic_id": "M1", "avg_result": 10.5},
+  {"batch_id": "B2", "batch_date": "2026-04-02", "mic_id": "M2", "avg_result": 105.0},
+  {"batch_id": "B3", "batch_date": "2026-04-03", "mic_id": "M1", "avg_result": 10.2},
+  {"batch_id": "B3", "batch_date": "2026-04-03", "mic_id": "M2", "avg_result": 102.0},
+  {"batch_id": "B4", "batch_date": "2026-04-04", "mic_id": "M1", "avg_result": 10.8},
+  {"batch_id": "B4", "batch_date": "2026-04-04", "mic_id": "M2", "avg_result": 108.0}
+]

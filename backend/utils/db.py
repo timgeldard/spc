@@ -407,7 +407,7 @@ _CONNECTOR_EXECUTOR: _SqlExecutor = _ConnectorStatementExecutor()
 
 
 def _configured_sql_executor_name() -> str:
-    configured = os.environ.get("SPC_SQL_EXECUTOR", "connector").strip().lower()
+    configured = os.environ.get("SPC_SQL_EXECUTOR", "rest").strip().lower()
     return configured if configured in {"rest", "connector"} else "rest"
 
 

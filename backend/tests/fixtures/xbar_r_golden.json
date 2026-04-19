@@ -1,0 +1,18 @@
+{
+  "description": "Standard Xbar-R example. Subgroups of size 5.",
+  "subgroup_size": 5,
+  "data": [
+    [10.2, 10.1, 10.3, 10.0, 10.1],
+    [9.9, 10.0, 10.1, 10.2, 10.0],
+    [10.1, 10.1, 10.1, 10.1, 10.1],
+    [10.5, 10.4, 10.6, 10.5, 10.5],
+    [9.8, 9.9, 9.7, 9.8, 9.9]
+  ],
+  "expected": {
+    "grand_mean": 10.14,
+    "r_bar": 0.28,
+    "sigma_within": 0.1204,
+    "xbar_ucl": 10.3016,
+    "xbar_lcl": 9.9784
+  }
+}
