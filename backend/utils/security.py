@@ -41,7 +41,15 @@ def _parse_env_allowed_origins() -> set[str]:
     raw = os.environ.get("SPC_ALLOWED_ORIGINS", "").strip()
     if not raw:
         return set()
-    return {o.strip().rstrip("/") for o in raw.split(",") if o.strip()}
+    hosts = set()
+    for o in raw.split(","):
+        o = o.strip()
+        if not o:
+            continue
+        host = _origin_host(o) or o.lower().rstrip("/")
+        if host:
+            hosts.add(host)
+    return hosts
 
 
 def _origin_host(origin_header: str) -> str | None:

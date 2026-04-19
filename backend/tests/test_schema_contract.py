@@ -25,7 +25,7 @@ def _full_schema_rows() -> list[dict]:
 
 
 def test_assert_gold_view_schema_ok_when_all_columns_present():
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return _full_schema_rows()
 
     result = asyncio.run(
@@ -48,7 +48,7 @@ def test_assert_gold_view_schema_flags_missing_column():
         if not (r["table_name"] == "gold_batch_quality_result_v" and r["column_name"] == "TARGET_VALUE")
     ]
 
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return rows
 
     result = asyncio.run(
@@ -64,7 +64,7 @@ def test_assert_gold_view_schema_flags_missing_column():
 def test_assert_gold_view_schema_flags_missing_view():
     rows = [r for r in _full_schema_rows() if r["table_name"] != "gold_material"]
 
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return rows
 
     result = asyncio.run(
@@ -84,7 +84,7 @@ def test_assert_gold_view_schema_case_insensitive_on_column_names():
         for col in spec["required_columns"].keys():
             rows.append({"table_name": view, "column_name": col.lower()})
 
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return rows
 
     result = asyncio.run(
@@ -98,7 +98,7 @@ def test_assert_gold_view_schema_case_insensitive_on_column_names():
 def test_assert_gold_view_schema_result_is_cached():
     calls = {"n": 0}
 
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         calls["n"] += 1
         return _full_schema_rows()
 
@@ -118,7 +118,7 @@ def test_assert_gold_view_schema_result_is_cached():
 
 
 def test_detect_optional_columns_returns_present_subset():
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return [{"column_name": "USAGE_DECISION_CODE"}]
 
     present = asyncio.run(
@@ -131,7 +131,7 @@ def test_detect_optional_columns_returns_present_subset():
 
 
 def test_detect_optional_columns_empty_when_none_present():
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return []
 
     present = asyncio.run(
@@ -159,7 +159,7 @@ def test_detect_optional_columns_tolerates_probe_failure():
 
 
 def test_detect_optional_columns_returns_empty_for_view_without_optionals():
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         return [{"column_name": "ANYTHING"}]
 
     # gold_material has no optional_columns in the contract.
@@ -175,7 +175,7 @@ def test_detect_optional_columns_returns_empty_for_view_without_optionals():
 def test_clear_cache_forces_requery():
     calls = {"n": 0}
 
-    async def fake_run(_token, _query):
+    async def fake_run(_token, _query, **kwargs):
         calls["n"] += 1
         return _full_schema_rows()
 

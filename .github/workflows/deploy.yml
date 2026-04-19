@@ -49,8 +49,10 @@ jobs:
           cache: pip
 
       - name: Install backend deps
-        working-directory: backend
-        run: pip install -r requirements.txt
+        working-directory: .
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Run backend tests with coverage
         env:
