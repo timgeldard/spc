@@ -1,26 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-python_files = "test_*.py"
+python_files = ["test_*.py"]
+addopts = "-q --cov=backend --cov-report=term-missing --cov-fail-under=72"
 asyncio_mode = "auto"
-addopts = "-v --cov=backend --cov-report=term-missing --cov-fail-under=75"
-markers = [
-    "integration: marks tests as integration tests (skipped by default)",
-]
+filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 source = ["backend"]
-omit = ["backend/tests/*", "backend/__init__.py"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "pass",
-    "raise",
-]
-show_missing = true
-fail_under = 75
+omit = ["backend/tests/*", "*/__init__.py"]

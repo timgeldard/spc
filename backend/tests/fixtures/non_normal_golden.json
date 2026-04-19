@@ -1,0 +1,10 @@
+{
+  "description": "Bimodal non-normal dataset.",
+  "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+  "expected": {
+    "is_normal": false,
+    "p50": 5.5,
+    "p00135": 1.0,
+    "p99865": 10.0
+  }
+}
