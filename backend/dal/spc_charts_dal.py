@@ -3,10 +3,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import quote, unquote
 
-from pypika import Database, Schema, Table, functions as fn
-from pypika.dialects import MySQLQuery
-from pypika.terms import Criterion, LiteralValue
-
 from backend.dal.spc_shared import infer_spec_type
 from backend.utils.db import TRACE_CATALOG, TRACE_SCHEMA, run_sql_async, sql_param, tbl
 from backend.utils.schema_contract import detect_optional_columns
@@ -153,38 +149,14 @@ class ChartFilterSpec:
     batch_date_conditions: list[str] = field(default_factory=list)
     quality_conditions: list[str] = field(default_factory=list)
     final_where_conditions: list[str] = field(default_factory=list)
-    select_extra_columns: list[str] = field(default_factory=list)
     stratify_by: Optional[str] = None
     stratify_select_sql: Optional[str] = None
 
 
-class _RawCriterion(Criterion):
-    def __init__(self, sql: str):
-        super().__init__()
-        self.sql = sql
-
-    def get_sql(self, **kwargs) -> str:  # pragma: no cover - exercised indirectly via Query.get_sql()
-        return self.sql
-
-
-def _sql_expr(sql: str) -> LiteralValue:
-    return LiteralValue(sql)
-
-
-def _source_table(name: str, alias: Optional[str] = None) -> Table:
-    table = Table(
-        name,
-        schema=Schema(TRACE_SCHEMA, parent=Database(TRACE_CATALOG)),
-    )
-    if alias:
-        return table.as_(alias)
-    return table
-
-
-def _apply_conditions(query, conditions: list[str]):
-    for condition in conditions:
-        query = query.where(_RawCriterion(condition))
-    return query
+def _where_clause(conditions: list[str]) -> str:
+    if not conditions:
+        return ""
+    return "WHERE " + " AND ".join(conditions)
 
 
 def _build_chart_filters(
@@ -203,7 +175,6 @@ def _build_chart_filters(
     ]
     batch_date_conditions = [
         "MATERIAL_ID = :material_id",
-        "MOVEMENT_CATEGORY = 'Production'",
     ]
     quality_conditions = [
         "r.MATERIAL_ID = :material_id",
@@ -212,16 +183,15 @@ def _build_chart_filters(
         "(r.QUALITATIVE_RESULT IS NULL OR r.QUALITATIVE_RESULT = '')",
     ]
     final_where_conditions: list[str] = []
-    select_extra_columns: list[str] = []
 
     if operation_id:
         params.append(sql_param("operation_id", operation_id))
         quality_conditions.append("r.OPERATION_ID = :operation_id")
     if date_from:
-        batch_date_conditions.append("POSTING_DATE >= :date_from")
+        batch_date_conditions.append("batch_date >= :date_from")
         params.append(sql_param("date_from", date_from))
     if date_to:
-        batch_date_conditions.append("POSTING_DATE <= :date_to")
+        batch_date_conditions.append("batch_date <= :date_to")
         params.append(sql_param("date_to", date_to))
     if plant_id:
         params.append(sql_param("plant_id", plant_id))
@@ -233,79 +203,78 @@ def _build_chart_filters(
             raise ValueError(
                 f"stratify_by must be one of {sorted(_ALLOWED_STRATIFY_COLUMNS)}"
             )
-        select_extra_columns.append("stratify_value")
     return ChartFilterSpec(
         params=params,
         batch_date_conditions=batch_date_conditions,
         quality_conditions=quality_conditions,
         final_where_conditions=final_where_conditions,
-        select_extra_columns=select_extra_columns,
         stratify_by=stratify_by,
         stratify_select_sql=stratify_select_sql,
     )
 
 
-def _build_batch_dates_cte(filters: ChartFilterSpec):
-    mb = _source_table("gold_batch_mass_balance_v", "mb")
-    query = (
-        MySQLQuery.from_(mb)
-        .select(
-            mb.MATERIAL_ID,
-            mb.BATCH_ID,
-            fn.Min(mb.POSTING_DATE).as_("batch_date"),
-            fn.Max(mb.PLANT_ID).as_("plant_id"),
+def _build_batch_dates_cte_sql(filters: ChartFilterSpec) -> str:
+    return f"""
+        batch_dates AS (
+            SELECT
+                MATERIAL_ID,
+                BATCH_ID,
+                batch_date,
+                plant_id
+            FROM {tbl('spc_batch_dim_mv')}
+            {_where_clause(filters.batch_date_conditions)}
         )
-        .groupby(mb.MATERIAL_ID, mb.BATCH_ID)
-    )
-    return _apply_conditions(query, filters.batch_date_conditions)
+    """
 
 
-def _build_quality_data_cte(filters: ChartFilterSpec):
-    r = _source_table("gold_batch_quality_result_v", "r")
-    bd = Table("batch_dates").as_("bd")
-    select_terms = [
-        r.BATCH_ID.as_("batch_id"),
-        r.INSPECTION_LOT_ID,
-        r.OPERATION_ID,
-        r.SAMPLE_ID,
-        r.attribute.as_("attribut"),
-        _sql_expr("CAST(r.QUANTITATIVE_RESULT AS DOUBLE)").as_("value"),
-        _sql_expr("TRY_CAST(r.TARGET_VALUE AS DOUBLE)").as_("nominal"),
-        _sql_expr(
-            "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
-            "THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1) END AS DOUBLE)"
-        ).as_("lsl"),
-        _sql_expr(
-            "TRY_CAST(CASE WHEN LOCATE('...', r.TOLERANCE) > 0 "
-            "THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3) END AS DOUBLE)"
-        ).as_("usl"),
-        _sql_expr(
-            "CASE WHEN LOCATE('...', r.TOLERANCE) = 0 THEN TRY_CAST(r.TOLERANCE AS DOUBLE) END"
-        ).as_("tolerance"),
-        r.INSPECTION_RESULT_VALUATION.as_("valuation"),
-        bd.batch_date,
-        bd.plant_id,
-        _sql_expr(
-            "COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400)"
-        ).as_("cursor_batch_date_epoch"),
-        _sql_expr("COALESCE(CAST(r.SAMPLE_ID AS STRING), '')").as_("cursor_sample_id"),
-        _sql_expr("COALESCE(CAST(r.INSPECTION_LOT_ID AS STRING), '')").as_("cursor_inspection_lot_id"),
-        _sql_expr("COALESCE(CAST(r.OPERATION_ID AS STRING), '')").as_("cursor_operation_id"),
-        _sql_expr(
-            "ROW_NUMBER() OVER (PARTITION BY r.BATCH_ID "
-            "ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID)"
-        ).as_("sample_seq"),
-    ]
+def _build_quality_data_cte_sql(filters: ChartFilterSpec) -> str:
+    stratify_select = ""
     if filters.stratify_select_sql:
-        select_terms.append(_sql_expr(filters.stratify_select_sql).as_("stratify_value"))
-
-    query = (
-        MySQLQuery.from_(r)
-        .join(bd)
-        .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
-        .select(*select_terms)
-    )
-    return _apply_conditions(query, filters.quality_conditions)
+        stratify_select = f",\n                {filters.stratify_select_sql} AS stratify_value"
+    return f"""
+        quality_data AS (
+            SELECT
+                r.BATCH_ID AS batch_id,
+                r.INSPECTION_LOT_ID,
+                r.OPERATION_ID,
+                r.SAMPLE_ID,
+                r.attribute AS attribut,
+                CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value,
+                TRY_CAST(r.TARGET_VALUE AS DOUBLE) AS nominal,
+                TRY_CAST(
+                    CASE
+                        WHEN LOCATE('...', r.TOLERANCE) > 0
+                        THEN SUBSTRING(r.TOLERANCE, 1, LOCATE('...', r.TOLERANCE) - 1)
+                    END AS DOUBLE
+                ) AS lsl,
+                TRY_CAST(
+                    CASE
+                        WHEN LOCATE('...', r.TOLERANCE) > 0
+                        THEN SUBSTRING(r.TOLERANCE, LOCATE('...', r.TOLERANCE) + 3)
+                    END AS DOUBLE
+                ) AS usl,
+                CASE
+                    WHEN LOCATE('...', r.TOLERANCE) = 0 THEN TRY_CAST(r.TOLERANCE AS DOUBLE)
+                END AS tolerance,
+                r.INSPECTION_RESULT_VALUATION AS valuation,
+                bd.batch_date,
+                bd.plant_id,
+                COALESCE(UNIX_TIMESTAMP(CAST(bd.batch_date AS TIMESTAMP)), 253402214400) AS cursor_batch_date_epoch,
+                COALESCE(CAST(r.SAMPLE_ID AS STRING), '') AS cursor_sample_id,
+                COALESCE(CAST(r.INSPECTION_LOT_ID AS STRING), '') AS cursor_inspection_lot_id,
+                COALESCE(CAST(r.OPERATION_ID AS STRING), '') AS cursor_operation_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY r.BATCH_ID
+                    ORDER BY COALESCE(CAST(r.SAMPLE_ID AS STRING), ''), r.INSPECTION_LOT_ID, r.OPERATION_ID
+                ) AS sample_seq
+                {stratify_select}
+            FROM {tbl('gold_batch_quality_result_v')} r
+            INNER JOIN batch_dates bd
+                ON bd.MATERIAL_ID = r.MATERIAL_ID
+               AND bd.BATCH_ID = r.BATCH_ID
+            {_where_clause(filters.quality_conditions)}
+        )
+    """
 
 
 def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], limit: int) -> tuple[str, list[dict]]:
@@ -344,66 +313,68 @@ def _build_chart_page_query(filters: ChartFilterSpec, cursor: Optional[str], lim
                 ")"
             ]
         )
-
-    qd = Table("quality_data")
-    select_columns = [
-        qd.batch_id,
-        _sql_expr("CAST(batch_date AS STRING)").as_("batch_date"),
-        qd.sample_seq,
-        qd.attribut,
-        qd.value,
-        qd.nominal,
-        qd.tolerance,
-        qd.lsl,
-        qd.usl,
-        qd.valuation,
-        qd.plant_id,
-        qd.cursor_batch_date_epoch,
-        qd.cursor_sample_id,
-        qd.cursor_inspection_lot_id,
-        qd.cursor_operation_id,
-    ]
-    if "stratify_value" in filters.select_extra_columns:
-        select_columns.append(qd.stratify_value)
+    stratify_select = ""
+    if filters.stratify_select_sql:
+        stratify_select = ",\n            stratify_value"
 
     # CRITICAL: ORDER BY must use the same columns as the cursor WHERE clause,
     # otherwise keyset pagination silently skips rows at page boundaries when
     # raw INSPECTION_LOT_ID / OPERATION_ID (BIGINT) sort order differs from the
     # string-casted cursor columns. Manifests as missing X-bar / Range points
     # in the X-R chart (each paginated gap drops samples from a subgroup).
-    final_query = (
-        MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
-        .with_(_build_quality_data_cte(filters), "quality_data")
-        .from_(qd)
-        .select(*select_columns)
-        .orderby(qd.cursor_batch_date_epoch)
-        .orderby(qd.batch_id)
-        .orderby(qd.cursor_sample_id)
-        .orderby(qd.cursor_inspection_lot_id)
-        .orderby(qd.cursor_operation_id)
-        .limit(limit + 1)
-    )
-    final_query = _apply_conditions(final_query, filters.final_where_conditions)
-    return final_query.get_sql(), params
+    final_query = f"""
+        WITH
+        {_build_batch_dates_cte_sql(filters)},
+        {_build_quality_data_cte_sql(filters)}
+        SELECT
+            batch_id,
+            CAST(batch_date AS STRING) AS batch_date,
+            sample_seq,
+            attribut,
+            value,
+            nominal,
+            tolerance,
+            lsl,
+            usl,
+            valuation,
+            plant_id,
+            cursor_batch_date_epoch,
+            cursor_sample_id,
+            cursor_inspection_lot_id,
+            cursor_operation_id
+            {stratify_select}
+        FROM quality_data
+        {_where_clause(filters.final_where_conditions)}
+        ORDER BY
+            cursor_batch_date_epoch,
+            batch_id,
+            cursor_sample_id,
+            cursor_inspection_lot_id,
+            cursor_operation_id
+        LIMIT {limit + 1}
+    """
+    return final_query, params
 
 
 def _build_chart_values_query(filters: ChartFilterSpec, max_points: int) -> tuple[str, list[dict]]:
-    r = _source_table("gold_batch_quality_result_v", "r")
-    bd = Table("batch_dates").as_("bd")
-    final_query = (
-        MySQLQuery.with_(_build_batch_dates_cte(filters), "batch_dates")
-        .from_(r)
-        .join(bd)
-        .on((bd.MATERIAL_ID == r.MATERIAL_ID) & (bd.BATCH_ID == r.BATCH_ID))
-        .select(_sql_expr("CAST(r.QUANTITATIVE_RESULT AS DOUBLE)").as_("value"))
-        .orderby(bd.batch_date)
-        .orderby(r.BATCH_ID)
-        .orderby(r.SAMPLE_ID)
-        .orderby(r.INSPECTION_LOT_ID)
-        .limit(max_points)
-    )
-    final_query = _apply_conditions(final_query, filters.quality_conditions)
-    return final_query.get_sql(), list(filters.params)
+    final_query = f"""
+        WITH
+        {_build_batch_dates_cte_sql(filters)}
+        SELECT
+            CAST(r.QUANTITATIVE_RESULT AS DOUBLE) AS value
+        FROM {tbl('gold_batch_quality_result_v')} r
+        INNER JOIN batch_dates bd
+            ON bd.MATERIAL_ID = r.MATERIAL_ID
+           AND bd.BATCH_ID = r.BATCH_ID
+        {_where_clause(filters.quality_conditions)}
+        ORDER BY
+            bd.batch_date,
+            r.BATCH_ID,
+            r.SAMPLE_ID,
+            r.INSPECTION_LOT_ID
+        LIMIT {max_points}
+    """
+    return final_query, list(filters.params)
 
 
 async def fetch_chart_data_page(
@@ -430,7 +401,7 @@ async def fetch_chart_data_page(
         operation_id,
     )
     query, params = _build_chart_page_query(filters, cursor, limit)
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.chart-data")
     has_more = len(rows) > limit
     raw_page_rows = rows[:limit]
     next_cursor = None
@@ -474,7 +445,7 @@ async def fetch_chart_data_values(
         operation_id,
     )
     query, params = _build_chart_values_query(filters, max_points)
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.chart-values")
     values = []
     for row in rows:
         value = row.get("value")
@@ -483,6 +454,128 @@ async def fetch_chart_data_values(
         except (ValueError, TypeError):
             values.append(None)
     return values
+
+
+async def fetch_normality_summary(
+    token: str,
+    material_id: str,
+    mic_id: str,
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    operation_id: Optional[str] = None,
+) -> dict:
+    params = [
+        sql_param("material_id", material_id),
+        sql_param("mic_id", mic_id),
+    ]
+    clauses = ["material_id = :material_id", "mic_id = :mic_id"]
+    if plant_id:
+        clauses.append("plant_id = :plant_id")
+        params.append(sql_param("plant_id", plant_id))
+    if date_from:
+        clauses.append("batch_date >= :date_from")
+        params.append(sql_param("date_from", date_from))
+    if date_to:
+        clauses.append("batch_date <= :date_to")
+        params.append(sql_param("date_to", date_to))
+    if operation_id:
+        clauses.append("operation_id = :operation_id")
+        params.append(sql_param("operation_id", operation_id))
+    where_sql = "WHERE " + " AND ".join(clauses)
+
+    query = f"""
+        SELECT
+            MEASURE(normality_safe) AS normality_safe,
+            MAX(normality_type)     AS normality_type,
+            MAX(normality_method)   AS normality_method
+        FROM {tbl('spc_quality_metrics')}
+        {where_sql}
+        GROUP BY mic_id
+    """
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.normality")
+    if not rows:
+        return {
+            "method": "governed_profile",
+            "p_value": None,
+            "alpha": 0.05,
+            "is_normal": None,
+            "warning": "Normality metadata unavailable for this characteristic.",
+        }
+
+    row = rows[0]
+    safe_flag = int(float(row.get("normality_safe") or 0))
+    normality_type = str(row.get("normality_type") or "unknown")
+    normality_method = str(row.get("normality_method") or "governed_profile")
+    is_normal: Optional[bool]
+    warning: Optional[str] = None
+    if safe_flag != 1:
+        is_normal = None
+        warning = "Normality classification is mixed across this date range."
+    elif normality_type == "normal":
+        is_normal = True
+    elif normality_type == "non_normal":
+        is_normal = False
+    else:
+        is_normal = None
+        warning = "Normality profile is not yet available for this characteristic."
+
+    return {
+        "method": normality_method,
+        "p_value": None,
+        "alpha": 0.05,
+        "is_normal": is_normal,
+        "warning": warning,
+    }
+
+
+async def fetch_control_limits(
+    token: str,
+    material_id: str,
+    mic_id: str,
+    plant_id: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    operation_id: Optional[str] = None,
+) -> dict:
+    params = [
+        sql_param("material_id", material_id),
+        sql_param("mic_id", mic_id),
+    ]
+    clauses = ["material_id = :material_id", "mic_id = :mic_id"]
+    if plant_id:
+        clauses.append("plant_id = :plant_id")
+        params.append(sql_param("plant_id", plant_id))
+    if date_from:
+        clauses.append("batch_date >= :date_from")
+        params.append(sql_param("date_from", date_from))
+    if date_to:
+        clauses.append("batch_date <= :date_to")
+        params.append(sql_param("date_to", date_to))
+    if operation_id:
+        clauses.append("operation_id = :operation_id")
+        params.append(sql_param("operation_id", operation_id))
+    where_sql = "WHERE " + " AND ".join(clauses)
+
+    query = f"""
+        SELECT
+            MEASURE(mean_value)    AS cl,
+            MEASURE(x_bar_ucl)     AS ucl,
+            MEASURE(x_bar_lcl)     AS lcl,
+            MEASURE(sigma_within)  AS sigma_within,
+            MEASURE(cpk)           AS cpk,
+            MEASURE(ppk)           AS ppk
+        FROM {tbl('spc_quality_metrics')}
+        {where_sql}
+        GROUP BY mic_id
+    """
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.control-limits")
+    row = rows[0] if rows else {}
+    result: dict[str, Optional[float]] = {}
+    for field in ("cl", "ucl", "lcl", "sigma_within", "cpk", "ppk"):
+        value = row.get(field)
+        result[field] = float(value) if value is not None else None
+    return result
 
 
 async def fetch_chart_data(
@@ -550,16 +643,17 @@ async def fetch_p_chart_data(
     query = f"""
         SELECT
             batch_id,
-            CAST(batch_date AS STRING)                              AS batch_date,
-            n_inspected,
-            n_nonconforming,
-            ROUND(n_nonconforming / GREATEST(n_inspected, 1), 4)   AS p_value
-        FROM {tbl('spc_attribute_metric_source_v')}
+            CAST(batch_date AS STRING)                                            AS batch_date,
+            SUM(inspected_count)                                                  AS n_inspected,
+            SUM(nonconforming_count)                                              AS n_nonconforming,
+            ROUND(SUM(nonconforming_count) / GREATEST(SUM(inspected_count), 1), 4) AS p_value
+        FROM {tbl('spc_attribute_subgroup_mv')}
         {where_sql}
+        GROUP BY batch_id, batch_date
         ORDER BY COALESCE(batch_date, '9999-12-31'), batch_id
         LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.p-chart")
     rows = _assign_batch_sequence(rows)
     for row in rows:
         row["batch_seq"] = int(float(row.get("batch_seq", 0) or 0))
@@ -599,15 +693,16 @@ async def fetch_count_chart_data(
     query = f"""
         SELECT
             batch_id,
-            CAST(batch_date AS STRING)  AS batch_date,
-            n_inspected,
-            n_nonconforming             AS defect_count
-        FROM {tbl('spc_attribute_metric_source_v')}
+            CAST(batch_date AS STRING)   AS batch_date,
+            SUM(inspected_count)         AS n_inspected,
+            SUM(nonconforming_count)     AS defect_count
+        FROM {tbl('spc_attribute_subgroup_mv')}
         {where_sql}
+        GROUP BY batch_id, batch_date
         ORDER BY COALESCE(batch_date, '9999-12-31'), batch_id
         LIMIT {_ATTRIBUTE_CHART_MAX_ROWS}
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.count-chart")
     rows = _assign_batch_sequence(rows)
     for row in rows:
         row["batch_seq"] = int(float(row.get("batch_seq", 0) or 0))
@@ -659,36 +754,54 @@ async def fetch_spec_drift_summary(
         params.append(sql_param("operation_id", operation_id))
 
     where_clause = " AND ".join(conditions)
-    query = f"""
+    preferred_query = f"""
+        SELECT
+            distinct_signatures,
+            total_batches,
+            signature_set,
+            change_references
+        FROM {tbl('spc_spec_drift_summary_v')}
+        WHERE {where_clause}
+    """
+    fallback_query = f"""
         SELECT
             COUNT(DISTINCT spec_signature)  AS distinct_signatures,
             COUNT(DISTINCT batch_id)        AS total_batches,
-            COLLECT_SET(spec_signature)     AS signature_set
+            COLLECT_SET(spec_signature)     AS signature_set,
+            CAST(NULL AS ARRAY<STRING>)     AS change_references
         FROM (
             SELECT DISTINCT batch_id, spec_signature
             FROM {tbl('spc_quality_metric_subgroup_v')}
             WHERE {where_clause}
         ) t
     """
-    rows = await run_sql_async(token, query, params)
+    try:
+        rows = await run_sql_async(token, preferred_query, params, endpoint_hint="spc.charts.spec-drift")
+    except Exception as exc:
+        message = str(exc).lower()
+        if (
+            "table_or_view_not_found" not in message
+            and "table or view not found" not in message
+            and "does not exist" not in message
+            and "doesn't exist" not in message
+        ):
+            raise
+        rows = await run_sql_async(token, fallback_query, params, endpoint_hint="spc.charts.spec-drift")
     row = rows[0] if rows else {}
     distinct = int(float(row.get("distinct_signatures") or 1))
     total = int(float(row.get("total_batches") or 0))
     sig_set = row.get("signature_set") or []
     if isinstance(sig_set, str):
         sig_set = [sig_set]
-    # Forward-compatible placeholder for upstream ECO references (Phase 2.3).
-    # The upstream gold view does not yet expose a `spec_change_reference`
-    # column tying a spec change to an engineering change order (ECO); when
-    # it does, fetch it via a separate COLLECT_SET query joined on
-    # spec_signature and populate `change_references` here. See
-    # docs/DATA_CONTRACT.md for the extension procedure.
+    change_references = row.get("change_references")
+    if isinstance(change_references, str):
+        change_references = [change_references]
     return {
         "detected": distinct > 1,
         "distinct_signatures": distinct,
         "total_batches": total,
         "signature_set": list(sig_set),
-        "change_references": None,
+        "change_references": list(change_references) if isinstance(change_references, list) else None,
     }
 
 
@@ -807,7 +920,7 @@ async def save_locked_limits(
             s.locked_by, s.locked_at
         )
     """
-    await run_sql_async(token, merge_sql, params)
+    await run_sql_async(token, merge_sql, params, endpoint_hint="spc.charts.lock-limits")
     return {"saved": True}
 
 
@@ -858,7 +971,7 @@ async def fetch_locked_limits(
         ORDER BY {mic_scope_order} locked_at DESC
         LIMIT 1
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.locked-limits")
     if not rows:
         return None
     row = rows[0]
@@ -908,7 +1021,7 @@ async def delete_locked_limits(
           {plant_filter}
           {operation_id_filter}
     """
-    await run_sql_async(token, query, params)
+    await run_sql_async(token, query, params, endpoint_hint="spc.charts.delete-locked-limits")
     return {"deleted": True}
 
 
@@ -1012,7 +1125,7 @@ async def fetch_data_quality_summary(
             (SELECT PERCENTILE(gap_days, 0.95) FROM gaps WHERE gap_days IS NOT NULL)                 AS p95_gap_days,
             (SELECT MAX(gap_days) FROM gaps WHERE gap_days IS NOT NULL)                              AS max_gap_days
     """
-    rows = await run_sql_async(token, query, params)
+    rows = await run_sql_async(token, query, params, endpoint_hint="spc.charts.data-quality")
     row = rows[0] if rows else {}
 
     # Phase 2.2: opportunistically probe for the optional USAGE_DECISION_CODE
@@ -1042,7 +1155,9 @@ async def fetch_data_quality_summary(
                 WHERE {where_clause}
                 GROUP BY COALESCE(r.USAGE_DECISION_CODE, '__UNSET__')
             """
-            disp_rows = await run_sql_async(token, disp_query, params)
+            disp_rows = await run_sql_async(
+                token, disp_query, params, endpoint_hint="spc.charts.data-quality"
+            )
             disposition_breakdown = {
                 str(drow.get("code") or "__UNSET__"): int(float(drow.get("n") or 0))
                 for drow in disp_rows

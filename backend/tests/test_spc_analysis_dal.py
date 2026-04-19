@@ -6,7 +6,7 @@ from backend.dal import spc_analysis_dal
 def test_fetch_scorecard_queries_metric_view_and_preserves_capability_fields(monkeypatch):
     calls = []
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         calls.append((query, params or []))
         return [
             {
@@ -50,7 +50,7 @@ def test_fetch_scorecard_queries_metric_view_and_preserves_capability_fields(mon
 
 
 def test_fetch_scorecard_marks_unspecified_specs(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         return [
             {
                 "mic_id": "MIC-2",
@@ -90,7 +90,7 @@ def test_fetch_scorecard_marks_unspecified_specs(monkeypatch):
 
 
 def test_fetch_scorecard_marks_out_of_spec_mean_distinctly(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         return [
             {
                 "mic_id": "MIC-3",
@@ -158,7 +158,7 @@ def _stable_row(ooc_batches: int) -> dict:
 
 
 def test_fetch_scorecard_marks_stable_when_no_ooc_batches(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         return [_stable_row(ooc_batches=0)]
 
     monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
@@ -169,7 +169,7 @@ def test_fetch_scorecard_marks_stable_when_no_ooc_batches(monkeypatch):
 
 
 def test_fetch_scorecard_marks_unstable_when_any_ooc_batch(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         return [_stable_row(ooc_batches=1)]
 
     monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)

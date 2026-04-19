@@ -61,4 +61,12 @@ export const spcQueryKeys = {
     dateTo: string | null | undefined,
     operationId: string | null | undefined,
   ) => ['spc', 'dataQuality', materialId ?? null, micId ?? null, plantId ?? null, dateFrom ?? null, dateTo ?? null, operationId ?? null] as const,
+  controlLimits: (
+    materialId: string | null | undefined,
+    micId: string | null | undefined,
+    plantId: string | null | undefined,
+    dateFrom: string | null | undefined,
+    dateTo: string | null | undefined,
+    operationId: string | null | undefined,
+  ) => ['spc', 'controlLimits', materialId ?? null, micId ?? null, plantId ?? null, dateFrom ?? null, dateTo ?? null, operationId ?? null] as const,
 }

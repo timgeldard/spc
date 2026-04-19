@@ -54,7 +54,7 @@ async def spc_process_flow(
     return await attach_data_freshness(
         payload,
         token,
-        ["gold_batch_lineage", "spc_process_flow_source_mv"],
+        ["spc_lineage_graph_mv", "spc_process_flow_source_mv"],
         request_path=request.url.path,
     )
 

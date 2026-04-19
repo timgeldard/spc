@@ -13,7 +13,7 @@ from backend.schemas.spc_schemas import ProcessFlowRequest
 def test_fetch_characteristics_applies_plant_filter(monkeypatch):
     calls = []
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         calls.append((query, params or []))
         return []
 
@@ -26,14 +26,14 @@ def test_fetch_characteristics_applies_plant_filter(monkeypatch):
     assert characteristics == []
     assert attr_characteristics == []
     query, params = calls[0]
-    assert "PLANT_ID = :plant_id" in query
+    assert "plant_id = :plant_id" in query
     assert any(param["name"] == "plant_id" and param["value"] == "PLANT-1" for param in params)
 
 
 def test_fetch_process_flow_aggregates_multi_plant_rows(monkeypatch):
     calls = []
 
-    async def fake_run_sql_async(_token, query, _params=None):
+    async def fake_run_sql_async(_token, query, _params=None, **_kwargs):
         calls.append((query, _params or []))
         if "SELECT DISTINCT" in query and "AS source" in query:
             return [{"source": "MAT-ROOT", "target": "MAT-CHILD"}]
@@ -69,6 +69,7 @@ def test_fetch_process_flow_aggregates_multi_plant_rows(monkeypatch):
     assert result["upstream_depth"] == 8
     assert result["downstream_depth"] == 6
     edge_query, edge_params = calls[0]
+    assert "spc_lineage_graph_mv" in edge_query
     assert "u.depth < :upstream_depth" in edge_query
     assert "d.depth < :downstream_depth" in edge_query
     assert any(param["name"] == "upstream_depth" and param["value"] == "8" for param in edge_params)
@@ -128,7 +129,7 @@ def test_get_exclusions_query_rejects_invalid_stratify_by():
 def test_get_exclusions_includes_legacy_plant_fallback(monkeypatch):
     calls = []
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         calls.append((query, params or []))
         return []
 
@@ -191,7 +192,7 @@ def test_fetch_compare_scorecard_single_grouped_query(monkeypatch):
     # that satisfy both call sites.
     calls: list[str] = []
 
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         calls.append(_query)
         return [
             {"material_id": "MAT-1", "material_name": "Material 1",

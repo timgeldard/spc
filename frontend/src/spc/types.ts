@@ -126,6 +126,11 @@ export interface ControlLimits {
   sigma_within?: number | null
 }
 
+export interface GovernedControlLimits extends ControlLimits {
+  cpk?: number | null
+  ppk?: number | null
+}
+
 export interface CapabilityMetrics {
   cp?: number | null
   cpk?: number | null

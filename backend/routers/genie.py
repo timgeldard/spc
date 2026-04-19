@@ -12,13 +12,11 @@ API flow:
      until status is COMPLETED, FAILED, or CANCELLED.
 """
 import asyncio
-import json
 import logging
 import os
-import urllib.error
-import urllib.request
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
@@ -30,6 +28,7 @@ logger = logging.getLogger(__name__)
 _GENIE_SPACE_ID: str = os.environ.get("GENIE_SPACE_ID", "")
 _POLL_INTERVAL_S: float = 1.5
 _POLL_MAX_ATTEMPTS: int = 40  # ~60 s maximum wait
+_API_TIMEOUT_S: float = 30.0
 
 
 class GenieRequest(BaseModel):
@@ -42,29 +41,33 @@ class GenieResponse(BaseModel):
     conversation_id: str
 
 
-def _api_sync(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
+async def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
     host = hostname()
     url = f"https://{host}{path}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=payload, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")[:500]
+        async with httpx.AsyncClient(timeout=httpx.Timeout(_API_TIMEOUT_S)) as client:
+            resp = await client.request(method, url, headers=headers, json=body)
+            resp.raise_for_status()
+            if not resp.content:
+                return {}
+            return resp.json()
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:500]
         logger.warning(
             "genie.api_error method=%s path=%s status=%d body=%s",
-            method, path, exc.code, detail,
+            method, path, exc.response.status_code, detail,
         )
         raise HTTPException(
-            status_code=exc.code,
+            status_code=exc.response.status_code,
             detail="Genie API request failed.",
         ) from exc
-
-
-async def _api(token: str, method: str, path: str, body: Optional[dict] = None) -> dict:
-    return await asyncio.to_thread(_api_sync, token, method, path, body)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("genie.api_transport_error method=%s path=%s error=%s", method, path, str(exc)[:300])
+        raise HTTPException(
+            status_code=502,
+            detail="Genie API request failed.",
+        ) from exc
 
 
 def _extract_text(msg: dict) -> str:

@@ -1,3 +1,7 @@
+import asyncio
+
+import httpx
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -145,3 +149,69 @@ def test_extract_text_legacy_format():
 
 def test_extract_text_falls_back_to_error_field():
     assert genie._extract_text({"attachments": [], "error": "fallback"}) == "fallback"
+
+
+def test_api_uses_async_httpx_client(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        content = b'{"ok":true}'
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            captured["method"] = method
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(genie, "hostname", lambda: "workspace.example.com")
+    monkeypatch.setattr(genie.httpx, "AsyncClient", FakeAsyncClient)
+
+    result = asyncio.run(genie._api("token-1", "POST", "/api/demo", {"hello": "world"}))
+
+    assert result == {"ok": True}
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://workspace.example.com/api/demo"
+    assert captured["headers"]["Authorization"] == "Bearer token-1"
+    assert captured["json"] == {"hello": "world"}
+
+
+def test_api_sanitizes_http_status_failures(monkeypatch):
+    class FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            return httpx.Response(
+                403,
+                request=httpx.Request(method, url, headers=headers, json=json),
+                text="SECRET_TOKEN should not leak",
+            )
+
+    monkeypatch.setattr(genie, "hostname", lambda: "workspace.example.com")
+    monkeypatch.setattr(genie.httpx, "AsyncClient", lambda *args, **kwargs: FakeAsyncClient())
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(genie._api("token-1", "GET", "/api/demo"))
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Genie API request failed."

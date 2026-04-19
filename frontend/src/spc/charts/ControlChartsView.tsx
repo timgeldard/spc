@@ -404,6 +404,7 @@ export default function ControlChartsView() {
         actionRail={null}
         lockedLimits={ctrl.lockedLimits}
         limitsMode={limitsMode}
+        limitsSourceLabel={ctrl.limitsSourceLabel}
         onExclusionClick={
           ctrl.exclusionCount > 0
             ? () => excludedPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -414,6 +415,8 @@ export default function ControlChartsView() {
       <ChartInfoBanners
         lockedLimitsError={ctrl.lockedLimitsError}
         lockedLimitsWarning={ctrl.lockedLimitsWarning}
+        limitsSourceDetail={ctrl.limitsSourceDetail}
+        limitsSourceTone={ctrl.limitsSourceTone}
         exclusionsError={ctrl.exclusionsError}
         exclusionsLoading={ctrl.exclusionsLoading}
         dataTruncated={ctrl.dataTruncated}

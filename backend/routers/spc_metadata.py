@@ -112,7 +112,7 @@ async def spc_characteristics(
     return await attach_data_freshness(
         {"characteristics": characteristics, "attr_characteristics": attr_characteristics},
         token,
-        ["gold_batch_quality_result_v"],
+        ["spc_characteristic_dim_mv", "spc_attribute_quality_metrics", "spc_quality_metric_subgroup_v"],
         request_path=request.url.path,
     )
 

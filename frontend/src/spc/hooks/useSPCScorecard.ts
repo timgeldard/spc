@@ -19,6 +19,7 @@ export function useSPCScorecard(
     queryKey: spcQueryKeys.scorecard(materialId, dateFrom, dateTo, plantId),
     queryFn: ({ signal }) => fetchScorecard(materialId as string, dateFrom ?? null, dateTo ?? null, plantId ?? null, signal),
     enabled: Boolean(materialId),
+    staleTime: 10 * 60_000,
   })
 
   return {

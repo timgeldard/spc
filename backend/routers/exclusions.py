@@ -190,6 +190,7 @@ async def save_exclusions(
         actor_rows = await run_sql_async(
             token,
             "SELECT CURRENT_USER() AS user_id, CAST(CURRENT_TIMESTAMP() AS STRING) AS event_ts",
+            endpoint_hint="spc.exclusions.actor-metadata",
         )
     except RuntimeError as exc:
         logger.warning("exclusions.actor_metadata_lookup_failed: %s", exc)
@@ -272,7 +273,7 @@ async def get_exclusions(
     """
 
     try:
-        rows = await run_sql_async(token, query, params)
+        rows = await run_sql_async(token, query, params, endpoint_hint="spc.exclusions.get")
     except RuntimeError as exc:
         _handle_sql_error(exc)
 

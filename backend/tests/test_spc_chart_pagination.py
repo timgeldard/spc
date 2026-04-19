@@ -28,14 +28,14 @@ def test_chart_data_returns_paginated_shape(monkeypatch):
             "has_more": True,
         }
 
-    async def fake_fetch_chart_data_values(*_args, **_kwargs):
-        return [1.23, 1.25, 1.22]
+    async def fake_fetch_normality_summary(*_args, **_kwargs):
+        return {"method": "shapiro_wilk", "p_value": None, "alpha": 0.05, "is_normal": True, "warning": None}
 
     async def passthrough_attach(payload, *_args, **_kwargs):
         return payload
 
     monkeypatch.setattr(spc_charts_module, "fetch_chart_data_page", fake_fetch_chart_data_page)
-    monkeypatch.setattr(spc_charts_module, "fetch_chart_data_values", fake_fetch_chart_data_values)
+    monkeypatch.setattr(spc_charts_module, "fetch_normality_summary", fake_fetch_normality_summary)
     monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
 
     response = client.post(
@@ -95,14 +95,14 @@ def test_chart_data_skips_normality_fetch_on_non_initial_pages(monkeypatch):
             "has_more": False,
         }
 
-    async def unexpected_fetch_chart_data_values(*_args, **_kwargs):  # pragma: no cover
-        raise AssertionError("normality values query should not run for follow-on pages")
+    async def unexpected_fetch_normality_summary(*_args, **_kwargs):  # pragma: no cover
+        raise AssertionError("normality summary query should not run for follow-on pages")
 
     async def passthrough_attach(payload, *_args, **_kwargs):
         return payload
 
     monkeypatch.setattr(spc_charts_module, "fetch_chart_data_page", fake_fetch_chart_data_page)
-    monkeypatch.setattr(spc_charts_module, "fetch_chart_data_values", unexpected_fetch_chart_data_values)
+    monkeypatch.setattr(spc_charts_module, "fetch_normality_summary", unexpected_fetch_normality_summary)
     monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
 
     response = client.post(
@@ -134,8 +134,8 @@ def test_chart_data_survives_spec_drift_summary_failure(monkeypatch):
             "has_more": False,
         }
 
-    async def fake_fetch_chart_data_values(*_args, **_kwargs):
-        return [1.23, 1.25, 1.22]
+    async def fake_fetch_normality_summary(*_args, **_kwargs):
+        return {"method": "shapiro_wilk", "p_value": None, "alpha": 0.05, "is_normal": True, "warning": None}
 
     async def failing_fetch_spec_drift_summary(*_args, **_kwargs):
         raise RuntimeError("warehouse side-car summary unavailable")
@@ -144,7 +144,7 @@ def test_chart_data_survives_spec_drift_summary_failure(monkeypatch):
         return payload
 
     monkeypatch.setattr(spc_charts_module, "fetch_chart_data_page", fake_fetch_chart_data_page)
-    monkeypatch.setattr(spc_charts_module, "fetch_chart_data_values", fake_fetch_chart_data_values)
+    monkeypatch.setattr(spc_charts_module, "fetch_normality_summary", fake_fetch_normality_summary)
     monkeypatch.setattr(spc_charts_module, "fetch_spec_drift_summary", failing_fetch_spec_drift_summary)
     monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
 
@@ -171,7 +171,7 @@ def test_encode_and_decode_chart_cursor_round_trip():
 
 
 def test_fetch_chart_data_page_builds_next_cursor_before_row_cleanup(monkeypatch):
-    async def fake_run_sql_async(_token, _query, _params=None):
+    async def fake_run_sql_async(_token, _query, _params=None, **_kwargs):
         return [
             {
                 "batch_id": "B1",
@@ -233,7 +233,7 @@ def test_fetch_chart_data_page_builds_next_cursor_before_row_cleanup(monkeypatch
 def test_fetch_chart_data_page_uses_full_cursor_tie_breakers(monkeypatch):
     captured: dict[str, object] = {}
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         captured["query"] = query
         captured["params"] = params or []
         return []
@@ -270,7 +270,7 @@ def test_fetch_chart_data_page_orderby_uses_cursor_columns(monkeypatch):
     in the X-R chart (subgroups lose members)."""
     captured: dict[str, object] = {}
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         captured["query"] = query
         captured["params"] = params or []
         return []
@@ -318,10 +318,54 @@ def test_chart_data_rejects_invalid_stratify_key(monkeypatch):
     assert "stratify_by" in str(response.json()["detail"])
 
 
+def test_control_limits_endpoint_returns_governed_metrics(monkeypatch):
+    monkeypatch.setattr(spc_charts_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(spc_charts_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    async def fake_fetch_control_limits(*_args, **_kwargs):
+        return {
+            "cl": 10.5,
+            "ucl": 12.1,
+            "lcl": 8.9,
+            "sigma_within": 0.4,
+            "cpk": 1.33,
+            "ppk": 1.21,
+        }
+
+    async def passthrough_attach(payload, *_args, **_kwargs):
+        return payload
+
+    monkeypatch.setattr(spc_charts_module, "fetch_control_limits", fake_fetch_control_limits)
+    monkeypatch.setattr(spc_charts_module, "attach_data_freshness", passthrough_attach)
+
+    response = client.post(
+        "/api/spc/control-limits",
+        headers={"x-forwarded-access-token": "not-a-real-jwt"},
+        json={
+            "material_id": "MAT-1",
+            "mic_id": "MIC-1",
+            "plant_id": "PLANT-1",
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "operation_id": "OP-10",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["control_limits"] == {
+        "cl": 10.5,
+        "ucl": 12.1,
+        "lcl": 8.9,
+        "sigma_within": 0.4,
+        "cpk": 1.33,
+        "ppk": 1.21,
+    }
+
+
 def test_fetch_chart_data_page_selects_stratify_value(monkeypatch):
     captured: dict[str, object] = {}
 
-    async def fake_run_sql_async(_token, query, params=None):
+    async def fake_run_sql_async(_token, query, params=None, **_kwargs):
         captured["query"] = query
         captured["params"] = params or []
         return []

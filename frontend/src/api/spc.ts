@@ -4,6 +4,7 @@ import type {
   CorrelationPair,
   CorrelationResult,
   CorrelationScatterResult,
+  GovernedControlLimits,
   LockedLimits,
   MSAResult,
   MicRef,
@@ -93,6 +94,34 @@ export async function fetchDataQuality(
       operation_id: operationId ?? null,
     }),
   })
+}
+
+export async function fetchControlLimits(
+  materialId: string,
+  micId: string,
+  plantId: string | null,
+  dateFrom: string | null,
+  dateTo: string | null,
+  operationId: string | null,
+  signal?: AbortSignal,
+): Promise<GovernedControlLimits | null> {
+  const data = await fetchJson<{ control_limits?: GovernedControlLimits | null }>(
+    '/api/spc/control-limits',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        material_id: materialId,
+        mic_id: micId,
+        plant_id: plantId ?? null,
+        date_from: dateFrom ?? null,
+        date_to: dateTo ?? null,
+        operation_id: operationId ?? null,
+      }),
+    },
+  )
+  return data.control_limits ?? null
 }
 
 export async function fetchScorecard(
