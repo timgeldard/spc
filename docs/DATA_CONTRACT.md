@@ -146,3 +146,25 @@ that succeeds but the schema query fails, we return 503 with an error note.
 **Q: Can the app keep serving when the contract breaks?**
 A: No — this is intentional. Silently serving with wrong column shape is
 worse than being visibly down. A graceful degradation would hide a real bug.
+
+## SPC-Owned Gold Objects
+
+### Materialized Views (Pipeline-Managed)
+
+| Object | Grain | Refresh | SLA | Owner |
+|--------|-------|---------|-----|-------|
+| spc_material_dim_mv | material_id | 4h | 99.5% | SPC Team |
+| spc_plant_material_dim_mv | plant_id, material_id | 4h | 99.5% | SPC Team |
+| spc_correlation_source_mv | material_id, batch_id, mic_id | 4h | 99.5% | SPC Team |
+| spc_process_flow_source_mv | material_id, batch_id | 4h | 99.5% | SPC Team |
+| spc_nelson_rule_flags_mv | material_id, plant_id, mic_id, batch_id | 4h | 99.5% | SPC Team |
+| spc_capability_detail_mv | material_id, plant_id, mic_id | 4h | 99.5% | SPC Team |
+
+### User-Editable Tables
+
+| Object | Purpose | Retention |
+|--------|---------|-----------|
+| spc_locked_limits | User-defined control limits | Permanent |
+| spc_exclusions | Sample/batch exclusions | Permanent |
+| spc_mic_chart_config | Chart type overrides | Permanent |
+| spc_query_audit | Query audit log | 90 days |

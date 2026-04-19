@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SPC Gold Layer Schema Contract",
+  "version": "1.0.0",
+  "objects": {
+    "spc_quality_metric_subgroup_v": {
+      "type": "VIEW",
+      "grain": ["material_id", "batch_id", "mic_id", "operation_id"],
+      "columns": {
+        "material_id": {"type": "STRING", "nullable": false},
+        "material_name": {"type": "STRING", "nullable": true},
+        "batch_id": {"type": "STRING", "nullable": false},
+        "plant_id": {"type": "STRING", "nullable": true},
+        "mic_id": {"type": "STRING", "nullable": false},
+        "value": {"type": "DOUBLE", "nullable": true},
+        "lsl_spec": {"type": "DOUBLE", "nullable": true},
+        "usl_spec": {"type": "DOUBLE", "nullable": true}
+      }
+    },
+    "spc_nelson_rule_flags_mv": {
+      "type": "MATERIALIZED_VIEW",
+      "grain": ["material_id", "plant_id", "mic_id", "batch_id"],
+      "clustering": ["material_id", "mic_id"],
+      "columns": {
+        "material_id": {"type": "STRING", "nullable": false},
+        "plant_id": {"type": "STRING", "nullable": false},
+        "mic_id": {"type": "STRING", "nullable": false},
+        "batch_id": {"type": "STRING", "nullable": false},
+        "is_stable": {"type": "INT", "nullable": false},
+        "violations": {"type": "STRING", "nullable": true}
+      }
+    },
+    "spc_capability_detail_mv": {
+      "type": "MATERIALIZED_VIEW",
+      "grain": ["material_id", "plant_id", "mic_id"],
+      "clustering": ["material_id", "mic_id"],
+      "columns": {
+        "material_id": {"type": "STRING", "nullable": false},
+        "plant_id": {"type": "STRING", "nullable": false},
+        "mic_id": {"type": "STRING", "nullable": false},
+        "ppk": {"type": "DOUBLE", "nullable": true},
+        "ppk_ci_lower": {"type": "DOUBLE", "nullable": true},
+        "ppk_ci_upper": {"type": "DOUBLE", "nullable": true}
+      }
+    }
+  }
+}
