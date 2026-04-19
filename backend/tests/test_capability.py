@@ -1,7 +1,24 @@
 import pytest
+import json
+import os
 from backend.utils.statistical_utils import compute_capability_indices
 
-def test_compute_capability_indices():
+def load_fixture(name):
+    path = os.path.join(os.path.dirname(__file__), "fixtures", name)
+    with open(path, "r") as f:
+        return json.load(f)
+
+def test_capability_golden_dataset():
+    fixture = load_fixture("capability_golden.json")
+    res = compute_capability_indices(fixture["data"], usl=fixture["usl"], lsl=fixture["lsl"])
+    expected = fixture["expected"]
+    
+    assert res["cp"] == pytest.approx(expected["cp"], rel=1e-2)
+    assert res["cpk"] == pytest.approx(expected["cpk"], rel=1e-2)
+    assert res["pp"] == pytest.approx(expected["pp"], rel=1e-2)
+    assert res["ppk"] == pytest.approx(expected["ppk"], rel=1e-2)
+
+def test_compute_capability_indices_simple():
     # mu = 10.0, s_overall = 1.0 (ddof=1)
     values = [8.0, 9.0, 10.0, 11.0, 12.0]
     # MR = [1.0, 1.0, 1.0, 1.0], MR_bar = 1.0, sigma_within = 1.0 / 1.128 = 0.8865

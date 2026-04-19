@@ -2,7 +2,7 @@
 testpaths = ["backend/tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
-addopts = "--cov=backend --cov-report=term-missing --cov-report=xml"
+addopts = "-v --cov=backend --cov-report=term-missing --cov-fail-under=75"
 markers = [
     "integration: marks tests as integration tests (skipped by default)",
 ]
