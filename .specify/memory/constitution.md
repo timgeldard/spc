@@ -1,50 +1,35 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# SPC-TIM Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Statistical Fidelity First
+The primary value of this application is statistical accuracy for quality decisions. 
+- **Strict Statistical Correctness**: All future refactors must mandate **Sample Standard Deviation** ($N-1$ denominator) for process performance indices ($P_p, P_{pk}$) and **Within-Subgroup Sigma** (estimated from $R/d_2$ or pooled variance) for process capability indices ($C_p, C_{pk}$).
+- **Formula Alignment**: All implemented formulas must match [docs/STATISTICAL_METHODS.md](../../docs/STATISTICAL_METHODS.md) without deviation.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Native Databricks Security
+The app must not replicate filtering logic that Databricks Unity Catalog already provides.
+- **User-Scoped Caching**: All analytical caches (including process-flow and scorecard) MUST be keyed by the user's OIDC `sub` or email claim to prevent cross-user data leakage.
+- **Token Passthrough**: Authentication MUST always use the `x-forwarded-access-token` provided by the Databricks Apps runtime.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. SAP QM Semantic Integrity
+Calculations must respect the semantics of the source data (SAP QM/PP-PI).
+- **Specification Context**: Specification types (bilateral, unilateral) must be correctly inferred from the data; hardcoded bilateral stubs are prohibited.
+- **Unit of Measure (UoM) Awareness**: SPC results across different plants are only valid if units are consistent; future implementations should include explicit normalization or warnings.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+## Security Requirements
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- **Rate Limiting**: Client identity for rate limiting must be based on user identity (token hash) or `x-forwarded-for`, never the proxy IP address alone.
+- **Data Isolation**: Caching must be strictly isolated per user session.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Performance Standards
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
-
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- **Push Statistics to SQL**: Heavy analytical logic should be implemented in Databricks SQL or Materialized Views to leverage the warehouse's compute.
+- **Latency**: Primary analytical screens should load within 2 seconds.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- **Statistical Validation**: Any change to calculation logic requires validation against AIAG/WECO ground-truth datasets.
+- **Regression Testing**: Unit tests must cover all 8 Nelson/WECO rules.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 2.0.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-19

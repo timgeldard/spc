@@ -32,6 +32,6 @@ frontend/
 
 ## Governance & Performance
 
-- **Caching**: Local-in-process TTL cache for metadata (15m), scorecards (5m), and charts (3m). Keyed by user hash to prevent cross-user data leakage.
+- **Caching**: Local-in-process TTL cache for metadata (15m), scorecards (5m), and charts (3m). Keyed by user hash to prevent cross-user data leakage. (Note: Process-flow cache is currently NOT user-scoped).
 - **Progressive Loading**: Charts hydrate the first 100 points immediately, then fetch historical data in background chunks.
-- **Statistical Parity**: Parity between backend (PyPika/SQL) and frontend (TypeScript) math is maintained via shared test suites.
+- **Statistical Parity**: Parity between backend (PyPika/SQL) and frontend (TypeScript) math is maintained via shared test suites. (Note: Current implementation has known mathematical gaps in Cp/Pp and MSA logic as per `QUALITY_REVIEW_2026-04-03`).
