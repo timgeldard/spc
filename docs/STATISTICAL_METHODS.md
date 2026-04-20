@@ -87,7 +87,7 @@ The MSA module (implemented in `backend/utils/msa.py`) evaluates the measurement
 
 ### Methods
 1.  **Average & Range**: Fast, uses $K$ factors ($d_2$ constants).
-    *   **Current Reality (Technical Debt)**: As identified in `QUALITY_REVIEW_2026-04-03`, the implementation in `msaCalculations.ts` currently uses division by K-constants ($1/d_2^*$) instead of the required multiplication. This results in standard deviations being used where variation widths (widths covering 99.73% or 99.0% of the distribution) are expected, yielding systematically incorrect %GRR and NDC values.
+    *   **Current Reality (Technical Debt)**: As identified in `QUALITY_REVIEW_2026-04-03`, this bug exists in both the frontend implementation (`frontend/src/spc/msa/msaCalculations.ts`) and the backend module (`backend/utils/msa.py`). Both currently use division by K-constants ($1/d_2^*$) instead of the required multiplication. This results in standard deviations being used where variation widths (widths covering 99.73% or 99.0% of the distribution) are expected, yielding systematically incorrect %GRR and NDC values.
 2.  **ANOVA**: Preferred; decomposes interaction effects between Operator and Part.
 
 ---
@@ -141,6 +141,10 @@ Based on the **Freedman-Diaconis rule** ($2 \cdot IQR \cdot n^{-1/3}$) for robus
 
 ### Specification Drift
 Monitors changes in `USL`, `LSL`, or `TARGET` across batches via `spc_spec_drift_v`. Alerts users if specs have changed within the chart's date window.
+
+### Control Limit History
+Visualizes the evolution of process limits by joining `spc_locked_limits` with calculated limits in `spc_control_limit_history_v`.
+ndow.
 
 ### Control Limit History
 Visualizes the evolution of process limits by joining `spc_locked_limits` with calculated limits in `spc_control_limit_history_v`.

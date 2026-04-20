@@ -26,8 +26,8 @@ def test_infer_spec_type():
     assert infer_spec_type(None, None) == "unspecified"
 
 def test_compute_normality_large_sample():
-    # Dataset > 5000 points
-    large_data = [1.0] * 6000
+    # Dataset > 5000 points with non-zero variance
+    large_data = list(range(6000))
     res = compute_normality_result(large_data)
     assert res["method"] == "shapiro_wilk_sampled"
     assert "Dataset exceeded 5000 points" in res["warning"]

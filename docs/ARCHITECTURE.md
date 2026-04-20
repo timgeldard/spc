@@ -211,7 +211,7 @@ As identified in `QUALITY_REVIEW_2026-04-03`, the following security gaps exist 
 
 The API uses `slowapi` limits to protect the warehouse from accidental UI storms while preserving a responsive analyst workflow.
 
-**Implementation Flaw**: As of `QUALITY_REVIEW_2026-04-03`, the rate-limiter client key is derived from the proxy IP address. In the Databricks Apps runtime, this means all users effectively share a single rate-limiting bucket, as they appear as the same internal IP behind the platform proxy.
+**Implementation Flaw**: As of `QUALITY_REVIEW_2026-04-03`, the implementation in `backend/utils/rate_limit.py` uses `_extract_client_identity()` which first hashes the `x-forwarded-access-token` to derive per-user rate-limiting buckets and only falls back to proxy IP if the token is absent. The fallback to proxy IP in the Databricks Apps runtime means users lacking a token effectively share a single rate-limiting bucket, as they appear as the same internal IP behind the platform proxy.
 
 | Endpoint | Limit | Rationale |
 |---|---:|---|

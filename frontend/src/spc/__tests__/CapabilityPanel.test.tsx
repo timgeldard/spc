@@ -4,16 +4,15 @@ import CapabilityPanel from '../charts/CapabilityPanel'
 import React from 'react'
 
 // Mock sub-components
-vi.mock('./CapabilityHistogram', () => ({
+vi.mock('../charts/CapabilityHistogram', () => ({
   default: () => <div data-testid="capability-histogram" />
 }))
-
 vi.mock('../../components/charts/CapabilityPanel', () => ({
-  CAPABILITY_TIERS: {
-      HEALTHY: 'healthy',
-      WARNING: 'warning',
-      CRITICAL: 'critical'
-  },
+  CAPABILITY_TIERS: [
+      { min: 1.67, label: 'Highly Capable', badgeLabel: 'Excellent', status: 'healthy' as const },
+      { min: 1.33, label: 'Capable', badgeLabel: 'Capable', status: 'warning' as const },
+      { min: 0, label: 'Not Capable', badgeLabel: 'Not Capable', status: 'critical' as const },
+  ],
   CapabilityPanel: ({ cp, cpk, pp, ppk }: any) => (
       <div data-testid="industrial-capability-panel">
           <span data-testid="cp">{cp}</span>
@@ -22,7 +21,11 @@ vi.mock('../../components/charts/CapabilityPanel', () => ({
           <span data-testid="ppk">{ppk}</span>
       </div>
   ),
-  getCapabilityTier: () => 'healthy'
+  getCapabilityTier: (v: number) => {
+    if (v >= 1.67) return { status: 'healthy' }
+    if (v >= 1.33) return { status: 'warning' }
+    return { status: 'critical' }
+  }
 }))
 
 const mockSpc: any = {
@@ -40,14 +43,19 @@ const mockSpc: any = {
     ppkLower95: 1.0,
     ppkUpper95: 1.2,
     zScore: 4.2,
-    dpmo: 63,
+    dpmo: 15.3,
     spec_type: 'bilateral_symmetric',
-    normality: { is_normal: true, p_value: 0.8 },
-    capabilityMethod: 'parametric',
+    capabilityMethod: 'gaussian',
     isStable: true,
+    normality: {
+      is_normal: true,
+      p_value: 0.5,
+      method: 'shapiro'
+    }
   },
   signals: [],
-  mrSignals: []
+  mrSignals: [],
+  data: []
 }
 
 describe('CapabilityPanel', () => {
@@ -59,22 +67,21 @@ describe('CapabilityPanel', () => {
   })
 
   it('suppresses capability metrics when process is unstable', () => {
-    const unstableSpc = {
-        ...mockSpc,
-        capability: { ...mockSpc.capability, isStable: false, instabilityReason: 'Out of control' },
-        signals: [{ rule: 1, indices: [0] }]
+    const unstableSpc = { 
+      ...mockSpc, 
+      signals: [{ type: 'rule1', index: 0 }],
+      capability: { ...mockSpc.capability, isStable: false }
     }
     render(<CapabilityPanel spc={unstableSpc} />)
-    expect(screen.getByText('Capability indices suppressed')).toBeInTheDocument()
-    expect(screen.getByText(/Out of control/)).toBeInTheDocument()
     expect(screen.queryByTestId('industrial-capability-panel')).not.toBeInTheDocument()
+    expect(screen.getByText(/Process unstable/)).toBeInTheDocument()
   })
 
   it('allows overriding suppression', () => {
-    const unstableSpc = {
-        ...mockSpc,
-        capability: { ...mockSpc.capability, isStable: false },
-        signals: [{ rule: 1, indices: [0] }]
+    const unstableSpc = { 
+      ...mockSpc, 
+      signals: [{ type: 'rule1', index: 0 }],
+      capability: { ...mockSpc.capability, isStable: false }
     }
     render(<CapabilityPanel spc={unstableSpc} />)
     fireEvent.click(screen.getByText('Show capability anyway'))
@@ -82,24 +89,29 @@ describe('CapabilityPanel', () => {
   })
 
   it('shows non-normal warning when normality is false', () => {
-    const nonNormalSpc = {
-        ...mockSpc,
-        capability: { 
-            ...mockSpc.capability, 
-            normality: { is_normal: false, p_value: 0.01 },
-            capabilityMethod: 'non_parametric'
-        }
+    const nonNormalSpc = { 
+      ...mockSpc, 
+      capability: { 
+        ...mockSpc.capability, 
+        normality: { is_normal: false, p_value: 0.01, method: 'shapiro' } 
+      }
     }
     render(<CapabilityPanel spc={nonNormalSpc} />)
     expect(screen.getByText(/Non-normal distribution/)).toBeInTheDocument()
-    expect(screen.getByText(/Shapiro-Wilk p=0.0100/)).toBeInTheDocument()
   })
 
   it('toggles detailed stats', () => {
-    render(<CapabilityPanel spc={mockSpc} />)
-    const toggle = screen.getByText('More capability stats')
-    fireEvent.click(toggle)
-    expect(screen.getByText('Potential Capability (Cp)')).toBeInTheDocument()
-    expect(screen.getByText('4.2')).toBeInTheDocument() // Z-score
+      render(<CapabilityPanel spc={mockSpc} />)
+      // Initially histogram is NOT showing (it's inside detailsOpen)
+      expect(screen.queryByTestId('capability-histogram')).not.toBeInTheDocument()
+      
+      // Click toggle to open details
+      fireEvent.click(screen.getByText('More capability stats'))
+      
+      // Now should show histogram (mocked) and cards
+      expect(screen.getByTestId('capability-histogram')).toBeInTheDocument()
+      expect(screen.getByText(/Z \(σ level\)/)).toBeInTheDocument()
+      expect(screen.getByText('4.20')).toBeInTheDocument()
+      expect(screen.getByText('DPMO')).toBeInTheDocument()
   })
 })

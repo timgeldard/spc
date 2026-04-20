@@ -16,7 +16,7 @@ def test_fetch_chart_data_page_generates_expected_sql(monkeypatch):
             "operation_id", cursor=spc_charts_dal.encode_chart_cursor(1704067200, "B1", "S1", "LOT1", "OP1"), limit=100,
         )
     )
-    query, params = calls[0]
+    query, _params = calls[0]
     assert "WITH" in query
     assert "batch_dates AS" in query
     assert "quality_data AS" in query

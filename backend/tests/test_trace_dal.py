@@ -57,6 +57,30 @@ def test_build_tree_various_statuses():
     node4 = trace_dal._build_tree([rows[3]])
     assert node4["riskTier"] == "Unknown"
 
+def test_build_tree_lowest_depth_wins():
+    rows = [
+        {"material_id": "M1", "batch_id": "B1", "release_status": "Released", "depth": 2},
+        {"material_id": "M1", "batch_id": "B1", "release_status": "Released", "depth": 0},
+    ]
+    tree = trace_dal._build_tree(rows)
+    assert tree["name"] == "M1"
+    assert tree["attributes"]["Depth"] == 0
+
+def test_build_tree_shared_node_deduplication():
+    rows = [
+        {"material_id": "M1", "batch_id": "B1", "release_status": "Released", "depth": 0},
+        {"material_id": "M2", "batch_id": "B2", "parent_material_id": "M1", "parent_batch_id": "B1", "release_status": "Released", "depth": 1},
+        {"material_id": "M3", "batch_id": "B3", "parent_material_id": "M1", "parent_batch_id": "B1", "release_status": "Released", "depth": 1},
+        {"material_id": "M4", "batch_id": "B4", "parent_material_id": "M2", "parent_batch_id": "B2", "release_status": "Released", "depth": 2},
+        {"material_id": "M4", "batch_id": "B4", "parent_material_id": "M3", "parent_batch_id": "B3", "release_status": "Released", "depth": 2},
+    ]
+    tree = trace_dal._build_tree(rows)
+    m2 = next(c for c in tree["children"] if c["name"] == "M2")
+    m3 = next(c for c in tree["children"] if c["name"] == "M3")
+    assert len(m2["children"]) == 1
+    assert len(m3["children"]) == 1
+    assert m2["children"][0] == m3["children"][0]
+
 async def test_fetch_trace_tree(monkeypatch):
     mock_run = AsyncMock(return_value=[{"material_id": "MAT1", "batch_id": "B1"}])
     monkeypatch.setattr(trace_dal, "run_sql_async", mock_run)

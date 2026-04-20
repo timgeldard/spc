@@ -50,7 +50,7 @@ As a Lead Engineer, I can exclude outliers with persistent justifications to mai
 
 - **FR-001**: System MUST compute within-subgroup variation for individuals using a moving range of 2. (Current implementation uses overall sigma for scorecard aggregation).
 - **FR-002**: System MUST compute process performance using sample standard deviation (denominator N-1). (Current implementation uses population denominator N).
-- **FR-003**: System MUST automatically infer specification types (Bilateral, Unilateral Upper/Lower, or Asymmetric) from master data. (Current implementation uses a hardcoded bilateral stub).
+- **FR-003**: System MUST automatically infer specification types (Bilateral, Unilateral Upper/Lower, or Asymmetric) from master data. (Current implementation in `backend/dal/spc_shared.py::infer_spec_type` handles this logic, but there is missing integration with the scorecard path which does not consistently propagate/apply these inferred types).
 - **FR-004**: System MUST perform Shapiro-Wilk normality testing to determine the appropriate capability model.
 - **FR-005**: System MUST provide an interactive Process Flow DAG with lineage-depth controls (1-12 levels).
 - **FR-006**: System MUST persist exclusions and justifications in a backend Delta table with Change Data Feed enabled.

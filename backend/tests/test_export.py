@@ -301,3 +301,5 @@ def test_export_sanitize_spreadsheet_value():
     assert sanitize_spreadsheet_value("@Something") == "'@Something"
     assert sanitize_spreadsheet_value("Normal Value") == "Normal Value"
     assert sanitize_spreadsheet_value(123) == 123
+    assert sanitize_spreadsheet_value("") == ""
+    assert sanitize_spreadsheet_value(None) is None
