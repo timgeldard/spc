@@ -38,6 +38,10 @@ dimensions:
   - name: inspection_method
     expr: inspection_method
     display_name: Inspection Method
+  - name: operation_id
+    expr: operation_id
+    display_name: Operation ID
+    synonyms: ['operation', 'routing step', 'op']
   - name: batch_id
     expr: batch_id
     display_name: Batch ID
@@ -177,6 +181,32 @@ measures:
       END
     display_name: Within Sigma
     synonyms: ['within sigma', 'short term sigma']
+  - name: x_bar_ucl
+    expr: |
+      CASE
+      WHEN MEASURE(sigma_within) IS NULL
+       OR MEASURE(sigma_within) <= 0
+       OR MEASURE(avg_n_eligible) IS NULL
+       OR MEASURE(avg_n_eligible) <= 0
+       OR MEASURE(mean_value) IS NULL
+      THEN NULL
+      ELSE MEASURE(mean_value) + 3 * MEASURE(sigma_within) / SQRT(MEASURE(avg_n_eligible))
+      END
+    display_name: X-bar UCL
+    synonyms: ['upper control limit', 'xbar ucl', 'ucl_x']
+  - name: x_bar_lcl
+    expr: |
+      CASE
+      WHEN MEASURE(sigma_within) IS NULL
+       OR MEASURE(sigma_within) <= 0
+       OR MEASURE(avg_n_eligible) IS NULL
+       OR MEASURE(avg_n_eligible) <= 0
+       OR MEASURE(mean_value) IS NULL
+      THEN NULL
+      ELSE MEASURE(mean_value) - 3 * MEASURE(sigma_within) / SQRT(MEASURE(avg_n_eligible))
+      END
+    display_name: X-bar LCL
+    synonyms: ['lower control limit', 'xbar lcl', 'lcl_x']
   - name: empirical_p00135
     expr: percentile(value, 0.00135)
     display_name: Empirical P0.135

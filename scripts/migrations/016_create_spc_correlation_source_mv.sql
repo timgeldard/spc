@@ -10,8 +10,8 @@
 -- the validate_release1_databricks.py script can reference it without changes.
 
 CREATE OR REPLACE MATERIALIZED VIEW `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`spc_correlation_source_mv`
-CLUSTER BY (material_id, mic_id)
-COMMENT 'Materialized correlation source at material/batch/MIC grain. Pre-computes avg_result so the pairwise CORR self-join reads from a compact Delta table rather than scanning gold views per request.'
+CLUSTER BY (material_id, mic_selection_key)
+COMMENT 'Materialized correlation source at material/batch/MIC grain (operation-scoped). Pre-computes avg_result so the pairwise CORR self-join reads from a compact Delta table rather than scanning gold views per request. Shape mirrors spc_correlation_source_v.'
 AS
 WITH batch_metadata AS (
     SELECT
@@ -26,15 +26,24 @@ WITH batch_metadata AS (
     GROUP BY mb.MATERIAL_ID, mb.BATCH_ID
 )
 SELECT
-    r.MATERIAL_ID                                           AS material_id,
+    r.MATERIAL_ID                                                           AS material_id,
     bm.batch_id,
     bm.batch_date,
     bm.batch_week,
     bm.batch_month,
     bm.plant_id,
-    r.MIC_ID                                                AS mic_id,
-    ANY_VALUE(r.MIC_NAME)                                   AS mic_name,
-    AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE))              AS avg_result
+    r.MIC_ID                                                                AS mic_id,
+    CAST(r.OPERATION_ID AS STRING)                                          AS operation_id,
+    CONCAT_WS('||', r.MIC_ID, COALESCE(CAST(r.OPERATION_ID AS STRING), 'NO_OP')) AS mic_selection_key,
+    ANY_VALUE(r.MIC_NAME)                                                   AS mic_name,
+    ANY_VALUE(
+        CASE
+            WHEN r.OPERATION_ID IS NOT NULL
+            THEN CONCAT(r.MIC_NAME, ' · Op ', CAST(r.OPERATION_ID AS STRING))
+            ELSE r.MIC_NAME
+        END
+    )                                                                        AS mic_display_name,
+    AVG(CAST(r.QUANTITATIVE_RESULT AS DOUBLE))                              AS avg_result
 FROM `${TRACE_CATALOG}`.`${TRACE_SCHEMA}`.`gold_batch_quality_result_v` r
 LEFT JOIN batch_metadata bm
     ON bm.material_id = r.MATERIAL_ID
@@ -48,4 +57,5 @@ GROUP BY
     bm.batch_week,
     bm.batch_month,
     bm.plant_id,
-    r.MIC_ID;
+    r.MIC_ID,
+    CAST(r.OPERATION_ID AS STRING);
