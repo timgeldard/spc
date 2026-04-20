@@ -1,3 +1,4 @@
+import json
 from fastapi.testclient import TestClient
 
 import backend.main as main_module
@@ -175,18 +176,130 @@ def test_export_attribute_chart_requires_chart_type():
     assert "chart_type is required" in response.text
 
 
-def test_export_attribute_chart_rejects_invalid_chart_type():
+def test_export_scorecard_excel_returns_200(monkeypatch):
+    monkeypatch.setattr(export_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(export_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    async def fake_fetch_scorecard(_token, _body):
+        return [{
+            "mic_id": "MIC-1",
+            "mic_name": "Moisture",
+            "batch_count": 4,
+            "mean_value": 10.1,
+            "stddev_overall": 0.2,
+            "pp": 1.5,
+            "ppk": 1.4,
+            "z_score": 4.2,
+            "dpmo": 63,
+            "ooc_rate": 0.0,
+            "capability_status": "good",
+        }]
+
+    monkeypatch.setattr(export_module, "_fetch_scorecard", fake_fetch_scorecard)
+
+    response = client.post(
+        "/api/spc/export",
+        headers={"x-forwarded-access-token": "not-a-real-jwt"},
+        json={
+            "export_type": "excel",
+            "export_scope": "scorecard",
+            "material_id": "MAT-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in response.headers["content-type"]
+    assert "attachment; filename=spc_scorecard.xlsx" == response.headers["content-disposition"]
+    # Check that we got some binary content
+    assert len(response.content) > 100
+
+
+def test_export_signals_csv_returns_200(monkeypatch):
+    monkeypatch.setattr(export_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(export_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    signals = [
+        {"rule": "1", "chart": "X", "indices": [0], "description": "Rule 1 breach"},
+        {"rule": "2", "chart": "R", "indices": [1, 2, 3], "description": "Rule 2 breach"},
+    ]
+
     response = client.post(
         "/api/spc/export",
         headers={"x-forwarded-access-token": "not-a-real-jwt"},
         json={
             "export_type": "csv",
-            "export_scope": "attribute_chart",
+            "export_scope": "signals",
             "material_id": "MAT-1",
-            "mic_id": "MIC-1",
-            "chart_type": "xbar_r",
+            "signals_json": json.dumps(signals),
         },
     )
 
+    assert response.status_code == 200
+    assert "attachment; filename=spc_signals.csv" == response.headers["content-disposition"]
+    assert "Rule 1 breach" in response.text
+    assert "Rule 2 breach" in response.text
+
+
+def test_export_signals_excel_returns_200(monkeypatch):
+    monkeypatch.setattr(export_module, "resolve_token", lambda *_args, **_kwargs: "token")
+    monkeypatch.setattr(export_module, "check_warehouse_config", lambda: "/sql/1.0/warehouses/test")
+
+    signals = [
+        {"rule": "1", "chart": "X", "indices": [0], "description": "Rule 1 breach"},
+    ]
+
+    response = client.post(
+        "/api/spc/export",
+        headers={"x-forwarded-access-token": "not-a-real-jwt"},
+        json={
+            "export_type": "excel",
+            "export_scope": "signals",
+            "material_id": "MAT-1",
+            "signals_json": json.dumps(signals),
+        },
+    )
+
+    assert response.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in response.headers["content-type"]
+    assert "attachment; filename=spc_signals.xlsx" == response.headers["content-disposition"]
+
+
+def test_export_rejects_invalid_scope():
+    response = client.post(
+        "/api/spc/export",
+        headers={"x-forwarded-access-token": "jwt"},
+        json={
+            "export_type": "csv",
+            "export_scope": "invalid",
+            "material_id": "MAT-1",
+        },
+    )
     assert response.status_code == 422
-    assert "chart_type must be one of" in response.text
+    assert "export_scope must be" in response.text
+
+
+def test_export_signals_requires_valid_json():
+    response = client.post(
+        "/api/spc/export",
+        headers={"x-forwarded-access-token": "jwt"},
+        json={
+            "export_type": "csv",
+            "export_scope": "signals",
+            "material_id": "MAT-1",
+            "signals_json": "not-json",
+        },
+    )
+    assert response.status_code == 422
+    assert "signals_json must be valid JSON" in response.text
+
+
+def test_export_sanitize_spreadsheet_value():
+    from backend.routers.export import sanitize_spreadsheet_value
+    assert sanitize_spreadsheet_value("=SUM(A1:A2)") == "'=SUM(A1:A2)"
+    assert sanitize_spreadsheet_value("+10") == "'+10"
+    assert sanitize_spreadsheet_value("-10") == "'-10"
+    assert sanitize_spreadsheet_value("@Something") == "'@Something"
+    assert sanitize_spreadsheet_value("Normal Value") == "Normal Value"
+    assert sanitize_spreadsheet_value(123) == 123
+    assert sanitize_spreadsheet_value("") == ""
+    assert sanitize_spreadsheet_value(None) is None

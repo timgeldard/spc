@@ -350,6 +350,8 @@ Displayed metrics:
 - `DPMO`
 - empirical `P0.135`, `P50`, `P99.865` when non-parametric mode is active
 
+**Implementation Note (Technical Debt)**: As of `QUALITY_REVIEW_2026-04-03`, the backend logic in `backend/dal/spc_shared.py::infer_spec_type` already handles unilateral upper/lower and bilateral asymmetric/symmetric specifications. The legacy `_infer_spec_type` stub is no longer the sole implementation, but the inferred types are not consistently propagated into all paths, which may result in incorrect Cpk calculations for those characteristics.
+
 What it shows:
 
 - The capability evidence for the selected characteristic, including short-term capability, long-term performance, sigma translation, confidence interval context, and non-normal percentile evidence when required.

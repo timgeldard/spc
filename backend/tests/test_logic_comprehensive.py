@@ -79,3 +79,28 @@ def test_multivariate_errors():
     ]
     with pytest.raises(ValueError, match="Insufficient shared batches"):
         compute_hotelling_t2(data, ["mic1", "mic2"])
+
+def test_round_float_edge_cases():
+    assert _round_float(None) is None
+    assert _round_float("invalid") is None
+    assert _round_float(float('nan')) is None
+    assert _round_float(float('inf')) is None
+    assert _round_float(10.5555555, 2) == 10.56
+
+def test_multivariate_missing_columns():
+    data = [{"batch_id": "B1"}] # Missing others
+    with pytest.raises(ValueError, match="Missing required multivariate columns"):
+        compute_hotelling_t2(data, ["M1", "M2"])
+
+def test_multivariate_empty_after_filter():
+    data = [{"batch_id": "B1", "batch_date": "D1", "mic_id": "M3", "mic_name": "N3", "avg_result": 10}]
+    with pytest.raises(ValueError, match="No observations found for the selected characteristics"):
+        compute_hotelling_t2(data, ["M1", "M2"])
+
+def test_multivariate_no_shared_batches():
+    data = [
+        {"batch_id": "B1", "batch_date": "D1", "mic_id": "M1", "mic_name": "N1", "avg_result": 10},
+        {"batch_id": "B2", "batch_date": "D2", "mic_id": "M2", "mic_name": "N2", "avg_result": 20},
+    ]
+    with pytest.raises(ValueError, match="No shared batches contain complete observations"):
+        compute_hotelling_t2(data, ["M1", "M2"])

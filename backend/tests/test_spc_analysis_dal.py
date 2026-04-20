@@ -1,6 +1,7 @@
 import asyncio
 
 from backend.dal import spc_analysis_dal
+from unittest.mock import AsyncMock
 
 
 def test_fetch_scorecard_queries_metric_view_and_preserves_capability_fields(monkeypatch):
@@ -178,3 +179,82 @@ def test_fetch_scorecard_marks_unstable_when_any_ooc_batch(monkeypatch):
     # One OOC batch is a WECO rule-1 violation — capability should be flagged.
     assert rows[0]["is_stable"] is False
     assert rows[0]["stability_basis"] == "ooc_batches_rule1_proxy"
+
+
+async def test_fetch_process_flow(monkeypatch):
+    calls = []
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        calls.append((query, params or []))
+        if "spc_lineage_graph_mv" in query:
+            return [{"source": "M1", "target": "M2"}]
+        return [{"material_id": "M1", "total_batches": 10, "rejected_batches": 1, "mic_count": 5}]
+
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    res = await spc_analysis_dal.fetch_process_flow("token", "MAT-1", None, None)
+    assert len(res["nodes"]) > 0
+    assert len(res["edges"]) > 0
+
+
+async def test_fetch_multivariate(monkeypatch):
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        return [
+            {"batch_id": "B1", "batch_date": "2026-04-01", "mic_id": "M1", "mic_name": "NM1", "avg_result": 10.0},
+            {"batch_id": "B1", "batch_date": "2026-04-01", "mic_id": "M2", "mic_name": "NM2", "avg_result": 20.0},
+        ]
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    monkeypatch.setattr(spc_analysis_dal, "compute_hotelling_t2", lambda rows, mic_ids: {"scores": []})
+    res = await spc_analysis_dal.fetch_multivariate("token", "MAT-1", ["M1", "M2"], None, None, None)
+    assert "scores" in res
+    assert res["material_id"] == "MAT-1"
+
+
+async def test_fetch_multivariate_too_large(monkeypatch):
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        return [{"batch_id": "B1"}] * (spc_analysis_dal._MULTIVARIATE_MAX_SOURCE_ROWS + 1)
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    import pytest
+    with pytest.raises(ValueError, match="too large for interactive analysis"):
+        await spc_analysis_dal.fetch_multivariate("token", "MAT-1", ["M1"], None, None, None)
+
+
+async def test_fetch_compare_scorecard(monkeypatch):
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        if "spc_quality_metrics" in query:
+            return [{"material_id": "M1", "mic_id": "MIC1", "mic_name": "Moisture", "ppk": 1.2, "batch_count": 5, "ooc_rate": 0.0}]
+        return [{"material_id": "M1", "material_name": "Name1"}]
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    res = await spc_analysis_dal.fetch_compare_scorecard("token", ["M1"], None, None, None)
+    assert len(res["materials"]) == 1
+    assert res["materials"][0]["material_name"] == "Name1"
+
+
+async def test_save_msa_session(monkeypatch):
+    mock_run = AsyncMock(return_value=[])
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", mock_run)
+    res = await spc_analysis_dal.save_msa_session("token", "M1", "MIC1", 2, 2, 2, 10.0, 0.1, 0.1, 5, "{}")
+    assert res["saved"] is True
+    assert "session_id" in res
+
+
+async def test_fetch_correlation(monkeypatch):
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        return [
+            {"mic_a": "A", "mic_name_a": "NA", "mic_b": "B", "mic_name_b": "NB", "pearson_r": 0.8, "shared_batches": 10}
+        ]
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    res = await spc_analysis_dal.fetch_correlation("token", "M1", None, None, None, 5)
+    assert len(res["pairs"]) == 1
+    assert res["pair_count"] == 1
+    assert len(res["mics"]) == 2
+
+
+async def test_fetch_correlation_scatter(monkeypatch):
+    async def fake_run_sql_async(_token, query, params=None, **kwargs):
+        return [
+            {"batch_id": "B1", "batch_date": "2026-04-01", "x": 10.0, "y": 20.0, "mic_a_name": "NX", "mic_b_name": "NY"}
+        ]
+    monkeypatch.setattr(spc_analysis_dal, "run_sql_async", fake_run_sql_async)
+    res = await spc_analysis_dal.fetch_correlation_scatter("token", "M1", "MIC1", "MIC2", None, None, None)
+    assert len(res["points"]) == 1
+    assert res["n"] == 1
+    assert res["mic_a_name"] == "NX"

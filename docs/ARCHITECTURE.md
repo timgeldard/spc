@@ -194,6 +194,11 @@ Databricks Apps injects the user's OIDC token into the header. The backend extra
 1.  **Auditor Visibility**: Every query in the SQL Warehouse logs shows the actual user's email.
 2.  **Native UC Security**: Row and column-level policies are enforced by Spark, not the application logic.
 
+### Security Risks & Debt
+As identified in `QUALITY_REVIEW_2026-04-03`, the following security gaps exist in the current architecture:
+1.  **Process-flow Cache Leak**: The analytical results for process-flow queries are currently cached using a key that does not include the user identity. This allows cross-user data exposure where a user with limited permissions could retrieve cached results previously requested by a user with broader permissions.
+2.  **Auth Token in Logs**: (Note: Audit did not explicitly mention logs, but the fix was to use token hash).
+
 ### Health and Readiness
 
 - `/api/health` is a liveness endpoint only.
@@ -205,6 +210,8 @@ Databricks Apps injects the user's OIDC token into the header. The backend extra
 ## Rate Limits
 
 The API uses `slowapi` limits to protect the warehouse from accidental UI storms while preserving a responsive analyst workflow.
+
+**Implementation Flaw**: As of `QUALITY_REVIEW_2026-04-03`, the implementation in `backend/utils/rate_limit.py` uses `_extract_client_identity()` which first hashes the `x-forwarded-access-token` to derive per-user rate-limiting buckets and only falls back to proxy IP if the token is absent. The fallback to proxy IP in the Databricks Apps runtime means users lacking a token effectively share a single rate-limiting bucket, as they appear as the same internal IP behind the platform proxy.
 
 | Endpoint | Limit | Rationale |
 |---|---:|---|
@@ -251,3 +258,4 @@ No automated deployment — push to UAT is a manual step via `make deploy`.
 | Histogram bins | Binning follows Freedman-Diaconis and may still need UX tuning for very small samples |
 | Scorecard stability | Cpk shown without per-MIC stability check (requires full chart-data fetch per MIC) |
 | UoM consistency | No unit-of-measure conversion; cross-plant SPC is only valid if UoM is consistent in the gold view |
+| First-Point Specification Bias | The SPC engine currently uses the specification values from the first point in the sequence for the entire chart, which may be incorrect if specs changed over the selected date range. |
