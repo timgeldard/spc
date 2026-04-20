@@ -9,15 +9,15 @@ The primary analytical source for dashboards and scorecards. It implements the "
 |---|---|---|
 | material_id | string | SAP Material identifier |
 | mic_id | string | Master Inspection Characteristic identifier |
-| pp / ppk | float | Governed performance index (Gaussian or Non-Parametric) |
-| cp / cpk | float | Short-term capability index (using within-sigma) |
-| sigma_within | float | Within-subgroup sigma estimated from average range |
-| stddev_overall | float | Process performance sigma (Sample StdDev N-1) |
+| pp / ppk | float | Governed performance index (Currently identical to Cp/Cpk due to overall sigma usage) |
+| cp / cpk | float | Short-term capability index (Currently identical to Pp/Ppk in scorecard) |
+| sigma_within | float | Within-subgroup sigma (Currently uses overall population sigma in scorecard) |
+| stddev_overall | float | Process performance sigma (Currently uses Population StdDev N instead of Sample N-1) |
 | normality_type | string | `normal`, `non_normal`, or `mixed` |
 
 #### Governed Logic Details (Implemented in SQL)
 1. **Model Selection**: If `normality_type` is 'normal', `pp` uses `pp_gaussian`. If 'non_normal', it uses `pp_non_parametric` (empirical percentiles). If 'mixed' or 'unknown', it returns `NULL`.
-2. **Short-term Estimation**: `sigma_within` is calculated using a `CASE` statement containing the $d_2$ constants for subgroup sizes $n=2$ to $n=15$.
+2. **Short-term Estimation**: While logic for $d_2$ constants exists, it is not currently accessible to the scorecard because it aggregates across all batches in SQL. Consequently, Cp/Cpk are currently identical to Pp/Ppk (using overall sigma).
 3. **DPMO Calculation**: Implemented as an inline SQL arithmetic block (Horner's method approximation of Normal CDF) including a mandatory 1.5σ long-term shift.
 4. **Safety Guards**: `spec_safe` and `normality_safe` flags ensure that if multiple specifications or normality types are detected in a single slice, capability results are suppressed to prevent misleading metrics.
 

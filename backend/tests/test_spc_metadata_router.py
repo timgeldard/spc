@@ -42,3 +42,19 @@ def test_validate_material_endpoint(mock_meta_dal, monkeypatch):
     response = client.post("/api/spc/validate-material", json={"material_id": "MAT1"})
     assert response.status_code == 200
     assert response.json()["valid"] is True
+
+def test_attribute_characteristics_endpoint(mock_meta_dal, monkeypatch):
+    monkeypatch.setattr(meta_router, "fetch_attribute_characteristics", AsyncMock(return_value=[]))
+    response = client.post(
+        "/api/spc/attribute-characteristics",
+        json={"material_id": "MAT1", "plant_id": "P1"}
+    )
+    assert response.status_code == 200
+    assert "characteristics" in response.json()
+
+def test_validate_material_not_found(mock_meta_dal, monkeypatch):
+    monkeypatch.setattr(meta_router, "validate_material", AsyncMock(return_value=None))
+    monkeypatch.setattr(meta_router, "attach_validation_freshness", AsyncMock(side_effect=lambda data, *args, **kwargs: data))
+    response = client.post("/api/spc/validate-material", json={"material_id": "MISSING"})
+    assert response.status_code == 200
+    assert response.json()["valid"] is False

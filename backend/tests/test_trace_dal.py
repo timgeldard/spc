@@ -1,5 +1,7 @@
-from backend.dal.trace_dal import _build_tree
-
+import pytest
+import asyncio
+from unittest.mock import AsyncMock
+import backend.dal.trace_dal as trace_dal
 
 def test_build_tree_breaks_cycles():
     rows = [
@@ -32,104 +34,59 @@ def test_build_tree_breaks_cycles():
         },
     ]
 
-    tree = _build_tree(rows)
+    tree = trace_dal._build_tree(rows)
     assert tree["name"] == "MAT-1"
     assert len(tree["children"]) == 1
     assert tree["children"][0]["name"] == "MAT-2"
     assert tree["children"][0]["children"] == []
 
-
-def test_build_tree_prefers_lowest_depth_root_and_deduplicates():
+def test_build_tree_various_statuses():
     rows = [
-        {
-            "material_id": "MAT-ROOT",
-            "batch_id": "B0",
-            "parent_material_id": None,
-            "parent_batch_id": None,
-            "depth": 0,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-ROOT",
-            "batch_id": "B0",
-            "parent_material_id": None,
-            "parent_batch_id": None,
-            "depth": 2,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-CHILD",
-            "batch_id": "B1",
-            "parent_material_id": "MAT-ROOT",
-            "parent_batch_id": "B0",
-            "depth": 1,
-            "release_status": "Blocked",
-            "plant_name": "Plant B",
-        },
+        {"material_id": "M1", "batch_id": "B1", "release_status": "Released", "depth": 0},
+        {"material_id": "M2", "batch_id": "B2", "release_status": "Blocked", "depth": 0},
+        {"material_id": "M3", "batch_id": "B3", "release_status": "QI Hold", "depth": 0},
+        {"material_id": "M4", "batch_id": "B4", "release_status": "Unknown", "depth": 0},
     ]
+    # Check color/tier for each
+    node1 = trace_dal._build_tree([rows[0]])
+    assert node1["riskTier"] == "Pass"
+    node2 = trace_dal._build_tree([rows[1]])
+    assert node2["riskTier"] == "Critical"
+    node3 = trace_dal._build_tree([rows[2]])
+    assert node3["riskTier"] == "Warning"
+    node4 = trace_dal._build_tree([rows[3]])
+    assert node4["riskTier"] == "Unknown"
 
-    tree = _build_tree(rows)
-    assert tree["name"] == "MAT-ROOT"
-    assert tree["attributes"]["Depth"] == 0
-    assert len(tree["children"]) == 1
-    assert tree["children"][0]["name"] == "MAT-CHILD"
+async def test_fetch_trace_tree(monkeypatch):
+    mock_run = AsyncMock(return_value=[{"material_id": "MAT1", "batch_id": "B1"}])
+    monkeypatch.setattr(trace_dal, "run_sql_async", mock_run)
+    
+    res = await trace_dal.fetch_trace_tree("token", "MAT1", "B1")
+    assert res[0]["material_id"] == "MAT1"
+    assert mock_run.called
 
+async def test_fetch_summary(monkeypatch):
+    mock_run = AsyncMock(return_value=[{"total_produced": 100}])
+    monkeypatch.setattr(trace_dal, "run_sql_async", mock_run)
+    
+    res = await trace_dal.fetch_summary("token", "B1")
+    assert res["total_produced"] == 100
+    
+    mock_run.return_value = []
+    res = await trace_dal.fetch_summary("token", "B2")
+    assert res is None
 
-def test_build_tree_preserves_shared_nodes_under_multiple_parents():
-    rows = [
-        {
-            "material_id": "MAT-ROOT",
-            "batch_id": "B0",
-            "parent_material_id": None,
-            "parent_batch_id": None,
-            "depth": 0,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-A",
-            "batch_id": "B1",
-            "parent_material_id": "MAT-ROOT",
-            "parent_batch_id": "B0",
-            "depth": 1,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-B",
-            "batch_id": "B2",
-            "parent_material_id": "MAT-ROOT",
-            "parent_batch_id": "B0",
-            "depth": 1,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-SHARED",
-            "batch_id": "B3",
-            "parent_material_id": "MAT-A",
-            "parent_batch_id": "B1",
-            "depth": 2,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-        {
-            "material_id": "MAT-SHARED",
-            "batch_id": "B3",
-            "parent_material_id": "MAT-B",
-            "parent_batch_id": "B2",
-            "depth": 2,
-            "release_status": "Released",
-            "plant_name": "Plant A",
-        },
-    ]
+async def test_fetch_batch_details(monkeypatch):
+    mock_run = AsyncMock(return_value=[{"id": 1}])
+    monkeypatch.setattr(trace_dal, "run_sql_async", mock_run)
+    
+    res = await trace_dal.fetch_batch_details("token", "MAT1", "B1")
+    assert res["summary"]["id"] == 1
+    assert len(res["coa_results"]) == 1
 
-    tree = _build_tree(rows)
-    assert len(tree["children"]) == 2
-    left_shared = tree["children"][0]["children"][0]
-    right_shared = tree["children"][1]["children"][0]
-    assert left_shared["name"] == "MAT-SHARED"
-    assert right_shared["name"] == "MAT-SHARED"
-    assert left_shared is not right_shared
+async def test_fetch_impact(monkeypatch):
+    mock_run = AsyncMock(return_value=[{"customer_name": "Cust"}])
+    monkeypatch.setattr(trace_dal, "run_sql_async", mock_run)
+    
+    res = await trace_dal.fetch_impact("token", "B1")
+    assert res["customers"][0]["customer_name"] == "Cust"

@@ -87,7 +87,7 @@ The MSA module (implemented in `backend/utils/msa.py`) evaluates the measurement
 
 ### Methods
 1.  **Average & Range**: Fast, uses $K$ factors ($d_2$ constants).
-    *   **Current Reality (Technical Debt)**: Per `QUALITY_REVIEW_2026-04-03`, the implementation in `msaCalculations.ts` incorrectly uses division by K-constants ($1/d_2^*$) instead of the required multiplication by $K_1 = 5.15/d_2^*$. This reporting error means standard deviations are used where variation widths (widths covering 99.73% or 99.0% of the distribution) are expected, yielding systematically incorrect %GRR and NDC values.
+    *   **Current Reality (Technical Debt)**: As identified in `QUALITY_REVIEW_2026-04-03`, the implementation in `msaCalculations.ts` currently uses division by K-constants ($1/d_2^*$) instead of the required multiplication. This results in standard deviations being used where variation widths (widths covering 99.73% or 99.0% of the distribution) are expected, yielding systematically incorrect %GRR and NDC values.
 2.  **ANOVA**: Preferred; decomposes interaction effects between Operator and Part.
 
 ---
@@ -134,7 +134,7 @@ The semantic layer (`spc_quality_metrics`) enforces safety for AI/BI consumers:
 As identified in the `QUALITY_REVIEW_2026-04-03` audit, the following critical gaps exist in the current implementation:
 
 *   **$C_p$ vs $P_p$ Collapse**: In the scorecard and export modules, $C_p/C_{pk}$ and $P_p/P_{pk}$ are currently mathematically identical. This is because the implementation incorrectly uses the **Population Standard Deviation** ($\sigma_{overall}$) as a proxy for **Within-Subgroup Sigma** ($\sigma_{within}$). True $C_p$ requires an estimate from $R/d_2$ or pooled subgroup variance, which is not yet available in the aggregate scorecard paths.
-*   **Population Denominator (N)**: $P_p/P_{pk}$ calculations currently use the $N$ (Population) denominator for standard deviation instead of the $N-1$ (Sample) standard required by AIAG. This leads to an material underestimation of variability and an artificial inflation of capability indices, particularly for the small sample sizes common in batch manufacturing.
+*   **Population Denominator (N)**: $P_p/P_{pk}$ calculations currently use the $N$ (Population) denominator for standard deviation instead of the $N-1$ (Sample) standard required by AIAG. Using population standard deviation understates variability and artificially inflates capability indices, particularly for the small sample sizes common in batch manufacturing.
 
 ### Histogram Binning
 Based on the **Freedman-Diaconis rule** ($2 \cdot IQR \cdot n^{-1/3}$) for robustness against skewed manufacturing data and heavy tails.

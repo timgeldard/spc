@@ -71,12 +71,10 @@ def handle_sql_error(exc: Exception) -> None:
 def handle_analysis_error(exc: Exception) -> None:
     """Handle errors from analysis endpoints, surfacing user-facing validation messages.
 
-    ValueError  → 422 with the exception message passed through to the client.
     LinAlgError → 422 with a user-friendly explanation of the degenerate matrix case.
+    ValueError  → 422 with the exception message passed through to the client.
     Anything else falls through to handle_sql_error for standard SQL / 500 handling.
     """
-    if isinstance(exc, ValueError):
-        raise HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, np.linalg.LinAlgError):
         raise HTTPException(
             status_code=422,
@@ -85,6 +83,8 @@ def handle_analysis_error(exc: Exception) -> None:
                 "Try removing highly correlated or zero-variance variables."
             ),
         )
+    if isinstance(exc, ValueError):
+        raise HTTPException(status_code=422, detail=str(exc))
     handle_sql_error(exc)
 
 

@@ -9,7 +9,7 @@ those require a live Databricks connection.
 import os
 import asyncio
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from fastapi import HTTPException
 import backend.utils.db as db_module
@@ -251,3 +251,62 @@ class TestSqlExecutorSelection:
         with patch.dict("os.environ", {"SPC_SQL_EXECUTOR": "connector"}, clear=False), patch("backend.utils.db.databricks_sql", None):
             executor = db_module._get_sql_executor()
         assert isinstance(executor, db_module._RestStatementExecutor)
+
+class TestErrorClassifiers:
+    def test_classify_sql_runtime_error_maps_403(self):
+        exc = Exception("PERMISSION DENIED: Access denied")
+        err = db_module.classify_sql_runtime_error(exc)
+        assert err.status_code == 403
+
+    def test_classify_sql_runtime_error_maps_401(self):
+        exc = Exception("UNAUTHORIZED: Invalid token")
+        err = db_module.classify_sql_runtime_error(exc)
+        assert err.status_code == 401
+
+    def test_classify_sql_runtime_error_maps_503_for_missing_table(self):
+        exc = Exception("TABLE OR VIEW NOT FOUND")
+        err = db_module.classify_sql_runtime_error(exc, missing_table_detail="Init required")
+        assert err.status_code == 503
+        assert err.detail == "Init required"
+
+class TestObservability:
+    def test_increment_observability_counter(self, caplog):
+        with caplog.at_level("INFO"):
+            db_module.increment_observability_counter("test.counter", tags={"t1": "v1"})
+            assert "metric.increment name=test.counter" in caplog.text
+            assert '"t1":"v1"' in caplog.text
+
+    def test_send_operational_alert(self, caplog):
+        with caplog.at_level("WARNING"):
+            db_module.send_operational_alert(subject="Sub", body="Body")
+            assert "operational_alert.pending" in caplog.text
+            assert "subject=Sub" in caplog.text
+
+async def test_attach_data_freshness_success():
+    payload = {"data": 1}
+    token = "token"
+    views = ["v1"]
+    mock_freshness = {"sources": [{"source_view": "v1", "last_altered_utc": "2026"}]}
+    
+    with patch("backend.utils.db.get_data_freshness", return_value=mock_freshness):
+        res = await db_module.attach_data_freshness(payload, token, views)
+        assert res["data_freshness"] == mock_freshness
+
+async def test_insert_spc_audit_event(monkeypatch):
+    mock_run = AsyncMock(return_value=[])
+    monkeypatch.setattr(db_module, "run_sql_async", mock_run)
+    
+    await db_module.insert_spc_audit_event("token", event_type="test", detail={"material_id": "M1"})
+    assert mock_run.called
+    assert "INSERT INTO" in mock_run.call_args[0][1]
+
+async def test_insert_spc_exclusion_snapshot(monkeypatch):
+    mock_run = AsyncMock(return_value=[])
+    monkeypatch.setattr(db_module, "run_sql_async", mock_run)
+    
+    payload = {
+        "event_id": "uuid", "material_id": "M1", "mic_id": "MIC1", "chart_type": "imr",
+        "justification": "test", "excluded_count": 1, "excluded_points": []
+    }
+    await db_module.insert_spc_exclusion_snapshot("token", payload)
+    assert mock_run.called

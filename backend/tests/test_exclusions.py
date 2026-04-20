@@ -150,3 +150,36 @@ class pytest_http_exception:
         assert exc.status_code == self.expected_status
         self.detail = str(exc.detail)
         return True
+
+def test_get_exclusions_returns_none_when_empty(monkeypatch):
+    monkeypatch.setattr(exclusions, "resolve_token", lambda *args: "token")
+    monkeypatch.setattr(exclusions, "check_warehouse_config", lambda: None)
+    
+    async def fake_run_sql_async(*args, **kwargs):
+        return []
+    monkeypatch.setattr(exclusions, "run_sql_async", fake_run_sql_async)
+    
+    response = client.get(
+        "/api/spc/exclusions?material_id=M1&mic_id=MIC1",
+        headers={"x-forwarded-access-token": "token"}
+    )
+    assert response.status_code == 200
+    assert response.json()["exclusions"] is None
+
+def test_save_exclusions_sql_error(monkeypatch):
+    monkeypatch.setattr(exclusions, "resolve_token", lambda *args: "token")
+    monkeypatch.setattr(exclusions, "check_warehouse_config", lambda: None)
+    
+    async def fake_insert(*args, **kwargs):
+        raise RuntimeError("SQL Error")
+    monkeypatch.setattr(exclusions, "insert_spc_exclusion_snapshot", fake_insert)
+    
+    response = client.post(
+        "/api/spc/exclusions",
+        headers={"x-forwarded-access-token": "token"},
+        json={
+            "material_id": "M1", "mic_id": "MIC1", "justification": "Too low",
+            "excluded_points": [{"batch_id": "B1", "sample_seq": 1}]
+        }
+    )
+    assert response.status_code == 500
