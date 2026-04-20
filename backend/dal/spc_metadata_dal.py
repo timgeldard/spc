@@ -144,19 +144,19 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
     rows = await _fetch_quantitative_characteristics(token, material_id, plant_id)
     attr_rows = await fetch_attribute_characteristics(token, material_id, plant_id)
     overrides = await _fetch_mic_chart_overrides(token, material_id, plant_id)
-    attribute_keys = {
-        (str(row.get("mic_id") or ""), str(row.get("operation_id") or ""))
-        for row in attr_rows
-    }
+    # The attribute query now collapses operations when a MIC spans multiple
+    # ops (operation_id comes back NULL), so the per-(mic_id, operation_id)
+    # check used here previously would falsely clear routing_conflict. Use
+    # mic_id alone: if any quantitative mic_id is also seen as attribute,
+    # flag the conflict. Coarser, but safer — the downstream UX just tells
+    # the user "this MIC has both variable and attribute records".
+    attribute_mic_ids = {str(row.get("mic_id") or "") for row in attr_rows}
     characteristics = []
     for row in rows:
         value = row.get("inspection_method")
         row["inspection_method"] = str(value) if value is not None else None
         row["batch_count"] = int(float(row.get("batch_count") or 0))
-        row["routing_conflict"] = (
-            str(row.get("mic_id") or ""),
-            str(row.get("operation_id") or ""),
-        ) in attribute_keys
+        row["routing_conflict"] = str(row.get("mic_id") or "") in attribute_mic_ids
         normalized_name = _normalize_mic_name(row.get("mic_name_normalized") or row.get("mic_name"))
         row["mic_name_normalized"] = normalized_name
         row["unified_mic_key"] = row.get("unified_mic_key") or (
@@ -178,15 +178,12 @@ async def fetch_characteristics(token: str, material_id: str, plant_id: Optional
         characteristics.append(row)
 
     attr_characteristics = []
-    quantitative_keys = {
-        (str(row.get("mic_id") or ""), str(row.get("operation_id") or ""))
-        for row in characteristics
-    }
+    # Mirror of the attribute_mic_ids set above — same reasoning. An attribute
+    # row flags routing_conflict if its mic_id also appears in the collapsed
+    # quantitative output.
+    quantitative_mic_ids = {str(row.get("mic_id") or "") for row in characteristics}
     for row in attr_rows:
-        row["routing_conflict"] = (
-            str(row.get("mic_id") or ""),
-            str(row.get("operation_id") or ""),
-        ) in quantitative_keys
+        row["routing_conflict"] = str(row.get("mic_id") or "") in quantitative_mic_ids
         mic_id = row.get("mic_id")
         override = overrides.get(str(mic_id)) if mic_id is not None else None
         row["chart_type"] = override if override in {"p_chart", "np_chart", "c_chart", "u_chart"} else "p_chart"
@@ -203,19 +200,28 @@ async def fetch_attribute_characteristics(token: str, material_id: str, plant_id
         params.append(sql_param("plant_id", plant_id))
     where_sql = "WHERE " + " AND ".join(filters)
 
+    # Mirrors the collapse idiom in `_fetch_quantitative_characteristics`: group
+    # by (mic_id, mic_name, inspection_method) and emit operation_id only when
+    # there is exactly one operation per group. Prevents the dropdown from
+    # showing N rows for a single attribute characteristic measured at N
+    # operations (same mic_id, different op) — which was the observed bug.
+    # Measures auto-aggregate at the coarser grain: batch_count remains a
+    # distinct-batch count across operations, totals are summed, p_bar is
+    # recomputed as the ratio at the new grain.
     query = f"""
         SELECT
             mic_id,
-            operation_id,
             mic_name,
             inspection_method,
-            MEASURE(batch_count)               AS batch_count,
-            MEASURE(total_inspected)           AS total_inspected,
-            MEASURE(total_nonconforming)       AS total_nonconforming,
-            MEASURE(p_bar)                     AS p_bar
+            CASE WHEN COUNT(DISTINCT operation_id) = 1
+                 THEN MAX(operation_id) END         AS operation_id,
+            MEASURE(batch_count)                    AS batch_count,
+            MEASURE(total_inspected)                AS total_inspected,
+            MEASURE(total_nonconforming)            AS total_nonconforming,
+            MEASURE(p_bar)                          AS p_bar
         FROM {tbl('spc_attribute_quality_metrics')}
         {where_sql}
-        GROUP BY mic_id, mic_name, operation_id, inspection_method
+        GROUP BY mic_id, mic_name, inspection_method
         HAVING MEASURE(batch_count) >= 3
         ORDER BY mic_name
     """

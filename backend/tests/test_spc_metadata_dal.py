@@ -147,3 +147,79 @@ def test_fetch_characteristics_attribute_override_rejects_variable_chart_type(mo
 
     assert attr_chars[0]["chart_type"] == "p_chart"
     assert attr_chars[0]["chart_type_source"] == "default"
+
+
+def test_fetch_attribute_characteristics_collapses_operations_in_sql(monkeypatch):
+    """Regression: the attribute query must GROUP BY (mic_id, mic_name,
+    inspection_method) — NOT by operation_id — and emit operation_id via
+    `CASE WHEN COUNT(DISTINCT operation_id) = 1 THEN MAX(operation_id) END`.
+    Without this, a single attribute MIC measured at N operations becomes N
+    duplicate rows in the Characteristic dropdown."""
+    captured: dict[str, object] = {}
+
+    async def fake_run(_token, query, _params=None, **_kwargs):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(spc_metadata_dal, "run_sql_async", fake_run)
+    asyncio.run(spc_metadata_dal.fetch_attribute_characteristics("token", "MAT-1", "PLANT-1"))
+
+    query = str(captured["query"])
+    assert "COUNT(DISTINCT operation_id) = 1" in query
+    assert "MAX(operation_id)" in query
+    # GROUP BY must exclude operation_id (collapse is the whole point).
+    group_by_section = query.split("GROUP BY", 1)[-1].split("HAVING", 1)[0]
+    assert "operation_id" not in group_by_section
+    assert "mic_id" in group_by_section
+    assert "mic_name" in group_by_section
+    assert "inspection_method" in group_by_section
+
+
+def test_fetch_characteristics_routing_conflict_uses_mic_id_not_op(monkeypatch):
+    """Because attribute rows can come back with operation_id=None (multi-op
+    collapse), the variable/attribute overlap check keys on mic_id alone.
+    Same mic_id as both attribute and quantitative → flag."""
+    quant = [_characteristic_row(mic_id="MIC-DUAL", operation_id=None,
+                                 total_samples=10, batch_count=10)]
+    attr = [{
+        "mic_id": "MIC-DUAL",
+        "operation_id": None,  # collapsed because it's used at multiple ops
+        "mic_name": "Dual-typed MIC",
+        "inspection_method": "GAUGE",
+        "batch_count": 10,
+        "total_inspected": 100,
+        "total_nonconforming": 5,
+        "p_bar": 0.05,
+        "chart_type": "p_chart",
+    }]
+    monkeypatch.setattr(spc_metadata_dal, "run_sql_async",
+                        _fake_runner(quant, [], attr))
+    chars, attr_chars = asyncio.run(
+        spc_metadata_dal.fetch_characteristics("token", "MAT-1", "PLANT-1")
+    )
+
+    assert chars[0]["routing_conflict"] is True
+    assert attr_chars[0]["routing_conflict"] is True
+
+
+def test_fetch_characteristics_no_routing_conflict_when_mic_ids_differ(monkeypatch):
+    quant = [_characteristic_row(mic_id="MIC-Q", total_samples=10, batch_count=10)]
+    attr = [{
+        "mic_id": "MIC-A",
+        "operation_id": None,
+        "mic_name": "Attribute only",
+        "inspection_method": "GAUGE",
+        "batch_count": 10,
+        "total_inspected": 100,
+        "total_nonconforming": 5,
+        "p_bar": 0.05,
+        "chart_type": "p_chart",
+    }]
+    monkeypatch.setattr(spc_metadata_dal, "run_sql_async",
+                        _fake_runner(quant, [], attr))
+    chars, attr_chars = asyncio.run(
+        spc_metadata_dal.fetch_characteristics("token", "MAT-1", "PLANT-1")
+    )
+
+    assert chars[0]["routing_conflict"] is False
+    assert attr_chars[0]["routing_conflict"] is False
